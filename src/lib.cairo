@@ -18,7 +18,6 @@ pub trait IHelloStarknet<TContractState> {
     // fn spawnNewPosition(self: @TContractState, gamerWalletAddress: ContractAddress, xCoordinate: u256, yCoordinate: u256, gameWeek:u256 ) -> u256;
     // fn _checkForTreasure(ref self: TContractState, gamerWalletAddress: ContractAddress, xCoordinate: u256, yCoordinate: u256, gameWeek:u256 ) -> u256;
     fn _checkForTreasure(ref self: TContractState) -> u256;
-
 }
 
 #[starknet::interface]
@@ -50,8 +49,8 @@ mod HelloStarknet {
     #[derive(Drop, starknet::Event)]
     enum Event {
         TreasureHidden: TreasureHidden,
-        // SpawnPosition:SpawnPosition,
-        // checkForTreasure: checkForTreasure
+    // SpawnPosition:SpawnPosition,
+    // checkForTreasure: checkForTreasure
 
     }
     #[derive(Drop, starknet::Event)]
@@ -101,6 +100,20 @@ mod HelloStarknet {
         total_reward_shares_for_finders: LegacyMap::<u256, u256>,
         //Player_position: LegacyMap::<(gameWeek, gamerWalletAddress), (xPosition, yPosition)>
         player_position: LegacyMap::<(u256, ContractAddress), (u256, u256)>
+    }
+
+    #[constructor]
+    fn constructor(ref self: ContractState) {
+        self
+            .startNewGame(
+                0x97a59a28d105842c91d0c411fe8992d4ed39c700bc44467d30589a2679d9b9cc,
+                100,
+                10,
+                5,
+                5,
+                1,
+                1000
+            );
     }
 
     #[abi(embed_v0)]
@@ -210,7 +223,6 @@ mod HelloStarknet {
         //     //increase or decrease the coordinates in the direction
         //     //do a require check, if the new coordinates is valid for current game
 
-
         //     //publish event that player has moved
         //     self
         //         .emit(
@@ -227,38 +239,38 @@ mod HelloStarknet {
 
         // fn _checkForTreasure(ref self: ContractState, gamerWalletAddress: ContractAddress, xCoordinate: u256, yCoordinate: u256, gameWeek:u256 ) -> u256 {
         fn _checkForTreasure(ref self: ContractState) -> u256 {
-
-            let eth = IERC20LibraryDispatcher { class_hash: class_hash_const::<0x049D36570D4e46f48e99674bd3fcc84644DdD6b96F7C741B1562B82f9e004dC7>() };
+            let eth = IERC20LibraryDispatcher {
+                class_hash: class_hash_const::<
+                    0x049D36570D4e46f48e99674bd3fcc84644DdD6b96F7C741B1562B82f9e004dC7
+                >()
+            };
             return eth.total_supply();
+        // self
+        //     .emit(
+        //         checkForTreasure {
+        //             user: gamerWalletAddress,
+        //             xCoordinate: xCoordinate,
+        //             yCoordinate: yCoordinate,
+        //             gameWeek: gameWeek
+        //         }
+        //     );
 
-
-            // self
-            //     .emit(
-            //         checkForTreasure {
-            //             user: gamerWalletAddress,
-            //             xCoordinate: xCoordinate,
-            //             yCoordinate: yCoordinate,
-            //             gameWeek: gameWeek
-            //         }
-            //     );
-
-            // true
+        // true
         }
+    // fn spawnNewPosition(ref self: ContractState, gamerWalletAddress: ContractAddress, xCoordinate: u256, yCoordinate: u256, gameWeek:u256 ) {
 
-        // fn spawnNewPosition(ref self: ContractState, gamerWalletAddress: ContractAddress, xCoordinate: u256, yCoordinate: u256, gameWeek:u256 ) {
-         
-        //     self
-        //         .emit(
-        //             spawnPosition {
-        //                 user: gamerWalletAddress,
-        //                 xCoordinate: xCoordinate,
-        //                 yCoordinate: yCoordinate,
-        //                 gameWeek: gameWeek
-        //             }
-        //         );
+    //     self
+    //         .emit(
+    //             spawnPosition {
+    //                 user: gamerWalletAddress,
+    //                 xCoordinate: xCoordinate,
+    //                 yCoordinate: yCoordinate,
+    //                 gameWeek: gameWeek
+    //             }
+    //         );
 
-        //     // _checkForTreasure();
-        // }
+    //     // _checkForTreasure();
+    // }
 
     }
 }
