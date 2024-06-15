@@ -380,3 +380,22 @@ fn test_spawnNewPosition_twice() {
     #[feature("safe_dispatcher")]
     safe_dispatcher._spawnNewPosition(address1, 5, 5, 0).unwrap();
 }
+
+
+#[test]
+fn test_getSeed() {
+    //should spawn a poistion for a player and try again to spawn a new position; but should fail as the player already has a position.
+
+    let contract_address = deploy_contract("HelloStarknet");
+
+    let safe_dispatcher = IHelloStarknetSafeDispatcher { contract_address };
+
+    let address1: ContractAddress = contract_address_const::<
+        0x052a2b0b20d8796e57f0f00e99adfd61e0b40c4a49553d4197e4da6c1c023833
+    >();
+
+    #[feature("safe_dispatcher")]
+    let result = safe_dispatcher._getSeed(address1).unwrap();
+
+    println!("result {:?}", result);
+}

@@ -82,6 +82,20 @@ pub trait IHelloStarknet<TContractState> {
     ) -> bool;
     fn claimReward(ref self: TContractState) -> bool;
     fn _transfer_token(ref self: TContractState, recipient: ContractAddress, amount: u256) -> bool;
+    // fn ooGetRandomnessCalldata(
+    //     ref self: TContractState, gamerWalletAddress: ContractAddress
+    // ) -> bool;
+    fn ooCreateRandomnessCalldata(
+        self: @TContractState, gamerWalletAddress: ContractAddress
+    ) -> Array::<felt252>;
+    fn ooRetrieveRandomnessCalldata(
+        self: @TContractState, calldataArr: Array::<felt252>
+    ) -> ContractAddress;
+    fn ooUpdateCallbackFeeLimit(ref self: TContractState, maxGasFeeAmount: u128) -> bool;
+    fn ooUpdatePublishDelay(ref self: TContractState, minNumberOfBlocks: u64) -> bool;
+    fn ooUpdateNumWords(ref self: TContractState, numberOfRandomNumbers: u64) -> bool;
+    fn _getSeed(self: @TContractState, finderGamerAddress: ContractAddress) -> u64;
+    fn ooUpdateSeedModuloDivisor(ref self: TContractState, value: u256) -> bool;
 }
 
 #[starknet::contract]
@@ -97,7 +111,7 @@ mod HelloStarknet {
     use core::integer::u128_byte_reverse;
     use starknet::{
         ContractAddress, get_caller_address, class_hash::class_hash_const, contract_address_const,
-        get_contract_address
+        get_contract_address, get_block_number
     };
     use core::serde::Serde;
     use starknet::{SyscallResultTrait, syscalls};
@@ -142,6 +156,12 @@ mod HelloStarknet {
 
     #[storage]
     struct Storage {
+        //Divisor used to get a value to generate a seed value for randmoness request.
+        seedModuloDivisor: u256,
+        //Randomness Request
+        callback_fee_limit: u128, // e.g. 1000000000000
+        publish_delay: u64, // e.g. 3
+        num_words: u64, // e.g. 2
         //Fees
         gasFeeReservation: u256,
         gameMasterFee: u256,
@@ -185,6 +205,12 @@ mod HelloStarknet {
 
         self.ooUpdateGasFeeReservation(10000000000000);
         self.ooUpdateGameMasterFee(2500000000000);
+
+        self.ooUpdateCallbackFeeLimit(10000000000000);
+        self.ooUpdatePublishDelay(3);
+        self.ooUpdateNumWords(2);
+
+        self.ooUpdateSeedModuloDivisor(128000000000);
     }
 
     #[abi(embed_v0)]
@@ -234,6 +260,62 @@ mod HelloStarknet {
         fn ooUpdateGameMasterFee(ref self: ContractState, feeAmount: u256) -> bool {
             self.gameMasterFee.write(feeAmount);
             return true;
+        }
+
+        fn ooUpdateCallbackFeeLimit(ref self: ContractState, maxGasFeeAmount: u128) -> bool {
+            self.callback_fee_limit.write(maxGasFeeAmount);
+            return true;
+        }
+
+        fn ooUpdatePublishDelay(ref self: ContractState, minNumberOfBlocks: u64) -> bool {
+            self.publish_delay.write(minNumberOfBlocks);
+            return true;
+        }
+
+        fn ooUpdateNumWords(ref self: ContractState, numberOfRandomNumbers: u64) -> bool {
+            self.num_words.write(numberOfRandomNumbers);
+            return true;
+        }
+
+        // fn ooGetRandomnessCalldata(
+        //     ref self: ContractState, gamerWalletAddress: ContractAddress
+        // ) -> bool {
+        //     // self.num_words.write(numberOfRandomNumbers);
+        //     let mut calldataArr = ArrayTrait::<felt252>::new();
+
+        //     // let address: u256 = gamerWalletAddress.try_into().unwrap();
+        //     // let address: felt252 = gamerWalletAddress.into();
+        //     calldataArr.append(gamerWalletAddress.into());
+
+        //     let decodeAddress: felt252 = *calldataArr.at(0);
+
+        //     let contractAddressAgain: ContractAddress = decodeAddress.try_into().unwrap();
+
+        //     ///temp for testing
+        //     self._transfer_token(contractAddressAgain, 4500000000000000);
+        //     ///
+
+        //     return true;
+        // }
+
+        fn ooCreateRandomnessCalldata(
+            self: @ContractState, gamerWalletAddress: ContractAddress
+        ) -> Array::<felt252> {
+            let mut calldataArr = ArrayTrait::<felt252>::new();
+
+            calldataArr.append(gamerWalletAddress.into());
+
+            return calldataArr;
+        }
+
+        fn ooRetrieveRandomnessCalldata(
+            self: @ContractState, calldataArr: Array::<felt252>
+        ) -> ContractAddress {
+            let decodeAddress: felt252 = *calldataArr.at(0);
+
+            let contractAddressAgain: ContractAddress = decodeAddress.try_into().unwrap();
+
+            return contractAddressAgain;
         }
 
         fn ooStartNewGame(
@@ -590,6 +672,8 @@ mod HelloStarknet {
         fn _claimReward(
             ref self: ContractState, gamerWalletAddress: ContractAddress, gameWeek: u256
         ) -> bool {
+            assert(gameWeek < self.currentGameWeek.read(), 'Reward already claimed');
+
             assert(
                 self.claimed_rewards.read((gameWeek, gamerWalletAddress)) == false,
                 'Reward already claimed'
@@ -618,6 +702,25 @@ mod HelloStarknet {
             let rewardDue = ((eligibleReward - gasFee) - gameFee);
 
             return rewardDue;
+        }
+
+        fn _getSeed(self: @ContractState, finderGamerAddress: ContractAddress) -> u64 {
+            let getBlockNumber: u64 = get_block_number();
+
+            let callerAsFelt: felt252 = finderGamerAddress.into();
+
+            let callerAsNumber: u256 = callerAsFelt.try_into().unwrap();
+
+            let callerAsu64: u64 = (callerAsNumber % self.seedModuloDivisor.read())
+                .try_into()
+                .unwrap();
+
+            return callerAsu64 + getBlockNumber;
+        }
+
+        fn ooUpdateSeedModuloDivisor(ref self: ContractState, value: u256) -> bool {
+            self.seedModuloDivisor.write(value);
+            return true;
         }
     }
 }
@@ -648,5 +751,7 @@ mod HelloStarknet {
 //         self.owner.write(new_owner);
 //     }
 // }
+
+// use openzeppelin::access::ownable::OwnableComponent;
 
 
