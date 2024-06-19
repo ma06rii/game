@@ -2,7 +2,7 @@ use starknet::ContractAddress;
 
 #[starknet::interface]
 pub trait IHelloStarknet<TContractState> {
-    fn ooStartNewGame(
+    fn start_new_game(
         ref self: TContractState,
         listOfPreviousWeeksTreasureCordinatesMerkleTreeRoot: u256,
         finderFee: u256,
@@ -13,8 +13,8 @@ pub trait IHelloStarknet<TContractState> {
         totalNumberOfHidersFromThePreviousWeek: u256,
         totalHiddenTreasureValueFromPreviousWeek: u256
     ) -> bool;
-    fn hideTreasure(ref self: TContractState) -> bool;
-    fn ooValidateTreasureCoordinates(
+    fn hide_treasure(ref self: TContractState) -> bool;
+    fn validate_treasure_coordinates(
         ref self: TContractState,
         finderGamerWalletAddress: ContractAddress,
         hiderGamerWalletAddress: ContractAddress,
@@ -22,20 +22,20 @@ pub trait IHelloStarknet<TContractState> {
         leaf: u256,
         proof: Array<u256>
     ) -> bool;
-    fn finderPlayerMovePosition(
+    fn finder_player_move_position(
         ref self: TContractState, xDirection: u128, yDirection: u128
     ) -> (u128, u128);
-    fn getFinderPlayerPosition(
+    fn get_finder_player_position(
         self: @TContractState, gamerWalletAddress: ContractAddress, gameWeek: u256
     ) -> (u128, u128);
-    fn ooUpdateGasFeeReservation(ref self: TContractState, feeAmount: u256) -> bool;
-    fn ooUpdateGameMasterFee(ref self: TContractState, feeAmount: u256) -> bool;
-    fn ooUpdateGameLandownerFee(ref self: TContractState, feeAmount: u256) -> bool;
-    fn claimReward(ref self: TContractState, gameWeek: u256) -> bool;
-    fn ooUpdateCallbackFeeLimit(ref self: TContractState, maxGasFeeAmount: u128) -> bool;
-    fn ooUpdatePublishDelay(ref self: TContractState, minNumberOfBlocks: u64) -> bool;
-    fn ooUpdateNumWords(ref self: TContractState, numberOfRandomNumbers: u64) -> bool;
-    fn ooUpdateSeedModuloDivisor(ref self: TContractState, value: u256) -> bool;
+    fn update_gas_fee_reservation(ref self: TContractState, feeAmount: u256) -> bool;
+    fn update_gamemaster_fee(ref self: TContractState, feeAmount: u256) -> bool;
+    fn update_game_landowner_fee(ref self: TContractState, feeAmount: u256) -> bool;
+    fn claim_reward(ref self: TContractState, gameWeek: u256) -> bool;
+    fn update_callback_fee_limit(ref self: TContractState, maxGasFeeAmount: u128) -> bool;
+    fn update_publish_delay(ref self: TContractState, minNumberOfBlocks: u64) -> bool;
+    fn update_num_words(ref self: TContractState, numberOfRandomNumbers: u64) -> bool;
+    fn update_seed_modulo_divisor(ref self: TContractState, value: u256) -> bool;
     fn receive_random_words(
         ref self: TContractState,
         requester_address: ContractAddress,
@@ -43,27 +43,25 @@ pub trait IHelloStarknet<TContractState> {
         random_words: Span<felt252>,
         calldata: Array<felt252>
     );
-    fn spawnNewPosition(ref self: TContractState) -> bool;
-
-    fn oowithdraw_extra_fee_fund(ref self: TContractState, receiver: ContractAddress);
-    fn getGameLandownerFee(self: @TContractState) -> bool;
-    fn getNumWords(self: @TContractState) -> bool;
-    fn getPublishDelay(self: @TContractState) -> bool;
-    fn getCallbackFeeLimit(self: @TContractState) -> bool;
-    fn getGameMasterFee(self: @TContractState) -> bool;
-    fn getGasFeeReservation(self: @TContractState) -> bool;
-
-    fn getGameTokenReward(self: @TContractState) -> u256;
-    fn getGameWeek(self: @TContractState) -> u256;
-    fn getGameTreasureTotal(self: @TContractState, gameWeek: u256) -> u256;
-    fn getGameGridSize(self: @TContractState, gameWeek: u256) -> (u128, u128);
-    fn getTotalNumberOfFinders(self: @TContractState, gameWeek: u256) -> u256;
-    fn getTotalNumberOfHiders(self: @TContractState, gameWeek: u256) -> u256;
-    fn getMainGameInfo(self: @TContractState, gameWeek: u256) -> (u256, u256, u256);
-    fn getSpawnNewPositionFee(self: @TContractState) -> u256;
-    fn getHiderPlayerFee(self: @TContractState) -> bool;
-    fn getFinderPlayerFee(self: @TContractState) -> bool;
-    fn getClaimShareAmounts(
+    fn finder_player_generate_position(ref self: TContractState) -> bool;
+    fn withdraw_ETH_Balance(ref self: TContractState, receiver: ContractAddress);
+    fn get_game_landowner_fee(self: @TContractState) -> bool;
+    fn get_num_words(self: @TContractState) -> bool;
+    fn get_publish_delay(self: @TContractState) -> bool;
+    fn get_callback_fee_limit(self: @TContractState) -> bool;
+    fn get_gamemaster_fee(self: @TContractState) -> bool;
+    fn get_gas_fee_reservation(self: @TContractState) -> bool;
+    fn get_game_token_reward(self: @TContractState) -> u256;
+    fn get_game_week(self: @TContractState) -> u256;
+    fn get_game_week_treasure_total(self: @TContractState, gameWeek: u256) -> u256;
+    fn get_game_grid_size(self: @TContractState, gameWeek: u256) -> (u128, u128);
+    fn get_total_number_of_finders(self: @TContractState, gameWeek: u256) -> u256;
+    fn get_total_number_of_hiders(self: @TContractState, gameWeek: u256) -> u256;
+    fn get_main_game_info(self: @TContractState, gameWeek: u256) -> (u256, u256, u256);
+    fn get_generate_position_fee(self: @TContractState) -> u256;
+    fn get_hider_player_fee(self: @TContractState) -> bool;
+    fn get_finder_player_fee(self: @TContractState) -> bool;
+    fn get_claim_share_amounts(
         self: @TContractState, gameWeek: u256, gamerWalletAddress: ContractAddress
     ) -> u256;
 }
@@ -691,121 +689,121 @@ mod HelloStarknet {
 
     #[abi(embed_v0)]
     impl HelloStarknetImpl of super::IHelloStarknet<ContractState> {
-        fn ooUpdateGasFeeReservation(ref self: ContractState, feeAmount: u256) -> bool {
+        fn update_gas_fee_reservation(ref self: ContractState, feeAmount: u256) -> bool {
             self.ownable.assert_only_owner();
             self.gasFeeReservation.write(feeAmount);
             return true;
         }
 
-        fn getGasFeeReservation(self: @ContractState) -> bool {
+        fn get_gas_fee_reservation(self: @ContractState) -> bool {
             self.gasFeeReservation.read();
             return true;
         }
 
-        fn ooUpdateGameMasterFee(ref self: ContractState, feeAmount: u256) -> bool {
+        fn update_gamemaster_fee(ref self: ContractState, feeAmount: u256) -> bool {
             self.ownable.assert_only_owner();
             self.gameMasterFee.write(feeAmount);
             return true;
         }
 
-        fn getGameMasterFee(self: @ContractState) -> bool {
+        fn get_gamemaster_fee(self: @ContractState) -> bool {
             self.gameMasterFee.read();
             return true;
         }
 
-        fn ooUpdateCallbackFeeLimit(ref self: ContractState, maxGasFeeAmount: u128) -> bool {
+        fn update_callback_fee_limit(ref self: ContractState, maxGasFeeAmount: u128) -> bool {
             self.ownable.assert_only_owner();
             self.callback_fee_limit.write(maxGasFeeAmount);
             return true;
         }
 
-        fn getCallbackFeeLimit(self: @ContractState) -> bool {
+        fn get_callback_fee_limit(self: @ContractState) -> bool {
             self.callback_fee_limit.read();
             return true;
         }
 
-        fn ooUpdatePublishDelay(ref self: ContractState, minNumberOfBlocks: u64) -> bool {
+        fn update_publish_delay(ref self: ContractState, minNumberOfBlocks: u64) -> bool {
             self.ownable.assert_only_owner();
             self.publish_delay.write(minNumberOfBlocks);
             return true;
         }
 
-        fn getPublishDelay(self: @ContractState) -> bool {
+        fn get_publish_delay(self: @ContractState) -> bool {
             self.publish_delay.read();
             return true;
         }
 
-        fn ooUpdateNumWords(ref self: ContractState, numberOfRandomNumbers: u64) -> bool {
+        fn update_num_words(ref self: ContractState, numberOfRandomNumbers: u64) -> bool {
             self.ownable.assert_only_owner();
             self.num_words.write(numberOfRandomNumbers);
             return true;
         }
 
-        fn getNumWords(self: @ContractState) -> bool {
+        fn get_num_words(self: @ContractState) -> bool {
             self.num_words.read();
             return true;
         }
 
-        fn ooUpdateGameLandownerFee(ref self: ContractState, feeAmount: u256) -> bool {
+        fn update_game_landowner_fee(ref self: ContractState, feeAmount: u256) -> bool {
             self.ownable.assert_only_owner();
             self.gameLandownerFee.write(feeAmount);
             return true;
         }
 
-        fn getGameLandownerFee(self: @ContractState) -> bool {
+        fn get_game_landowner_fee(self: @ContractState) -> bool {
             self.gameLandownerFee.read();
             return true;
         }
 
-        fn getFinderPlayerFee(self: @ContractState) -> bool {
+        fn get_finder_player_fee(self: @ContractState) -> bool {
             self.currentFinderFee.read();
             return true;
         }
 
-        fn getHiderPlayerFee(self: @ContractState) -> bool {
+        fn get_hider_player_fee(self: @ContractState) -> bool {
             self.currentHiderFee.read();
             return true;
         }
 
-        fn getSpawnNewPositionFee(self: @ContractState) -> u256 {
+        fn get_generate_position_fee(self: @ContractState) -> u256 {
             return self.currentSpawnNewPositionFee.read();
         }
 
-        fn getMainGameInfo(self: @ContractState, gameWeek: u256) -> (u256, u256, u256) {
+        fn get_main_game_info(self: @ContractState, gameWeek: u256) -> (u256, u256, u256) {
             return self.main_game.read(gameWeek);
         }
 
-        fn getTotalNumberOfHiders(self: @ContractState, gameWeek: u256) -> u256 {
+        fn get_total_number_of_hiders(self: @ContractState, gameWeek: u256) -> u256 {
             return self.total_reward_shares_for_hiders.read(gameWeek);
         }
 
-        fn getTotalNumberOfFinders(self: @ContractState, gameWeek: u256) -> u256 {
+        fn get_total_number_of_finders(self: @ContractState, gameWeek: u256) -> u256 {
             return self.total_reward_shares_for_finders.read(gameWeek);
         }
 
-        fn getGameGridSize(self: @ContractState, gameWeek: u256) -> (u128, u128) {
+        fn get_game_grid_size(self: @ContractState, gameWeek: u256) -> (u128, u128) {
             return self.main_game_grid_size.read(gameWeek);
         }
 
-        fn getGameTreasureTotal(self: @ContractState, gameWeek: u256) -> u256 {
+        fn get_game_week_treasure_total(self: @ContractState, gameWeek: u256) -> u256 {
             return self.game_totals.read(gameWeek);
         }
 
-        fn getGameWeek(self: @ContractState) -> u256 {
+        fn get_game_week(self: @ContractState) -> u256 {
             return self.currentGameWeek.read();
         }
 
-        fn getGameTokenReward(self: @ContractState) -> u256 {
+        fn get_game_token_reward(self: @ContractState) -> u256 {
             return self.currentGameTokenReward.read();
         }
 
-        fn getClaimShareAmounts(
+        fn get_claim_share_amounts(
             self: @ContractState, gameWeek: u256, gamerWalletAddress: ContractAddress
         ) -> u256 {
             return self.claim_share_amounts.read((gameWeek, gamerWalletAddress));
         }
 
-        fn ooStartNewGame(
+        fn start_new_game(
             ref self: ContractState,
             listOfPreviousWeeksTreasureCordinatesMerkleTreeRoot: u256,
             finderFee: u256,
@@ -835,13 +833,13 @@ mod HelloStarknet {
                 );
         }
 
-        fn hideTreasure(ref self: ContractState) -> bool {
+        fn hide_treasure(ref self: ContractState) -> bool {
             let caller = get_caller_address();
 
             return self._hideTreasure(caller);
         }
 
-        fn finderPlayerMovePosition(
+        fn finder_player_move_position(
             ref self: ContractState, xDirection: u128, yDirection: u128
         ) -> (u128, u128) {
             let gamerWalletAddress = get_caller_address();
@@ -859,7 +857,7 @@ mod HelloStarknet {
                 ._finderPlayerMovePosition(xDirection, yDirection, gamerWalletAddress, gameWeek);
         }
 
-        fn getFinderPlayerPosition(
+        fn get_finder_player_position(
             self: @ContractState, gamerWalletAddress: ContractAddress, gameWeek: u256
         ) -> (u128, u128) {
             //get x,y coordinates from player_position mapping
@@ -868,7 +866,7 @@ mod HelloStarknet {
             return (x, y);
         }
 
-        fn ooValidateTreasureCoordinates(
+        fn validate_treasure_coordinates(
             ref self: ContractState,
             finderGamerWalletAddress: ContractAddress,
             hiderGamerWalletAddress: ContractAddress,
@@ -921,7 +919,7 @@ mod HelloStarknet {
             }
         }
 
-        fn spawnNewPosition(ref self: ContractState) -> bool {
+        fn finder_player_generate_position(ref self: ContractState) -> bool {
             let gamerWalletAddress = get_caller_address();
             let gameWeek = self.currentGameWeek.read();
 
@@ -938,13 +936,13 @@ mod HelloStarknet {
             return true;
         }
 
-        fn claimReward(ref self: ContractState, gameWeek: u256) -> bool {
+        fn claim_reward(ref self: ContractState, gameWeek: u256) -> bool {
             let gamerWalletAddress = get_caller_address();
 
             return self._claimReward(gamerWalletAddress, gameWeek);
         }
 
-        fn ooUpdateSeedModuloDivisor(ref self: ContractState, value: u256) -> bool {
+        fn update_seed_modulo_divisor(ref self: ContractState, value: u256) -> bool {
             self.ownable.assert_only_owner();
             self.seedModuloDivisor.write(value);
             return true;
@@ -1001,7 +999,7 @@ mod HelloStarknet {
                 );
         }
 
-        fn oowithdraw_extra_fee_fund(ref self: ContractState, receiver: ContractAddress) {
+        fn withdraw_ETH_Balance(ref self: ContractState, receiver: ContractAddress) {
             self.ownable.assert_only_owner();
             let eth_dispatcher = ERC20ABIDispatcher {
                 contract_address: contract_address_const::<
