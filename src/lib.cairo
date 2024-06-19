@@ -39,9 +39,6 @@ pub trait IHelloStarknet<TContractState> {
     fn _transfer_token_from(
         ref self: TContractState, sender: ContractAddress, recipient: ContractAddress, amount: u256
     ) -> bool;
-    fn _transfer_game_token_from(
-        ref self: TContractState, sender: ContractAddress, recipient: ContractAddress, amount: u256
-    ) -> bool;
     fn _rewardGamer(
         ref self: TContractState, gamerWalletAddress: ContractAddress, gameWeek: u256,
     ) -> bool;
@@ -91,9 +88,6 @@ pub trait IHelloStarknet<TContractState> {
     ) -> bool;
     fn claimReward(ref self: TContractState, gameWeek: u256) -> bool;
     fn _transfer_token(ref self: TContractState, recipient: ContractAddress, amount: u256) -> bool;
-    fn _transfer_game_token(
-        ref self: TContractState, recipient: ContractAddress, amount: u256
-    ) -> bool;
     fn _createRandomnessCalldata(
         self: @TContractState, gamerWalletAddress: ContractAddress
     ) -> Array::<felt252>;
@@ -824,50 +818,6 @@ mod HelloStarknet {
 
             let mut res = syscalls::call_contract_syscall(
                 address, selector!("transfer"), call_data.span()
-            )
-                .unwrap_syscall();
-
-            Serde::<bool>::deserialize(ref res).unwrap()
-        }
-
-        fn _transfer_game_token(
-            ref self: ContractState, recipient: ContractAddress, amount: u256
-        ) -> bool {
-            let mut call_data: Array<felt252> = ArrayTrait::new();
-
-            Serde::serialize(@recipient, ref call_data);
-            Serde::serialize(@amount, ref call_data);
-
-            let address: ContractAddress = contract_address_const::<
-                0x07a3662019f61f6abec62114ac960819914284c9246f4be499fae8b11c5464e0
-            >();
-
-            let mut res = syscalls::call_contract_syscall(
-                address, selector!("transfer"), call_data.span()
-            )
-                .unwrap_syscall();
-
-            Serde::<bool>::deserialize(ref res).unwrap()
-        }
-
-        fn _transfer_game_token_from(
-            ref self: ContractState,
-            sender: ContractAddress,
-            recipient: ContractAddress,
-            amount: u256
-        ) -> bool {
-            let mut call_data: Array<felt252> = ArrayTrait::new();
-
-            Serde::serialize(@sender, ref call_data);
-            Serde::serialize(@recipient, ref call_data);
-            Serde::serialize(@amount, ref call_data);
-
-            let address: ContractAddress = contract_address_const::<
-                0x07a3662019f61f6abec62114ac960819914284c9246f4be499fae8b11c5464e0
-            >();
-
-            let mut res = syscalls::call_contract_syscall(
-                address, selector!("transfer_from"), call_data.span()
             )
                 .unwrap_syscall();
 
