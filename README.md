@@ -5,6 +5,8 @@ This repository contains a smart contract built with Cairo Language, targeted to
 The smart contract is the core logic for a onchain treasure hunt game. The aim of this project is the create a multiplayer provable onchain game.
 
 
+
+
 ## Game Functions 
 
 ### User
@@ -13,27 +15,27 @@ The smart contract is the core logic for a onchain treasure hunt game. The aim o
 - claimReward
 - finderPlayerMovePosition
 - finderPlayerStartNewPosition
-- getFinderPlayerPosition (read only)
+- getFinderPlayerPosition *(read only)*
 
 ### User Utilities
 
-- getGameLandownerFee (read only)
-- getNumWords (read only)
-- getPublishDelay (read only)
-- getCallbackFeeLimit (read only)
-- getGameMasterFee (read only)
-- getGasFeeReservation (read only)
-- getGameTokenReward (read only)
-- getGameWeek (read only)
-- getGameWeekTreasureTotal (read only)
-- getGameGridSize (read only)
-- getTotalNumberOfFinders (read only)
-- getTotalNumberOfHiders (read only)
-- getMainGameInfo (read only)
-- getSpawnNewPositionFee (read only)
-- getHiderPlayerFee (read only)
-- getFinderPlayerFee (read only)
-- getClaimShareAmounts (read only)
+- getGameLandownerFee *(read only)*
+- getNumWords *(read only)*
+- getPublishDelay *(read only)*
+- getCallbackFeeLimit *(read only)*
+- getGameMasterFee *(read only)*
+- getGasFeeReservation *(read only)*
+- getGameTokenReward *(read only)*
+- getGameWeek *(read only)*
+- getGameWeekTreasureTotal *(read only)*
+- getGameGridSize *(read only)*
+- getTotalNumberOfFinders *(read only)*
+- getTotalNumberOfHiders *(read only)*
+- getMainGameInfo *(read only)*
+- getSpawnNewPositionFee *(read only)*
+- getHiderPlayerFee *(read only)*
+- getFinderPlayerFee *(read only)*
+- getClaimShareAmounts *(read only)*
 
 ### Admin
 
@@ -49,6 +51,8 @@ The smart contract is the core logic for a onchain treasure hunt game. The aim o
 - updateRandomnessPublishDelay
 - updateRandomnessSeedModuloDivisor
 - withdrawETHBalance
+
+
 
 
 ## Gameplay
