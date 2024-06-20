@@ -3,8 +3,8 @@
 This repository contains a smart contract built with Cairo Language, targeted to be deployed on Starknet.
 
 The smart contract is the core logic for a onchain treasure hunt game. The aim of this project is the create a multiplayer provable onchain game.
-
-
+\
+\
 
 
 ## Game Description
