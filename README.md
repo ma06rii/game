@@ -3,7 +3,6 @@
 This repository contains a smart contract built with Cairo Language, targeted to be deployed on Starknet.
 
 The smart contract is the core logic for a onchain treasure hunt game. The aim of this project is the create a multiplayer provable onchain game.
-\
 
 
 
@@ -16,7 +15,6 @@ Here's the deal, for a small fee gamers can search for treasure in the game. Fin
 
 
 There is also a third gamer option whereby if you don’t fancy looking for treasure or hiding treasure, a User could opt-in to help govern the game features by purchasing an NFT which represents 1 vote when voting on proposals for game changes or improvements.
-\
 
 
 
@@ -65,7 +63,6 @@ There is also a third gamer option whereby if you don’t fancy looking for trea
 - updateRandomnessPublishDelay
 - updateRandomnessSeedModuloDivisor
 - withdrawETHBalance
-\
 
 
 
@@ -84,4 +81,3 @@ There is also a third gamer option whereby if you don’t fancy looking for trea
 2. Finder Player: Move Position And Check For Treasure
 3. Admin Player: Start New Game
 4. Finder Player: Claim Treasure
-\
