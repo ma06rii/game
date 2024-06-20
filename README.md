@@ -72,12 +72,12 @@ There is also a third gamer option whereby if you don’t fancy looking for trea
 ### Hiding Treasure
 
 1. Hider Player: Hide Treasure
-2. Admin Player: Start New Game
+2. Admin Player: Start New Game *(weekly)*
 3. Hider Player: Claim Treasure
 
 ### Finding Treasure
 
 1. Finder Player: Generation Position on Game Board
 2. Finder Player: Move Position And Check For Treasure
-3. Admin Player: Start New Game
+3. Admin Player: Start New Game *(weekly)*
 4. Finder Player: Claim Treasure
