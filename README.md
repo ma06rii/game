@@ -1,4 +1,4 @@
-# Treasure Hunt Game for Starknet
+# Treasure Hunt Game
 
 This repository contains a smart contract built with Cairo Language, targeted to be deployed on Starknet.
 
