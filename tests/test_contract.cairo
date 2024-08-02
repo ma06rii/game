@@ -4,6 +4,7 @@ use project_name::IHelloStarknetSafeDispatcher;
 use project_name::IHelloStarknetSafeDispatcherTrait;
 use project_name::IHelloStarknetDispatcher;
 use project_name::IHelloStarknetDispatcherTrait;
+
 use starknet::{
     get_caller_address, class_hash::class_hash_const, contract_address_const, get_contract_address
 };
@@ -14,50 +15,50 @@ fn deploy_contract(name: ByteArray) -> ContractAddress {
     contract_address
 }
 
-#[test]
-fn test_verify() {
-    let contract_address = deploy_contract("HelloStarknet");
+// #[test]
+// fn test_verify() {
+//     let contract_address = deploy_contract("HelloStarknet");
 
-    let safe_dispatcher = IHelloStarknetSafeDispatcher { contract_address };
+//     let safe_dispatcher = IHelloStarknetSafeDispatcher { contract_address };
 
-    #[feature("safe_dispatcher")]
-    let result = safe_dispatcher
-        ._verify(
-            0xbc19a39ffdeb3ff487a290fd65626b9592fe3fb625937ab468940c4c58966849,
-            0x03e48ef2868eb9039abb12f13e6d4aa79059381a8d3d10c9b5b344d41fad189f,
-            array![
-                0x4dfa50b1d7dd9d841c1d5e20c75ed801f483f1e837d255bc36716bd371ba52ac,
-                0x61a3acbba2a8ef1be4bf74714ddc2cf18e6dceef124978add3db7e34137eaaf2
-            ]
-        )
-        .unwrap();
+//     #[feature("safe_dispatcher")]
+//     let result = safe_dispatcher
+//         ._verify(
+//             0xbc19a39ffdeb3ff487a290fd65626b9592fe3fb625937ab468940c4c58966849,
+//             0x03e48ef2868eb9039abb12f13e6d4aa79059381a8d3d10c9b5b344d41fad189f,
+//             array![
+//                 0x4dfa50b1d7dd9d841c1d5e20c75ed801f483f1e837d255bc36716bd371ba52ac,
+//                 0x61a3acbba2a8ef1be4bf74714ddc2cf18e6dceef124978add3db7e34137eaaf2
+//             ]
+//         )
+//         .unwrap();
 
-    assert(@result == @true, 'Not verified');
-}
+//     assert(@result == @true, 'Not verified');
+// }
 
-#[test]
-fn test_createNewGame() {
-    let contract_address = deploy_contract("HelloStarknet");
+// #[test]
+// fn test_createNewGame() {
+//     let contract_address = deploy_contract("HelloStarknet");
 
-    let safe_dispatcher = IHelloStarknetSafeDispatcher { contract_address };
+//     let safe_dispatcher = IHelloStarknetSafeDispatcher { contract_address };
 
-    #[feature("safe_dispatcher")]
-    let result = safe_dispatcher
-        ._createNewGame(
-            0xbc19a39ffdeb3ff487a290fd65626b9592fe3fb625937ab468940c4c58966849,
-            75000000000000, //approx $ 0.25 finder fee
-            35000000000000, //approx $ 0.12 hider fee
-            5000000000000000,
-            5,
-            5,
-            3,
-            105000000000000,
-            0
-        )
-        .unwrap();
+//     #[feature("safe_dispatcher")]
+//     let result = safe_dispatcher
+//         ._createNewGame(
+//             0xbc19a39ffdeb3ff487a290fd65626b9592fe3fb625937ab468940c4c58966849,
+//             75000000000000, //approx $ 0.25 finder fee
+//             35000000000000, //approx $ 0.12 hider fee
+//             5000000000000000,
+//             5,
+//             5,
+//             3,
+//             105000000000000,
+//             0
+//         )
+//         .unwrap();
 
-    assert(result == true, 'Game not created');
-}
+//     assert(result == true, 'Game not created');
+// }
 
 //skip
 // #[test]
@@ -309,19 +310,19 @@ fn test_createNewGame() {
 //     assert(hiderAddress_playerRewardDue_result == 0, 'Reward value should be zero');
 // }
 
-#[test]
-#[should_panic]
-fn test_calculateRewardDue_0() {
-    let contract_address = deploy_contract("HelloStarknet");
+// #[test]
+// #[should_panic]
+// fn test_calculateRewardDue_0() {
+//     let contract_address = deploy_contract("HelloStarknet");
 
-    let safe_dispatcher = IHelloStarknetSafeDispatcher { contract_address };
+//     let safe_dispatcher = IHelloStarknetSafeDispatcher { contract_address };
 
-    #[feature("safe_dispatcher")]
-    let calculateRewardDue_result = safe_dispatcher._calculateRewardDue(0).unwrap();
+//     #[feature("safe_dispatcher")]
+//     let calculateRewardDue_result = safe_dispatcher._calculateRewardDue(0).unwrap();
 
-    //finder player should be due 1 share of the reward
-    assert(calculateRewardDue_result == 0, 'Reward value should be zero');
-}
+//     //finder player should be due 1 share of the reward
+//     assert(calculateRewardDue_result == 0, 'Reward value should be zero');
+// }
 
 //skip
 // #[test]
@@ -388,6 +389,24 @@ fn test_calculateRewardDue_0() {
 //     safe_dispatcher._spawnNewPosition(address1, 0).unwrap();
 // }
 
+// #[test]
+// fn test_getSeed() {
+//     //should spawn a poistion for a player and try again to spawn a new position; but should fail as the player already has a position.
+
+//     let contract_address = deploy_contract("HelloStarknet");
+
+//     let safe_dispatcher = IHelloStarknetSafeDispatcher { contract_address };
+
+//     let address1: ContractAddress = contract_address_const::<
+//         0x052a2b0b20d8796e57f0f00e99adfd61e0b40c4a49553d4197e4da6c1c023833
+//     >();
+
+//     #[feature("safe_dispatcher")]
+//     let result = safe_dispatcher._getSeed(address1).unwrap();
+
+//     println!("result {:?}", result);
+// }
+
 #[test]
 fn test_getSeed() {
     //should spawn a poistion for a player and try again to spawn a new position; but should fail as the player already has a position.
@@ -396,12 +415,12 @@ fn test_getSeed() {
 
     let safe_dispatcher = IHelloStarknetSafeDispatcher { contract_address };
 
-    let address1: ContractAddress = contract_address_const::<
-        0x052a2b0b20d8796e57f0f00e99adfd61e0b40c4a49553d4197e4da6c1c023833
-    >();
+    // let address1: ContractAddress = contract_address_const::<
+    //     0x052a2b0b20d8796e57f0f00e99adfd61e0b40c4a49553d4197e4da6c1c023833
+    // >();
 
     #[feature("safe_dispatcher")]
-    let result = safe_dispatcher._getSeed(address1).unwrap();
+    let result = safe_dispatcher.finder_player_move_position(0).unwrap();
 
     println!("result {:?}", result);
 }

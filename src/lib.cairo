@@ -22,9 +22,7 @@ pub trait IHelloStarknet<TContractState> {
         leaf: u256,
         proof: Array<u256>
     ) -> bool;
-    fn finder_player_move_position(
-        ref self: TContractState, xDirection: u128, yDirection: u128
-    ) -> (u128, u128);
+    fn finder_player_move_position(ref self: TContractState, direction: u128) -> (u128, u128);
     fn get_finder_player_position(
         self: @TContractState, gamerWalletAddress: ContractAddress, gameWeek: u256
     ) -> (u128, u128);
@@ -45,12 +43,12 @@ pub trait IHelloStarknet<TContractState> {
     );
     fn finder_player_generate_position(ref self: TContractState) -> bool;
     fn withdraw_ETH_Balance(ref self: TContractState, receiver: ContractAddress);
-    fn get_game_landowner_fee(self: @TContractState) -> bool;
-    fn get_num_words(self: @TContractState) -> bool;
-    fn get_publish_delay(self: @TContractState) -> bool;
-    fn get_callback_fee_limit(self: @TContractState) -> bool;
-    fn get_gamemaster_fee(self: @TContractState) -> bool;
-    fn get_gas_fee_reservation(self: @TContractState) -> bool;
+    fn get_game_landowner_fee(self: @TContractState) -> u256;
+    fn get_num_words(self: @TContractState) -> u64;
+    fn get_publish_delay(self: @TContractState) -> u64;
+    fn get_callback_fee_limit(self: @TContractState) -> u128;
+    fn get_gamemaster_fee(self: @TContractState) -> u256;
+    fn get_gas_fee_reservation(self: @TContractState) -> u256;
     fn get_game_token_reward(self: @TContractState) -> u256;
     fn get_game_week(self: @TContractState) -> u256;
     fn get_game_week_treasure_total(self: @TContractState, gameWeek: u256) -> u256;
@@ -59,8 +57,8 @@ pub trait IHelloStarknet<TContractState> {
     fn get_total_number_of_hiders(self: @TContractState, gameWeek: u256) -> u256;
     fn get_main_game_info(self: @TContractState, gameWeek: u256) -> (u256, u256, u256);
     fn get_generate_position_fee(self: @TContractState) -> u256;
-    fn get_hider_player_fee(self: @TContractState) -> bool;
-    fn get_finder_player_fee(self: @TContractState) -> bool;
+    fn get_hider_player_fee(self: @TContractState) -> u256;
+    fn get_finder_player_fee(self: @TContractState) -> u256;
     fn get_claim_share_amounts(
         self: @TContractState, gameWeek: u256, gamerWalletAddress: ContractAddress
     ) -> u256;
@@ -110,8 +108,7 @@ trait InternalFunctionsTrait<TContractState> {
     );
     fn _finderPlayerMovePosition(
         ref self: TContractState,
-        xDirection: u128,
-        yDirection: u128,
+        direction: felt252,
         gamerWalletAddress: ContractAddress,
         gameWeek: u256
     ) -> (u128, u128);
@@ -248,13 +245,13 @@ mod HelloStarknet {
         self
             ._createNewGame(
                 0xbc19a39ffdeb3ff487a290fd65626b9592fe3fb625937ab468940c4c58966849,
-                75000000000000, //approx $ 0.25 finder fee
-                35000000000000, //approx $ 0.12 hider fee
-                5000000000000000,
-                5,
-                5,
+                30000000000000, //approx $ 0.1 finder fee
+                1500000000000000, //approx $ 5 hider fee
+                300000000000000, //approx $ 1 spawn new position
+                14,
+                14,
                 3,
-                105000000000000,
+                4500000000000000, // assuming $5 minimum value of hidden treasure
                 0
             );
 
@@ -423,17 +420,10 @@ mod HelloStarknet {
 
         fn _finderPlayerMovePosition(
             ref self: ContractState,
-            xDirection: u128,
-            yDirection: u128,
+            direction: u128,
             gamerWalletAddress: ContractAddress,
             gameWeek: u256
         ) -> (u128, u128) {
-            assert(xDirection >= 0, 'cannot be negative');
-            assert(yDirection >= 0, 'cannot be negative');
-
-            assert(xDirection <= 1, 'can only move one step');
-            assert(yDirection <= 1, 'can only move one step');
-
             //get x,y coordinates from player_position mapping
             let (x, y) = self.player_position.read((gameWeek, gamerWalletAddress));
 
@@ -441,9 +431,33 @@ mod HelloStarknet {
             assert(x.is_non_zero(), 'gamer does not have coordinates');
             assert(y.is_non_zero(), 'gamer does not have coordinates');
 
-            //increase or decrease the coordinates in the direction
-            let newX: u128 = x + xDirection;
-            let newY: u128 = y + yDirection;
+            //increase or decrease the coordinates in the intended direction
+            let mut newX: u128 = 0;
+            let mut newY: u128 = 0;
+
+            if (direction == 0_u128) {
+                newX = x - 1;
+                newY = y;
+            }
+
+            if (direction == 1_u128) {
+                newX = x + 1;
+                newY = y;
+            }
+
+            if (direction == 2_u128) {
+                newX = x;
+                newY = y - 1;
+            }
+
+            if (direction == 3_u128) {
+                newX = x;
+                newY = y + 1;
+            }
+
+            //incorrect direction selected by user.
+            assert(newY != 0, 'invalid direction selected');
+            assert(newX != 0, 'invalid direction selected');
 
             let (maxGridX, maxGridY) = self.main_game_grid_size.read(gameWeek);
 
@@ -452,20 +466,7 @@ mod HelloStarknet {
             assert(newY <= maxGridY, 'out of game board range');
 
             //update player position
-            self.player_position.write((gameWeek, gamerWalletAddress), (newX, newY));
-
-            //publish event that player has moved
-            self
-                .emit(
-                    PlayerPosition {
-                        user: gamerWalletAddress,
-                        xCoordinate: newX,
-                        yCoordinate: newY,
-                        gameWeek: gameWeek
-                    }
-                );
-
-            self._checkForTreasure(gamerWalletAddress, newX, newY, gameWeek);
+            self._updatePlayerPosition(newX, newY, gamerWalletAddress, gameWeek);
 
             return self.player_position.read((gameWeek, gamerWalletAddress));
         }
@@ -695,9 +696,8 @@ mod HelloStarknet {
             return true;
         }
 
-        fn get_gas_fee_reservation(self: @ContractState) -> bool {
-            self.gasFeeReservation.read();
-            return true;
+        fn get_gas_fee_reservation(self: @ContractState) -> u256 {
+            return self.gasFeeReservation.read();
         }
 
         fn update_gamemaster_fee(ref self: ContractState, feeAmount: u256) -> bool {
@@ -706,9 +706,8 @@ mod HelloStarknet {
             return true;
         }
 
-        fn get_gamemaster_fee(self: @ContractState) -> bool {
-            self.gameMasterFee.read();
-            return true;
+        fn get_gamemaster_fee(self: @ContractState) -> u256 {
+            return self.gameMasterFee.read();
         }
 
         fn update_callback_fee_limit(ref self: ContractState, maxGasFeeAmount: u128) -> bool {
@@ -717,9 +716,9 @@ mod HelloStarknet {
             return true;
         }
 
-        fn get_callback_fee_limit(self: @ContractState) -> bool {
-            self.callback_fee_limit.read();
-            return true;
+        fn get_callback_fee_limit(self: @ContractState) -> u128 {
+            return self.callback_fee_limit.read();
+
         }
 
         fn update_publish_delay(ref self: ContractState, minNumberOfBlocks: u64) -> bool {
@@ -728,9 +727,8 @@ mod HelloStarknet {
             return true;
         }
 
-        fn get_publish_delay(self: @ContractState) -> bool {
-            self.publish_delay.read();
-            return true;
+        fn get_publish_delay(self: @ContractState) -> u64 {
+            return self.publish_delay.read();
         }
 
         fn update_num_words(ref self: ContractState, numberOfRandomNumbers: u64) -> bool {
@@ -739,9 +737,9 @@ mod HelloStarknet {
             return true;
         }
 
-        fn get_num_words(self: @ContractState) -> bool {
-            self.num_words.read();
-            return true;
+        fn get_num_words(self: @ContractState) -> u64 {
+            return self.num_words.read();
+            
         }
 
         fn update_game_landowner_fee(ref self: ContractState, feeAmount: u256) -> bool {
@@ -750,19 +748,17 @@ mod HelloStarknet {
             return true;
         }
 
-        fn get_game_landowner_fee(self: @ContractState) -> bool {
-            self.gameLandownerFee.read();
-            return true;
+        fn get_game_landowner_fee(self: @ContractState) -> u256 {
+            return self.gameLandownerFee.read();
+            
         }
 
-        fn get_finder_player_fee(self: @ContractState) -> bool {
-            self.currentFinderFee.read();
-            return true;
+        fn get_finder_player_fee(self: @ContractState) -> u256 {
+            return self.currentFinderFee.read();
         }
 
-        fn get_hider_player_fee(self: @ContractState) -> bool {
-            self.currentHiderFee.read();
-            return true;
+        fn get_hider_player_fee(self: @ContractState) -> u256 {
+            return self.currentHiderFee.read();
         }
 
         fn get_generate_position_fee(self: @ContractState) -> u256 {
@@ -839,9 +835,8 @@ mod HelloStarknet {
             return self._hideTreasure(caller);
         }
 
-        fn finder_player_move_position(
-            ref self: ContractState, xDirection: u128, yDirection: u128
-        ) -> (u128, u128) {
+        fn finder_player_move_position(// ref self: ContractState, xDirection: u128, yDirection: u128
+        ref self: ContractState, direction: u128) -> (u128, u128) {
             let gamerWalletAddress = get_caller_address();
             let gameWeek = self.currentGameWeek.read();
 
@@ -853,8 +848,7 @@ mod HelloStarknet {
 
             assert(transferTokenResult == true, 'eth token not transferred');
 
-            return self
-                ._finderPlayerMovePosition(xDirection, yDirection, gamerWalletAddress, gameWeek);
+            return self._finderPlayerMovePosition(direction, gamerWalletAddress, gameWeek);
         }
 
         fn get_finder_player_position(
