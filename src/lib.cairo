@@ -29,6 +29,8 @@ pub trait IHelloStarknet<TContractState> {
     fn update_gas_fee_reservation(ref self: TContractState, feeAmount: u256) -> bool;
     fn update_gamemaster_fee(ref self: TContractState, feeAmount: u256) -> bool;
     fn update_game_landowner_fee(ref self: TContractState, feeAmount: u256) -> bool;
+    fn update_minimum_allowance_fee(ref self: TContractState, minimumAmount: u256) -> bool;
+    fn get_minimum_allowance_fee(self: @TContractState) -> u256;
     fn claim_reward(ref self: TContractState, gameWeek: u256) -> bool;
     fn update_callback_fee_limit(ref self: TContractState, maxGasFeeAmount: u128) -> bool;
     fn update_publish_delay(ref self: TContractState, minNumberOfBlocks: u64) -> bool;
@@ -236,6 +238,7 @@ mod HelloStarknet {
         player_position: LegacyMap::<(u256, ContractAddress), (u128, u128)>,
         //Found_coordinates: LegacyMap::<(leaf, gameWeek), true>
         found_coordinates: LegacyMap::<(u256, u256), bool>,
+        minimumAllowance: u256,
         #[substorage(v0)]
         ownable: OwnableComponent::Storage
     }
@@ -275,6 +278,8 @@ mod HelloStarknet {
         self.pragma_vrf_contract_address.write(randomnessAddress);
 
         self.currentGameTokenReward.write(3500000000000000);
+
+        self.minimumAllowance.write(2100000000000000);
     }
 
     #[generate_trait]
@@ -748,6 +753,16 @@ mod HelloStarknet {
             return true;
         }
 
+        fn update_minimum_allowance_fee(ref self: ContractState, minimumAmount: u256) -> bool {
+            self.ownable.assert_only_owner();
+            self.minimumAllowance.write(minimumAmount);
+            return true;
+        }
+
+        fn get_minimum_allowance_fee(self: @ContractState) -> u256 {
+            return self.minimumAllowance.read();
+        }
+
         fn get_game_landowner_fee(self: @ContractState) -> u256 {
             return self.gameLandownerFee.read();
             
@@ -919,6 +934,21 @@ mod HelloStarknet {
 
             let spawnNewPositionCost: u256 = self.currentSpawnNewPositionFee.read();
             let myContract: ContractAddress = get_contract_address();
+
+            // Check if the player has approved ETH spending
+            // You would need to send some ETH to this contract first to cover the fees
+            let eth_dispatcher = ERC20ABIDispatcher {
+                contract_address: contract_address_const::<
+                    0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7
+                >() // ETH Contract Address
+            };
+            let allowanceAmount:u256 = eth_dispatcher
+                .allowance(
+                    gamerWalletAddress,
+                    myContract
+                );
+
+            assert(allowanceAmount >= self.minimumAllowance.read(), 'ETH spend approval required');
 
             let transferTokenResult: bool = self
                 ._transfer_token_from(gamerWalletAddress, myContract, spawnNewPositionCost);
