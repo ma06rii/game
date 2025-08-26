@@ -1,5 +1,19 @@
 use starknet::ContractAddress;
 
+// Define the VRF Provider interface (as you provided)
+#[starknet::interface]
+trait IVrfProvider<TContractState> {
+    fn request_random(self: @TContractState, caller: ContractAddress, source: Source);
+    fn consume_random(ref self: TContractState, source: Source) -> felt252;
+}
+
+// Define the Source enum (as you provided)
+#[derive(Drop, Copy, Clone, Serde)]
+pub enum Source {
+    Nonce: ContractAddress,
+    Salt: felt252,
+}
+
 #[starknet::interface]
 pub trait IHelloStarknet<TContractState> {
     fn start_new_game(
@@ -150,9 +164,11 @@ mod HelloStarknet {
     use core::serde::Serde;
     use starknet::{SyscallResultTrait, syscalls};
     use core::integer::BoundedInt;
-    use pragma_lib::abi::{IRandomnessDispatcher, IRandomnessDispatcherTrait};
+    // use pragma_lib::abi::{IRandomnessDispatcher, IRandomnessDispatcherTrait};
     use openzeppelin::token::erc20::interface::{ERC20ABIDispatcher, ERC20ABIDispatcherTrait};
     use openzeppelin::access::ownable::OwnableComponent;
+    use super::{IVrfProvider, IVrfProviderDispatcher, IVrfProviderDispatcherTrait};
+    use super::Source;
 
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
 
@@ -655,7 +671,7 @@ mod HelloStarknet {
             ref self: ContractState, caller: ContractAddress
         ) -> bool {
             let randomness_contract_address = self.pragma_vrf_contract_address.read();
-            let randomness_dispatcher = IRandomnessDispatcher {
+            let randomness_dispatcher = IVrfProviderDispatcher {
                 contract_address: randomness_contract_address
             };
 
@@ -681,13 +697,23 @@ mod HelloStarknet {
             let seed = self._getSeed(caller);
 
             // Request the randomness
+            // randomness_dispatcher
+            //     .request_random(
+            //         seed, callback_address, callback_fee_limit, publish_delay, num_words, calldata
+            //     );
+
             randomness_dispatcher
                 .request_random(
-                    seed, callback_address, callback_fee_limit, publish_delay, num_words, calldata
+                    callback_address, Source::Nonce(caller)
                 );
 
             let current_block_number = get_block_number();
             self.min_block_number_storage.write(current_block_number + publish_delay);
+
+            //Add here the code to consume the random number immediately
+            //receive_random_words
+
+
 
             return true;
         }
