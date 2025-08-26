@@ -292,8 +292,12 @@ mod HelloStarknet {
         self.num_words.write(1_u64);
         self.seedModuloDivisor.write(128000000000);
 
-        let randomnessAddress: ContractAddress = contract_address_const::<
-            0x60c69136b39319547a4df303b6b3a26fab8b2d78de90b6bd215ce82e9cb515c
+        // let randomnessAddress: ContractAddress = contract_address_const::<
+        //     0x60c69136b39319547a4df303b6b3a26fab8b2d78de90b6bd215ce82e9cb515c
+        // >();
+
+         let randomnessAddress: ContractAddress = contract_address_const::<
+            0x051fea4450da9d6aee758bdeba88b2f665bcbf549d2c61421aa724e9ac0ced8f
         >();
 
         self.pragma_vrf_contract_address.write(randomnessAddress);
