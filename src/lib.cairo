@@ -81,6 +81,11 @@ pub trait IHelloStarknet<TContractState> {
 }
 
 trait InternalFunctionsTrait<TContractState> {
+     fn _receive_random_words_2(
+        ref self: TContractState,
+        requester_address: ContractAddress,
+        random_words: felt252
+    );
     fn _checkForTreasure(
         ref self: TContractState,
         gamerWalletAddress: ContractAddress,
@@ -300,6 +305,56 @@ mod HelloStarknet {
 
     #[generate_trait]
     impl InternalFunctions of InternalFunctionsTrait {
+        fn _receive_random_words_2(
+            ref self: ContractState,
+            requester_address: ContractAddress,
+            random_words: felt252
+        ) {
+            // Have to make sure that the caller is the Pragma Randomness Oracle contract
+            // let caller_address = get_caller_address();
+            // assert(
+            //     caller_address == self.pragma_vrf_contract_address.read(),
+            //     'caller not randomness contract'
+            // );
+            // and that the current block is within publish_delay of the request block
+            // let current_block_number = get_block_number();
+            // let min_block_number = self.min_block_number_storage.read();
+            // assert(min_block_number <= current_block_number, 'block number issue');
+
+            let gameWeek = self.currentGameWeek.read();
+
+            // let random_word_0: felt252 = *random_words.at(0);
+            let random_word_0: felt252 = random_words;
+
+            let random_word_0_AsNumber: u256 = random_word_0.try_into().unwrap();
+
+            let random_word_0_AsNumber_A: u128 = random_word_0_AsNumber.high;
+            let random_word_0_AsNumber_B: u128 = random_word_0_AsNumber.low;
+
+            let (maxGridX, maxGridY) = self.main_game_grid_size.read(gameWeek);
+
+            let reducedNumberXCoordinate: u128 = (random_word_0_AsNumber_A - 1_u128) % maxGridX
+                .try_into()
+                .unwrap()
+                + 1_u128;
+
+            let reducedNumberYCoordinate: u128 = (random_word_0_AsNumber_B - 1_u128) % maxGridY
+                .try_into()
+                .unwrap()
+                + 1_u128;
+
+            // let gamerWalletAddressFromCalldata: ContractAddress = self
+            //     ._retrieveRandomnessCalldata(calldata);
+
+            self
+                ._updatePlayerPosition(
+                    reducedNumberXCoordinate,
+                    reducedNumberYCoordinate,
+                    requester_address,
+                    gameWeek
+                );
+        }
+
         fn _checkForTreasure(
             ref self: ContractState,
             gamerWalletAddress: ContractAddress,
@@ -712,7 +767,12 @@ mod HelloStarknet {
 
             //Add here the code to consume the random number immediately
             //receive_random_words
-
+            let random_value = randomness_dispatcher.consume_random(Source::Nonce(caller));
+            //check if random_value is valid
+         
+            self._receive_random_words_2(caller, random_value);
+            //update function to return 'true'
+            //Then add an assertion check that this function was executed successfully.
 
 
             return true;
