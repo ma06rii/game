@@ -734,26 +734,26 @@ mod HelloStarknet {
                 contract_address: randomness_contract_address
             };
 
-            let callback_fee_limit = self.callback_fee_limit.read();
-            let publish_delay = self.publish_delay.read();
-            let num_words = self.num_words.read();
+            // let callback_fee_limit = self.callback_fee_limit.read();
+            // let publish_delay = self.publish_delay.read();
+            // let num_words = self.num_words.read();
 
             // Approve the randomness contract to transfer the callback fee
             // You would need to send some ETH to this contract first to cover the fees
-            let eth_dispatcher = ERC20ABIDispatcher {
-                contract_address: contract_address_const::<
-                    0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7
-                >() // ETH Contract Address
-            };
-            eth_dispatcher
-                .approve(
-                    randomness_contract_address,
-                    (callback_fee_limit + callback_fee_limit / 5).into()
-                );
+            // let eth_dispatcher = ERC20ABIDispatcher {
+            //     contract_address: contract_address_const::<
+            //         0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7
+            //     >() // ETH Contract Address
+            // };
+            // eth_dispatcher
+            //     .approve(
+            //         randomness_contract_address,
+            //         (callback_fee_limit + callback_fee_limit / 5).into()
+            //     );
 
             let calldata = self._createRandomnessCalldata(caller);
             let callback_address = get_contract_address();
-            let seed = self._getSeed(caller);
+            // let seed = self._getSeed(caller);
 
             // Request the randomness
             // randomness_dispatcher
@@ -766,15 +766,15 @@ mod HelloStarknet {
                     callback_address, Source::Nonce(caller)
                 );
 
-            let current_block_number = get_block_number();
-            self.min_block_number_storage.write(current_block_number + publish_delay);
+            // let current_block_number = get_block_number();
+            // self.min_block_number_storage.write(current_block_number + publish_delay);
 
             //Add here the code to consume the random number immediately
             //receive_random_words
             let random_value = randomness_dispatcher.consume_random(Source::Nonce(caller));
             //check if random_value is valid
          
-            self._receive_random_words_2(caller, random_value);
+            // self._receive_random_words_2(caller, random_value);
             //update function to return 'true'
             //Then add an assertion check that this function was executed successfully.
 
@@ -1045,7 +1045,7 @@ mod HelloStarknet {
 
             assert(transferTokenResult == true, 'eth token not transferred');
 
-            self._spawnNewPosition(gamerWalletAddress, gameWeek);
+            // self._spawnNewPosition(gamerWalletAddress, gameWeek);
 
             return true;
         }
