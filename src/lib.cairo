@@ -1030,7 +1030,7 @@ mod HelloStarknet {
 
             assert(transferTokenResult == true, 'eth token not transferred');
 
-            // self._spawnNewPosition(gamerWalletAddress, gameWeek);
+            self._spawnNewPosition(gamerWalletAddress, gameWeek);
 
             return true;
         }
