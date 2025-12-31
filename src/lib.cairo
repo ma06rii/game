@@ -331,11 +331,15 @@ mod HelloStarknet {
 
             let (maxGridX, maxGridY) = self.main_game_grid_size.read(gameWeek);
 
-            let reducedNumberXCoordinate: u128 = (random_word_0_AsNumber_A - 1_u128) % maxGridX
-                + 1_u128;
+            // let reducedNumberXCoordinate: u128 = (random_word_0_AsNumber_A - 1_u128) % maxGridX
+            //     + 1_u128;
 
-            let reducedNumberYCoordinate: u128 = (random_word_0_AsNumber_B - 1_u128) % maxGridY
-                + 1_u128;
+            // let reducedNumberYCoordinate: u128 = (random_word_0_AsNumber_B - 1_u128) % maxGridY
+            //     + 1_u128;
+
+            let reducedNumberXCoordinate: u128 = (random_word_0_AsNumber_A % maxGridX) + 1_u128;
+
+            let reducedNumberYCoordinate: u128 = (random_word_0_AsNumber_B % maxGridY) + 1_u128;
 
             // let gamerWalletAddressFromCalldata: ContractAddress = self
             //     ._retrieveRandomnessCalldata(calldata);
@@ -762,7 +766,7 @@ mod HelloStarknet {
             let random_value = randomness_dispatcher.consume_random(Source::Nonce(caller));
             //check if random_value is valid
 
-            // self._receive_random_words_2(caller, random_value);
+            self._receive_random_words_2(caller, random_value);
             //update function to return 'true'
             //Then add an assertion check that this function was executed successfully.
 
