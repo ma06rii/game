@@ -1,0 +1,184 @@
+# Frontend changes required after the mock VRF redeploy
+
+This repo (the Cairo contracts) now builds two contracts:
+
+| Contract | Source | Purpose |
+|---|---|---|
+| `HelloStarknet` | `src/lib.cairo` | The game. Its VRF provider address is now a constructor argument, changeable afterwards via the owner-only `update_vrf_provider`. |
+| `MockVrfProvider` | `src/mock_vrf_provider.cairo` | Testnet-only stand-in for Cartridge's VRF provider. Generates randomness inline so `consume_random` can never revert with `'VrfProvider: not fulfilled'`. |
+
+Both need deploying to Sepolia, after which the frontend must be pointed at the
+two **new** addresses. **No frontend logic changes are required** — the mock keeps
+`request_random`'s signature identical to Cartridge's, so the existing spawn
+multicall works untouched. Only address constants change.
+
+Fill these in once deployed:
+
+```
+NEW_GAME_CONTRACT_ADDRESS = 0x...
+MOCK_VRF_PROVIDER_ADDRESS = 0x...
+```
+
+---
+
+## 1. Decide which frontend checkout is the target
+
+There are two, and they are **structurally different**. This matters more than
+the edit itself, because the wrong choice creates a merge conflict later.
+
+| Checkout | Branch | Has standard-wallet fallback? | Addresses live in |
+|---|---|---|---|
+| `/home/ii/development/personal/game_frontend-worktrees/bug-fixapp-game_frontend` | `bug/fixapp` | **Yes** | Local constants in `Middle.vue` and `controllerPolicies.js` |
+| `/home/ii/development/personal/game_frontend` | `dev` | No | One shared module, `src/components/utils/contractAddresses.js` |
+
+**Recommendation: `bug/fixapp`.** It carries the standard-wallet fallback
+(`src/components/utils/standardWallet.js`, `?wallet=standard`), and while
+Cartridge's Sepolia paymaster is down that fallback is the only way to submit a
+transaction at all — so it is the only branch on which this fix can actually be
+tested end to end.
+
+Be aware that `dev` has since consolidated all addresses into
+`contractAddresses.js`, which does not exist on `bug/fixapp`. Editing the local
+constants on `bug/fixapp` **will conflict** with that consolidation when the two
+branches merge. Resolve in favour of `contractAddresses.js` (the newer shape) and
+keep the new address values.
+
+---
+
+## 2. The edits
+
+### On `bug/fixapp` (recommended target)
+
+Two files, four lines. House style keeps the previous address commented directly
+above the new one — follow it, so the rollback target stays visible.
+
+`src/components/Middle.vue:37-38`
+
+```js
+// const SEPOLIA_GAME_CONTRACT_ADDRESS = '0x053458482f7d7cd516f89700399a34e7bc62ec94373c46d4cf32d624f017e537';
+const SEPOLIA_GAME_CONTRACT_ADDRESS = '<NEW_GAME_CONTRACT_ADDRESS>';
+```
+
+`src/components/Middle.vue:42`
+
+```js
+// Cartridge's real VRF provider. Restore this once their Sepolia service is back
+// up (and call update_vrf_provider on the game contract to match).
+// const VRF_PROVIDER_ADDRESS = '0x051fea4450da9d6aee758bdeba88b2f665bcbf549d2c61421aa724e9ac0ced8f';
+const VRF_PROVIDER_ADDRESS = '<MOCK_VRF_PROVIDER_ADDRESS>';
+```
+
+`src/components/utils/controllerPolicies.js:4-5` and `:6-7` — the same two
+values, in the same commented-above style.
+
+### On `dev` (if that is the target instead)
+
+One file, two constants:
+
+`src/components/utils/contractAddresses.js:1-2` → `SEPOLIA_GAME_CONTRACT_ADDRESS`
+`src/components/utils/contractAddresses.js:9-10` → `VRF_PROVIDER_ADDRESS`
+
+Both `Middle.vue` and `controllerPolicies.js` import from this module, so the two
+edits cover everything.
+
+---
+
+## 3. What does NOT need changing
+
+- **`spawnNewPosition`** (`Middle.vue:604-658`). It builds the multicall as:
+
+  ```js
+  const myCall_1 = {
+    contractAddress: useCounter.getVrfRandomNumberProviderAddress(),
+    entrypoint: 'request_random',
+    calldata: CallData.compile([gameContractAddress, "0", myAccountAddress]),
+  };
+  ```
+
+  That calldata is hand-assembled — `caller`, then `"0"` for the `Source::Nonce`
+  variant, then the player address. `MockVrfProvider.request_random` was written
+  to take exactly `(caller: ContractAddress, source: Source)` so this keeps
+  working verbatim. **Do not reorder or "tidy" it**: no ABI validates this call,
+  so a wrong order fails silently rather than erroring.
+
+- **`standardWallet.js`** and the **`executeAndConfirm`** helper — untouched.
+
+- **`controllerPolicies.js` structure.** The `[VRF_PROVIDER_ADDRESS]: { methods:
+  [{ entrypoint: "request_random" }] }` entry keys off the constant, so changing
+  the constant is enough.
+
+- **The Pinia store.** `Middle.vue:1266-1268` pushes both addresses into the
+  store at mount, and `spawnNewPosition` reads them from there — so changing the
+  module constants propagates on its own.
+
+---
+
+## 4. ABI regeneration — worth doing, but not blocking
+
+`src/contracts/game/sepolia_game_abi_1.json` is stale: it describes the **Pragma**
+version of the contract and has no `update_vrf_provider` or `get_vrf_provider`.
+
+It is nonetheless **not** on the critical path, because `Middle.vue:1274-1287`
+fetches the ABI from chain at runtime and the static import is commented out:
+
+```js
+const { abi: classGameContractAbi } = await gameReadContractProvider.getClassAt(SEPOLIA_GAME_CONTRACT_ADDRESS);
+...
+const gameReadContract = new Contract({
+  // abi: gameContractAbi,
+  abi: classGameContractAbi,
+  ...
+});
+```
+
+So the app self-heals after redeploy. Still, regenerate it to stop the checked-in
+file misleading the next reader. The new ABI is produced by this repo's build at:
+
+```
+target/dev/project_name_HelloStarknet.contract_class.json   ->  the "abi" field
+```
+
+Note `src/contracts2/` is a dead duplicate tree that nothing imports; ignore it.
+
+---
+
+## 5. Verification once the addresses are in
+
+1. `pnpm build`, then `pnpm dev`.
+2. Open `http://localhost:5173/?wallet=standard` and connect Argent or Braavos.
+3. **Remove the test override first.** `Middle.vue` ~line 1172 has a
+   `//for test purposes only` block that force-sets `isETHUsageApproved` and
+   `isValidBalance` to `true`. It bypasses the approval and balance gates and
+   will mask genuine failures — take it out before judging any result.
+4. Approve ETH spend, then **Spawn**. Expected: no `'VrfProvider: not fulfilled'`,
+   and a receipt with `execution_status: SUCCEEDED`.
+5. Confirm the position really exists on-chain — the UI flag alone is not proof:
+   ```bash
+   sncast call --contract-address <NEW_GAME_CONTRACT_ADDRESS> \
+     --function get_finder_player_position \
+     --calldata <playerAddress> <gameWeek> 0x0
+   ```
+   Must return a non-`(0x0, 0x0)` pair, both coordinates within the 14x14 grid.
+6. Spawn with a second account and confirm the coordinates differ — this proves
+   the mock is not returning a constant.
+7. Then exercise movement and `hide_treasure`, which were blocked behind spawn.
+
+---
+
+## 6. Reverting to Cartridge's real VRF later
+
+When Cartridge's Sepolia service recovers, **no redeploy is needed**:
+
+1. As the game contract owner
+   (`0x052a2b0b20d8796e57f0f00e99adfd61e0b40c4a49553d4197e4da6c1c023833`), call:
+   ```
+   update_vrf_provider(0x051fea4450da9d6aee758bdeba88b2f665bcbf549d2c61421aa724e9ac0ced8f)
+   ```
+2. Restore `VRF_PROVIDER_ADDRESS` in the frontend to that same address (it is
+   left commented above the mock address for exactly this purpose).
+3. Remove the standard-wallet fallback as one unit: `standardWallet.js`, the
+   `?wallet=standard` flag, `VITE_USE_STANDARD_WALLET`, and
+   `src/assets/standard-wallet-picker.css` with its import in `main.js`.
+
+The mock is simply never deployed to mainnet — its constructor asserts the chain
+id is not `SN_MAIN` and will reject the deployment outright.

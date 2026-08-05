@@ -6,15 +6,17 @@ edition = "2023_11"
 # See more keys and their definitions at https://docs.swmansion.com/scarb/docs/reference/manifest.html
 
 [dependencies]
-starknet = "2.6.3"
-pragma_lib = { git = "https://github.com/astraly-labs/pragma-lib" }
-openzeppelin = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v0.9.0" }
+starknet = "2.12.0"
+openzeppelin = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v2.0.0" }
 
 [dev-dependencies]
 snforge_std = { git = "https://github.com/foundry-rs/starknet-foundry", tag = "v0.24.0" }
 
 [[target.starknet-contract]]
-allowed-libfuncs-list.name = "experimental"
+# "audited" is the libfunc list Starknet accepts when declaring a class on a
+# public network (Sepolia and mainnet). It replaces the older "experimental"
+# list, which newer Scarb releases no longer recognise.
+allowed-libfuncs-list.name = "audited"
 casm = true
 
 [scripts]

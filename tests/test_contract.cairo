@@ -1,17 +1,26 @@
-use starknet::ContractAddress;
-use snforge_std::{declare, ContractClassTrait};
-use project_name::IHelloStarknetSafeDispatcher;
-use project_name::IHelloStarknetSafeDispatcherTrait;
-use project_name::IHelloStarknetDispatcher;
-use project_name::IHelloStarknetDispatcherTrait;
-
-use starknet::{
-    get_caller_address, class_hash::class_hash_const, contract_address_const, get_contract_address
+use project_name::{
+    IHelloStarknetDispatcher, IHelloStarknetDispatcherTrait, IHelloStarknetSafeDispatcher,
+    IHelloStarknetSafeDispatcherTrait,
 };
+use snforge_std::{ContractClassTrait, declare};
+use starknet::class_hash::class_hash_const;
+use starknet::{ContractAddress, contract_address_const, get_caller_address, get_contract_address};
 
+// The game contract's constructor now takes the VRF provider address as an
+// argument, so it has to be serialised into the deploy calldata here. Tests do
+// not exercise randomness, so any non-zero address will do; Cartridge's real
+// provider address is used simply because it is the meaningful default.
 fn deploy_contract(name: ByteArray) -> ContractAddress {
     let contract = declare(name).unwrap();
-    let (contract_address, _) = contract.deploy(@ArrayTrait::new()).unwrap();
+
+    let vrfProviderAddress: ContractAddress = contract_address_const::<
+        0x051fea4450da9d6aee758bdeba88b2f665bcbf549d2c61421aa724e9ac0ced8f,
+    >();
+
+    let mut constructorCalldata = ArrayTrait::<felt252>::new();
+    constructorCalldata.append(vrfProviderAddress.into());
+
+    let (contract_address, _) = contract.deploy(@constructorCalldata).unwrap();
     contract_address
 }
 
@@ -235,7 +244,7 @@ fn deploy_contract(name: ByteArray) -> ContractAddress {
 //     #[feature("safe_dispatcher")]
 //     let playerRewardDue_result = safe_dispatcher._playerRewardDue(address1, 0).unwrap();
 
-//     //PlayerRewardToPay + GasFeeReservation + GameMasterFee == HiderFee 
+//     //PlayerRewardToPay + GasFeeReservation + GameMasterFee == HiderFee
 //     assert(
 //         (playerRewardDue_result + 10000000000000 + 2500000000000) == 35000000000000,
 //         'Reward value not correct'
@@ -297,8 +306,8 @@ fn deploy_contract(name: ByteArray) -> ContractAddress {
 
 //     //finder player should be due 1 share of the reward
 //     assert(
-//         (finderAddress_playerRewardDue_result + 10000000000000 + 2500000000000) == 35000000000000,
-//         'Reward value not correct'
+//         (finderAddress_playerRewardDue_result + 10000000000000 + 2500000000000) ==
+//         35000000000000, 'Reward value not correct'
 //     );
 
 //     #[feature("safe_dispatcher")]
@@ -369,7 +378,8 @@ fn deploy_contract(name: ByteArray) -> ContractAddress {
 // #[test]
 // #[should_panic]
 // fn test_spawnNewPosition_twice() {
-//     //should spawn a poistion for a player and try again to spawn a new position; but should fail as the player already has a position.
+//     //should spawn a poistion for a player and try again to spawn a new position; but should fail
+//     as the player already has a position.
 
 //     let contract_address = deploy_contract("HelloStarknet");
 
@@ -391,7 +401,8 @@ fn deploy_contract(name: ByteArray) -> ContractAddress {
 
 // #[test]
 // fn test_getSeed() {
-//     //should spawn a poistion for a player and try again to spawn a new position; but should fail as the player already has a position.
+//     //should spawn a poistion for a player and try again to spawn a new position; but should fail
+//     as the player already has a position.
 
 //     let contract_address = deploy_contract("HelloStarknet");
 
@@ -409,7 +420,8 @@ fn deploy_contract(name: ByteArray) -> ContractAddress {
 
 #[test]
 fn test_getSeed() {
-    //should spawn a poistion for a player and try again to spawn a new position; but should fail as the player already has a position.
+    //should spawn a poistion for a player and try again to spawn a new position; but should fail as
+    //the player already has a position.
 
     let contract_address = deploy_contract("HelloStarknet");
 
