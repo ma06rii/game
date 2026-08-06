@@ -6,10 +6,11 @@ use snforge_std::{ContractClassTrait, declare};
 use starknet::class_hash::class_hash_const;
 use starknet::{ContractAddress, contract_address_const, get_caller_address, get_contract_address};
 
-// The game contract's constructor now takes the VRF provider address as an
-// argument, so it has to be serialised into the deploy calldata here. Tests do
-// not exercise randomness, so any non-zero address will do; Cartridge's real
-// provider address is used simply because it is the meaningful default.
+// The game contract's constructor takes the VRF provider address and the game
+// token address, so both have to be serialised into the deploy calldata here, in
+// that order. Tests exercise neither randomness nor token transfers, so any
+// non-zero addresses would do; the real ones are used because they are the
+// meaningful defaults.
 fn deploy_contract(name: ByteArray) -> ContractAddress {
     let contract = declare(name).unwrap();
 
@@ -17,8 +18,14 @@ fn deploy_contract(name: ByteArray) -> ContractAddress {
         0x051fea4450da9d6aee758bdeba88b2f665bcbf549d2c61421aa724e9ac0ced8f,
     >();
 
+    // USDC on Sepolia - 6 decimals, which is what the fee constants assume.
+    let gameTokenAddress: ContractAddress = contract_address_const::<
+        0x0512feac6339ff7889822cb5aa2a86c848e9d392bb0e3e237c008674feed8343,
+    >();
+
     let mut constructorCalldata = ArrayTrait::<felt252>::new();
     constructorCalldata.append(vrfProviderAddress.into());
+    constructorCalldata.append(gameTokenAddress.into());
 
     let (contract_address, _) = contract.deploy(@constructorCalldata).unwrap();
     contract_address

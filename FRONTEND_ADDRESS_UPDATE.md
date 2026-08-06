@@ -12,12 +12,33 @@ two **new** addresses. **No frontend logic changes are required** — the mock k
 `request_random`'s signature identical to Cartridge's, so the existing spawn
 multicall works untouched. Only address constants change.
 
-Fill these in once deployed:
+## Deployed addresses (Sepolia)
 
 ```
-NEW_GAME_CONTRACT_ADDRESS = 0x...
-MOCK_VRF_PROVIDER_ADDRESS = 0x...
+NEW_GAME_CONTRACT_ADDRESS = 0x01ad64b0557cb573f078d7a573bb35526c7dda92ea7e1d182151ee5ab5691b26
+MOCK_VRF_PROVIDER_ADDRESS = 0x01baad38bde8d3d60eebab5b96f72a297d52e6d1386bc3d4ec5344d9a30388bd
 ```
+
+| | Class hash |
+|---|---|
+| `HelloStarknet` | `0x1b095da057971244a4a166ebf45f3fd96191d3d906371c621af7d220ba2fdb5` |
+| `MockVrfProvider` | `0x71ce286ae6540c25c0fbe0e453cc1f8ce848a52a831de8bfcdd5b6017294bc4` |
+
+## Status
+
+- [x] Both contracts deployed.
+- [x] Game contract repointed at the mock. It was deployed with Cartridge's real
+      provider (`0x051fea...`) as the constructor argument, which would have left
+      spawn failing; `update_vrf_provider` fixed it with no redeploy.
+      `get_vrf_provider()` now returns `0x1baad38b...` — verified on-chain.
+- [ ] **Frontend addresses** — ready to apply as `frontend-address-update.patch`
+      in this repo (verified with `git apply --check`). Not applied directly
+      because both frontend checkouts are mounted read-only.
+- [ ] **ABI** — regenerated as `sepolia_game_abi_2.json` in this repo; copy it to
+      the frontend as `src/contracts/game/sepolia_game_abi_1.json`.
+- [x] **Game week** — no action needed. `Middle.vue:258` reads
+      `get_game_week()` from the contract rather than assuming `0x1`, so the
+      fresh deploy's week 0 works as-is.
 
 ---
 

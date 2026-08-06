@@ -59,6 +59,8 @@ pub trait IHelloStarknet<TContractState> {
     fn update_seed_modulo_divisor(ref self: TContractState, value: u256) -> bool;
     fn update_vrf_provider(ref self: TContractState, vrfProviderAddress: ContractAddress) -> bool;
     fn get_vrf_provider(self: @TContractState) -> ContractAddress;
+    fn update_game_token(ref self: TContractState, gameTokenAddress: ContractAddress) -> bool;
+    fn get_game_token(self: @TContractState) -> ContractAddress;
     fn receive_random_words(
         ref self: TContractState,
         requester_address: ContractAddress,
@@ -67,7 +69,7 @@ pub trait IHelloStarknet<TContractState> {
         calldata: Array<felt252>,
     );
     fn finder_player_generate_position(ref self: TContractState) -> bool;
-    fn withdraw_ETH_Balance(ref self: TContractState, receiver: ContractAddress);
+    fn withdraw_token_balance(ref self: TContractState, receiver: ContractAddress);
     fn get_game_landowner_fee(self: @TContractState) -> u256;
     fn get_num_words(self: @TContractState) -> u64;
     fn get_publish_delay(self: @TContractState) -> u64;
@@ -240,6 +242,17 @@ mod HelloStarknet {
         callback_fee_limit: u128, // e.g. 1000000000000
         publish_delay: u64, // e.g. 3
         num_words: u64, // e.g. 2
+        //Game token
+        //The ERC-20 that every fee, reward and treasure value in this contract is
+        //denominated in. Set from a constructor argument and changeable afterwards
+        //by the owner through update_game_token.
+        //
+        //CRITICAL: every amount below is a RAW token amount, so it is tied to this
+        //token's decimals. The contract is currently configured for USDC, which has
+        //6 decimals, meaning 1 USDC = 1,000,000. Pointing this at a token with
+        //different decimals (ETH has 18) without also rescaling every amount would
+        //silently change every fee in the game by orders of magnitude.
+        game_token_contract_address: ContractAddress,
         //Fees
         gasFeeReservation: u256,
         gameMasterFee: u256,
@@ -285,18 +298,36 @@ mod HelloStarknet {
     //   sepolia  -> currently the MockVrfProvider from src/mock_vrf_provider.cairo,
     //               because Cartridge's Sepolia service is down. Switch back with
     //               update_vrf_provider once it recovers - no redeploy needed.
+    //
+    // gameTokenAddress is the ERC-20 the game charges fees in and pays rewards
+    // from. Also passed in at deploy time so the token can be changed without a
+    // new class, and changeable afterwards through update_game_token.
+    //
+    // ALL AMOUNTS BELOW ARE IN THE GAME TOKEN'S SMALLEST UNIT, and the values
+    // written here assume USDC's 6 decimals:
+    //
+    //     1 USDC = 1,000,000 units      so  $1.00 = 1000000
+    //                                       $0.10 =  100000
+    //
+    // If you deploy against a token with different decimals, every one of these
+    // literals has to be rescaled to match. (They were previously written for
+    // 18-decimal ETH priced at roughly $3,333.)
     #[constructor]
-    fn constructor(ref self: ContractState, vrfProviderAddress: ContractAddress) {
+    fn constructor(
+        ref self: ContractState,
+        vrfProviderAddress: ContractAddress,
+        gameTokenAddress: ContractAddress,
+    ) {
         self
             ._createNewGame(
                 0xbc19a39ffdeb3ff487a290fd65626b9592fe3fb625937ab468940c4c58966849,
-                30000000000000, //approx $ 0.1 finder fee
-                1500000000000000, //approx $ 5 hider fee
-                300000000000000, //approx $ 1 spawn new position
+                100000, //$ 0.10 finder fee
+                5000000, //$ 5.00 hider fee
+                1000000, //$ 1.00 spawn new position
                 14,
                 14,
                 3,
-                4500000000000000, // assuming $5 minimum value of hidden treasure
+                15000000, // 3 hiders x $5 minimum value of hidden treasure = $15.00
                 0,
             );
 
@@ -305,9 +336,13 @@ mod HelloStarknet {
         >();
 
         self.ownable.initializer(ownerAddress);
-        self.gasFeeReservation.write(1000000000000);
-        self.gameMasterFee.write(2500000000000);
-        self.gameLandownerFee.write(350000000000);
+        self.gasFeeReservation.write(3333); //$ 0.0033 held back to cover gas
+        self.gameMasterFee.write(8333); //$ 0.0083 to the game master
+        self.gameLandownerFee.write(1167); //$ 0.0012 to the landowner
+        // callback_fee_limit, publish_delay, num_words and seedModuloDivisor are
+        // leftovers from the old Pragma VRF flow and are no longer read on any
+        // live path. callback_fee_limit is a gas allowance, not a game-token
+        // amount, so it is deliberately NOT rescaled with the fees above.
         self.callback_fee_limit.write(5000000000000000);
         self.publish_delay.write(0);
         self.num_words.write(1_u64);
@@ -318,9 +353,13 @@ mod HelloStarknet {
         // comment above this constructor for the addresses involved.
         self.vrf_provider_contract_address.write(vrfProviderAddress);
 
-        self.currentGameTokenReward.write(3500000000000000);
+        // Likewise supplied at deploy time. Currently USDC on Sepolia,
+        // 0x0512feac6339ff7889822cb5aa2a86c848e9d392bb0e3e237c008674feed8343.
+        self.game_token_contract_address.write(gameTokenAddress);
 
-        self.minimumAllowance.write(2100000000000000);
+        self.currentGameTokenReward.write(11666667); //$ 11.6667 reward per share
+
+        self.minimumAllowance.write(7000000); //$ 7.00 minimum spend approval
     }
 
     #[generate_trait]
@@ -493,7 +532,7 @@ mod HelloStarknet {
             let transferTokenResult: bool = self
                 ._transfer_token_from(caller, myContract, hiderCost);
 
-            assert(transferTokenResult == true, 'eth token not transferred');
+            assert(transferTokenResult == true, 'game token not transferred');
 
             let rewardResult: bool = self._rewardGamer(caller, gameWeek);
 
@@ -637,9 +676,10 @@ mod HelloStarknet {
             Serde::serialize(@recipient, ref call_data);
             Serde::serialize(@amount, ref call_data);
 
-            let address: ContractAddress = contract_address_const::<
-                0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7,
-            >();
+            // Whichever ERC-20 the game is configured to use. Was a hardcoded ETH
+            // address; now read from storage so the token can be changed by the
+            // owner. `amount` is a raw token amount in that token's decimals.
+            let address: ContractAddress = self.game_token_contract_address.read();
 
             let mut res = syscalls::call_contract_syscall(
                 address, selector!("transfer_from"), call_data.span(),
@@ -657,9 +697,8 @@ mod HelloStarknet {
             Serde::serialize(@recipient, ref call_data);
             Serde::serialize(@amount, ref call_data);
 
-            let address: ContractAddress = contract_address_const::<
-                0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7,
-            >();
+            // See _transfer_token_from above - same configured game token.
+            let address: ContractAddress = self.game_token_contract_address.read();
 
             let mut res = syscalls::call_contract_syscall(
                 address, selector!("transfer"), call_data.span(),
@@ -700,7 +739,7 @@ mod HelloStarknet {
 
             let transferTokenResult: bool = self._transfer_token(gamerWalletAddress, reward);
 
-            assert(transferTokenResult == true, 'No eth token transferred');
+            assert(transferTokenResult == true, 'No game token transferred');
 
             self.claimed_rewards.write((gameWeek, gamerWalletAddress), true);
 
@@ -769,7 +808,8 @@ mod HelloStarknet {
             // let num_words = self.num_words.read();
 
             // Approve the randomness contract to transfer the callback fee
-            // You would need to send some ETH to this contract first to cover the fees
+            // Pragma charged its callback fee in ETH, which is why this dead block
+            // still names ETH rather than the configured game token.
             // let eth_dispatcher = ERC20ABIDispatcher {
             //     contract_address: contract_address_const::<
             //         0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7
@@ -982,7 +1022,7 @@ mod HelloStarknet {
             let transferTokenResult: bool = self
                 ._transfer_token_from(gamerWalletAddress, myContract, finderCost);
 
-            assert(transferTokenResult == true, 'eth token not transferred');
+            assert(transferTokenResult == true, 'game token not transferred');
 
             return self._finderPlayerMovePosition(direction, gamerWalletAddress, gameWeek);
         }
@@ -1056,21 +1096,22 @@ mod HelloStarknet {
             let spawnNewPositionCost: u256 = self.currentSpawnNewPositionFee.read();
             let myContract: ContractAddress = get_contract_address();
 
-            // Check if the player has approved ETH spending
-            // You would need to send some ETH to this contract first to cover the fees
-            let eth_dispatcher = ERC20ABIDispatcher {
-                contract_address: contract_address_const::<
-                    0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7,
-                >() // ETH Contract Address
+            // Check that the player has approved this contract to spend enough of
+            // the game token on their behalf. This is checked once here rather than
+            // per fee, so a player approves a budget up front and can then play
+            // several rounds without re-approving.
+            let game_token_dispatcher = ERC20ABIDispatcher {
+                contract_address: self.game_token_contract_address.read(),
             };
-            let allowanceAmount: u256 = eth_dispatcher.allowance(gamerWalletAddress, myContract);
+            let allowanceAmount: u256 = game_token_dispatcher
+                .allowance(gamerWalletAddress, myContract);
 
-            assert(allowanceAmount >= self.minimumAllowance.read(), 'ETH spend approval required');
+            assert(allowanceAmount >= self.minimumAllowance.read(), 'token spend approval req');
 
             let transferTokenResult: bool = self
                 ._transfer_token_from(gamerWalletAddress, myContract, spawnNewPositionCost);
 
-            assert(transferTokenResult == true, 'eth token not transferred');
+            assert(transferTokenResult == true, 'game token not transferred');
 
             self._spawnNewPosition(gamerWalletAddress, gameWeek);
 
@@ -1120,6 +1161,35 @@ mod HelloStarknet {
         // think it is.
         fn get_vrf_provider(self: @ContractState) -> ContractAddress {
             return self.vrf_provider_contract_address.read();
+        }
+
+        // Points the game at a different ERC-20 for fees and rewards. Owner only.
+        //
+        // Handle with care - this is a setup and migration lever, not a routine
+        // one. Two things go wrong if it is used casually:
+        //
+        //   1. DECIMALS. Every fee stored in this contract is a raw token amount.
+        //      The current values assume 6 decimals (USDC). Switching to an
+        //      18-decimal token such as ETH without also calling the update_*_fee
+        //      setters would make every fee one-trillionth of its intended value.
+        //   2. STRANDED BALANCE. Fees already collected stay in the old token, and
+        //      withdraw_token_balance only reaches the currently configured one.
+        //      Sweep the old token BEFORE switching.
+        //
+        // Doing this mid-round also means players who approved a spend budget on
+        // the old token have not approved anything on the new one, so their next
+        // action reverts on 'token spend approval req' until they re-approve.
+        fn update_game_token(ref self: ContractState, gameTokenAddress: ContractAddress) -> bool {
+            self.ownable.assert_only_owner();
+            self.game_token_contract_address.write(gameTokenAddress);
+            return true;
+        }
+
+        // Reads back the token the game is currently charging fees in. Anyone can
+        // call this; it is the quickest way to confirm a deploy wired up the token
+        // you intended.
+        fn get_game_token(self: @ContractState) -> ContractAddress {
+            return self.game_token_contract_address.read();
         }
 
         fn receive_random_words(
@@ -1173,15 +1243,19 @@ mod HelloStarknet {
                 );
         }
 
-        fn withdraw_ETH_Balance(ref self: ContractState, receiver: ContractAddress) {
+        // Sweeps this contract's entire balance of the CURRENT game token to
+        // `receiver`. Owner only.
+        //
+        // Note it drains whichever token update_game_token last pointed at. If you
+        // ever switch tokens, sweep the old one BEFORE switching - afterwards this
+        // function can no longer reach it and the balance is stranded.
+        fn withdraw_token_balance(ref self: ContractState, receiver: ContractAddress) {
             self.ownable.assert_only_owner();
-            let eth_dispatcher = ERC20ABIDispatcher {
-                contract_address: contract_address_const::<
-                    0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7,
-                >() // ETH Contract Address            
+            let game_token_dispatcher = ERC20ABIDispatcher {
+                contract_address: self.game_token_contract_address.read(),
             };
-            let balance = eth_dispatcher.balance_of(get_contract_address());
-            eth_dispatcher.transfer(receiver, balance);
+            let balance = game_token_dispatcher.balance_of(get_contract_address());
+            game_token_dispatcher.transfer(receiver, balance);
         }
     }
 }

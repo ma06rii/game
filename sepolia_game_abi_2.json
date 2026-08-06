@@ -1,0 +1,829 @@
+[
+  {
+    "type": "impl",
+    "name": "HelloStarknetImpl",
+    "interface_name": "project_name::IHelloStarknet"
+  },
+  {
+    "type": "struct",
+    "name": "core::integer::u256",
+    "members": [
+      {
+        "name": "low",
+        "type": "core::integer::u128"
+      },
+      {
+        "name": "high",
+        "type": "core::integer::u128"
+      }
+    ]
+  },
+  {
+    "type": "enum",
+    "name": "core::bool",
+    "variants": [
+      {
+        "name": "False",
+        "type": "()"
+      },
+      {
+        "name": "True",
+        "type": "()"
+      }
+    ]
+  },
+  {
+    "type": "struct",
+    "name": "core::array::Span::<core::felt252>",
+    "members": [
+      {
+        "name": "snapshot",
+        "type": "@core::array::Array::<core::felt252>"
+      }
+    ]
+  },
+  {
+    "type": "interface",
+    "name": "project_name::IHelloStarknet",
+    "items": [
+      {
+        "type": "function",
+        "name": "start_new_game",
+        "inputs": [
+          {
+            "name": "listOfPreviousWeeksTreasureCordinatesMerkleTreeRoot",
+            "type": "core::integer::u256"
+          },
+          {
+            "name": "finderFee",
+            "type": "core::integer::u256"
+          },
+          {
+            "name": "hiderFee",
+            "type": "core::integer::u256"
+          },
+          {
+            "name": "spawnNewPositionFee",
+            "type": "core::integer::u256"
+          },
+          {
+            "name": "gameGridSizeX",
+            "type": "core::integer::u128"
+          },
+          {
+            "name": "gameGridSizeY",
+            "type": "core::integer::u128"
+          },
+          {
+            "name": "totalNumberOfHidersFromThePreviousWeek",
+            "type": "core::integer::u256"
+          },
+          {
+            "name": "totalHiddenTreasureValueFromPreviousWeek",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::bool"
+          }
+        ],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "hide_treasure",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::bool"
+          }
+        ],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "validate_treasure_coordinates",
+        "inputs": [
+          {
+            "name": "finderGamerWalletAddress",
+            "type": "core::starknet::contract_address::ContractAddress"
+          },
+          {
+            "name": "hiderGamerWalletAddress",
+            "type": "core::starknet::contract_address::ContractAddress"
+          },
+          {
+            "name": "gameWeek",
+            "type": "core::integer::u256"
+          },
+          {
+            "name": "leaf",
+            "type": "core::integer::u256"
+          },
+          {
+            "name": "proof",
+            "type": "core::array::Array::<core::integer::u256>"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::bool"
+          }
+        ],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "finder_player_move_position",
+        "inputs": [
+          {
+            "name": "direction",
+            "type": "core::integer::u128"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "(core::integer::u128, core::integer::u128)"
+          }
+        ],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "get_finder_player_position",
+        "inputs": [
+          {
+            "name": "gamerWalletAddress",
+            "type": "core::starknet::contract_address::ContractAddress"
+          },
+          {
+            "name": "gameWeek",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "(core::integer::u128, core::integer::u128)"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "update_gas_fee_reservation",
+        "inputs": [
+          {
+            "name": "feeAmount",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::bool"
+          }
+        ],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "update_gamemaster_fee",
+        "inputs": [
+          {
+            "name": "feeAmount",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::bool"
+          }
+        ],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "update_game_landowner_fee",
+        "inputs": [
+          {
+            "name": "feeAmount",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::bool"
+          }
+        ],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "update_minimum_allowance_fee",
+        "inputs": [
+          {
+            "name": "minimumAmount",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::bool"
+          }
+        ],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "get_minimum_allowance_fee",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "claim_reward",
+        "inputs": [
+          {
+            "name": "gameWeek",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::bool"
+          }
+        ],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "update_callback_fee_limit",
+        "inputs": [
+          {
+            "name": "maxGasFeeAmount",
+            "type": "core::integer::u128"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::bool"
+          }
+        ],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "update_publish_delay",
+        "inputs": [
+          {
+            "name": "minNumberOfBlocks",
+            "type": "core::integer::u64"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::bool"
+          }
+        ],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "update_num_words",
+        "inputs": [
+          {
+            "name": "numberOfRandomNumbers",
+            "type": "core::integer::u64"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::bool"
+          }
+        ],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "update_seed_modulo_divisor",
+        "inputs": [
+          {
+            "name": "value",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::bool"
+          }
+        ],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "update_vrf_provider",
+        "inputs": [
+          {
+            "name": "vrfProviderAddress",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::bool"
+          }
+        ],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "get_vrf_provider",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "receive_random_words",
+        "inputs": [
+          {
+            "name": "requester_address",
+            "type": "core::starknet::contract_address::ContractAddress"
+          },
+          {
+            "name": "request_id",
+            "type": "core::integer::u64"
+          },
+          {
+            "name": "random_words",
+            "type": "core::array::Span::<core::felt252>"
+          },
+          {
+            "name": "calldata",
+            "type": "core::array::Array::<core::felt252>"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "finder_player_generate_position",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::bool"
+          }
+        ],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "withdraw_ETH_Balance",
+        "inputs": [
+          {
+            "name": "receiver",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "get_game_landowner_fee",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_num_words",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::integer::u64"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_publish_delay",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::integer::u64"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_callback_fee_limit",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::integer::u128"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_gamemaster_fee",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_gas_fee_reservation",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_game_token_reward",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_game_week",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_game_week_treasure_total",
+        "inputs": [
+          {
+            "name": "gameWeek",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_game_grid_size",
+        "inputs": [
+          {
+            "name": "gameWeek",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "(core::integer::u128, core::integer::u128)"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_total_number_of_finders",
+        "inputs": [
+          {
+            "name": "gameWeek",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_total_number_of_hiders",
+        "inputs": [
+          {
+            "name": "gameWeek",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_main_game_info",
+        "inputs": [
+          {
+            "name": "gameWeek",
+            "type": "core::integer::u256"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "(core::integer::u256, core::integer::u256, core::integer::u256)"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_generate_position_fee",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_hider_player_fee",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_finder_player_fee",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_claim_share_amounts",
+        "inputs": [
+          {
+            "name": "gameWeek",
+            "type": "core::integer::u256"
+          },
+          {
+            "name": "gamerWalletAddress",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::integer::u256"
+          }
+        ],
+        "state_mutability": "view"
+      }
+    ]
+  },
+  {
+    "type": "impl",
+    "name": "OwnableImpl",
+    "interface_name": "openzeppelin_access::ownable::interface::IOwnable"
+  },
+  {
+    "type": "interface",
+    "name": "openzeppelin_access::ownable::interface::IOwnable",
+    "items": [
+      {
+        "type": "function",
+        "name": "owner",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "transfer_ownership",
+        "inputs": [
+          {
+            "name": "new_owner",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "renounce_ownership",
+        "inputs": [],
+        "outputs": [],
+        "state_mutability": "external"
+      }
+    ]
+  },
+  {
+    "type": "constructor",
+    "name": "constructor",
+    "inputs": [
+      {
+        "name": "vrfProviderAddress",
+        "type": "core::starknet::contract_address::ContractAddress"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "project_name::HelloStarknet::TreasureHidden",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "user",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      },
+      {
+        "name": "hiderFee",
+        "type": "core::integer::u256",
+        "kind": "data"
+      },
+      {
+        "name": "gameWeek",
+        "type": "core::integer::u256",
+        "kind": "key"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "project_name::HelloStarknet::PlayerPosition",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "user",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      },
+      {
+        "name": "xCoordinate",
+        "type": "core::integer::u128",
+        "kind": "data"
+      },
+      {
+        "name": "yCoordinate",
+        "type": "core::integer::u128",
+        "kind": "data"
+      },
+      {
+        "name": "gameWeek",
+        "type": "core::integer::u256",
+        "kind": "key"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "project_name::HelloStarknet::CheckForTreasure",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "user",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      },
+      {
+        "name": "xCoordinate",
+        "type": "core::integer::u128",
+        "kind": "data"
+      },
+      {
+        "name": "yCoordinate",
+        "type": "core::integer::u128",
+        "kind": "data"
+      },
+      {
+        "name": "gameWeek",
+        "type": "core::integer::u256",
+        "kind": "key"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "openzeppelin_access::ownable::ownable::OwnableComponent::OwnershipTransferred",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "previous_owner",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      },
+      {
+        "name": "new_owner",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "openzeppelin_access::ownable::ownable::OwnableComponent::OwnershipTransferStarted",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "previous_owner",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      },
+      {
+        "name": "new_owner",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "openzeppelin_access::ownable::ownable::OwnableComponent::Event",
+    "kind": "enum",
+    "variants": [
+      {
+        "name": "OwnershipTransferred",
+        "type": "openzeppelin_access::ownable::ownable::OwnableComponent::OwnershipTransferred",
+        "kind": "nested"
+      },
+      {
+        "name": "OwnershipTransferStarted",
+        "type": "openzeppelin_access::ownable::ownable::OwnableComponent::OwnershipTransferStarted",
+        "kind": "nested"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "project_name::HelloStarknet::Event",
+    "kind": "enum",
+    "variants": [
+      {
+        "name": "TreasureHidden",
+        "type": "project_name::HelloStarknet::TreasureHidden",
+        "kind": "nested"
+      },
+      {
+        "name": "PlayerPosition",
+        "type": "project_name::HelloStarknet::PlayerPosition",
+        "kind": "nested"
+      },
+      {
+        "name": "CheckForTreasure",
+        "type": "project_name::HelloStarknet::CheckForTreasure",
+        "kind": "nested"
+      },
+      {
+        "name": "OwnableEvent",
+        "type": "openzeppelin_access::ownable::ownable::OwnableComponent::Event",
+        "kind": "flat"
+      }
+    ]
+  }
+]
