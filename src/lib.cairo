@@ -89,6 +89,9 @@ pub trait IHelloStarknet<TContractState> {
     fn get_claim_share_amounts(
         self: @TContractState, gameWeek: u256, gamerWalletAddress: ContractAddress,
     ) -> u256;
+    fn get_player_reward_due(
+        self: @TContractState, gameWeek: u256, gamerWalletAddress: ContractAddress,
+    ) -> u256;
 }
 
 trait InternalFunctionsTrait<TContractState> {
@@ -145,7 +148,7 @@ trait InternalFunctionsTrait<TContractState> {
     fn _playerRewardDue(
         self: @TContractState, gamerWalletAddress: ContractAddress, gameWeek: u256,
     ) -> u256;
-    fn _calculateRewardDue(self: @TContractState, claimShareCount: u256) -> u256;
+    fn _calculateRewardDue(self: @TContractState, claimShareCount: u256, gameWeek: u256) -> u256;
     fn _claimReward(
         ref self: TContractState, gamerWalletAddress: ContractAddress, gameWeek: u256,
     ) -> bool;
@@ -266,6 +269,16 @@ mod HelloStarknet {
         currentGameTokenReward: u256,
         //Main_Game: LegacyMap::<gameWeek, (listOfPreviousWeeksTreasureCordinatesMerkleTreeRoot,
         //finderFee, hiderFee)>
+        //
+        //CAREFUL - the three values in this tuple do NOT all describe the same week:
+        //  root      -> the treasures hidden during the PREVIOUS week, which are the
+        //               ones live and findable during THIS week (hence the name)
+        //  finderFee -> the rate charged for a move made DURING this week
+        //  hiderFee  -> the rate charged to hide DURING this week, which funds the
+        //               reward pool of the week AFTER this one
+        //
+        //So the money backing week K's rewards sits at main_game[K-1].hiderFee, not
+        //at main_game[K].hiderFee. See _calculateRewardDue.
         main_game: LegacyMap<u256, (u256, u256, u256)>,
         //Main_Game_Grid_Size: LegacyMap::<gameWeek, (gameGridSizeX, gameGridSizeY)>
         main_game_grid_size: LegacyMap<u256, (u128, u128)>,
@@ -718,7 +731,7 @@ mod HelloStarknet {
             if (claimShareCount == 0) {
                 return 0;
             } else {
-                return self._calculateRewardDue(claimShareCount);
+                return self._calculateRewardDue(claimShareCount, gameWeek);
             }
         }
 
@@ -746,8 +759,44 @@ mod HelloStarknet {
             return true;
         }
 
-        fn _calculateRewardDue(self: @ContractState, claimShareCount: u256) -> u256 {
-            let gameHiderFee = self.currentHiderFee.read();
+        // Works out what one player's shares in a finished game week are worth.
+        //
+        // The gameWeek argument is the week the shares BELONG to - the week the
+        // treasure was live and findable - not the week the player is claiming in.
+        // A claim always happens at least one week later, because a hider only
+        // knows their treasure survived once the week is over.
+        //
+        // That matters because of when a share is created. hide_treasure charges
+        // the fee in force at that moment and credits the share to the NEXT week:
+        //
+        //   hide during week K-1   ->  charged main_game[K-1].hiderFee
+        //                          ->  share credited to week K
+        //   week K                 ->  the treasure is live and findable
+        //   week K+1 or later      ->  claim_reward(K)
+        //
+        // So the money backing week K was paid in during week K-1, and week K-1's
+        // rate is what this calculation must use. It is the same for finders:
+        // validate_treasure_coordinates does not create a share, it moves the
+        // hider's existing one, so every share at week K is one hide from week K-1.
+        //
+        // This previously read the live currentHiderFee. Because start_new_game
+        // rewrites that on every rollover, any fee change silently repriced every
+        // reward players had not yet claimed - paying them a rate they never
+        // agreed to, in either direction.
+        fn _calculateRewardDue(
+            self: @ContractState, claimShareCount: u256, gameWeek: u256,
+        ) -> u256 {
+            // Guard against u256 underflow rather than a real case: shares at week
+            // 0 cannot exist, because hide_treasure always credits week 1 or later
+            // and _removeGamerReward requires the hider to already hold one.
+            // main_game[0] is seeded by the constructor, so the fallback is safe.
+            let fundingWeek: u256 = if gameWeek == 0 {
+                0
+            } else {
+                gameWeek - 1
+            };
+
+            let (_, _, gameHiderFee) = self.main_game.read(fundingWeek);
 
             let gasFee = self.gasFeeReservation.read();
             let gameFee = self.gameMasterFee.read();
@@ -972,6 +1021,24 @@ mod HelloStarknet {
             self: @ContractState, gameWeek: u256, gamerWalletAddress: ContractAddress,
         ) -> u256 {
             return self.claim_share_amounts.read((gameWeek, gamerWalletAddress));
+        }
+
+        // Returns exactly what claim_reward(gameWeek) would pay this player, in
+        // the game token's smallest unit. Anyone can call it.
+        //
+        // Use this rather than working the figure out from get_claim_share_amounts
+        // and get_hider_player_fee. Those two cannot reproduce it: the shares must
+        // be priced at the PREVIOUS week's hider fee, and the three deductions have
+        // to come off once. Going through the same internal path as the claim means
+        // the number shown to a player can never disagree with the number they get.
+        //
+        // Note this mirrors the claim completely, including its assertions - so it
+        // reverts with 'Reward is less than fees' in the case where the shares are
+        // worth less than the deductions. Treat a revert as "nothing to claim".
+        fn get_player_reward_due(
+            self: @ContractState, gameWeek: u256, gamerWalletAddress: ContractAddress,
+        ) -> u256 {
+            return self._playerRewardDue(gamerWalletAddress, gameWeek);
         }
 
         fn start_new_game(
