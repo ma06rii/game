@@ -90,9 +90,9 @@ A game round is **6 hours**. There are 4 rounds each day.
 
 | Action | ROZ | Conditions |
 |---|---|---|
-| Hide a treasure | 30 | Immediately |
-| The treasure is not found in the round | 50 | At the claim |
-| Find or steal a treasure | 110 | Also approximately $5 USDC |
+| Hide a treasure | 30 | Immediately. The value decreases to 4.5 or 15. Costs $0.20, and the maximum is 3 each day. Refer to section 5 |
+| The treasure is not found in the round | 50 | At the claim. The value decreases to 7.5 or 25. The contract selects the rate **when the player hides**, not at the claim. Refer to section 7 |
+| Find or steal a treasure | 110 | Also approximately $5 USDC. **This is the only reward that stays full for all the players** |
 | Each hop | 1 | Maximum 40 hops in a round. The value decreases to 0.15 or 0.5. Refer to section 5.2 |
 
 ### One reward for each day
@@ -119,12 +119,20 @@ not operate. Refer to section 11.
 ### The order of the rewards
 
 1. Find or steal - the best single action.
-2. A successful hide - 30 + 50 = 80.
+2. A successful hide - 30 + 50 = 80 for a player who paid $0.60 that day, and
+   12 for a player who did not.
 3. Participation - less important. The player must make 28 of a maximum of 40
    hops. The player must also pay $0.60 in the day.
 4. Each hop - a small reward for exploration.
 
 There is no retention reward now.
+
+**Find or steal is the one reward that the gate never decreases.** This is
+correct, for two reasons. A find needs the hidden treasure of a different player,
+and it takes that player's stake. Thus a farmer cannot find their own treasures in
+a closed loop, as they can with hops and hides. A find is also the action that
+controls the hide loop: each find is a farm hide that did not survive. Refer to
+section 9.2. If you decrease this reward, you make the control weaker.
 
 ### How many players Year 1 can pay
 
@@ -161,39 +169,55 @@ payment gets to $0.60. The player gets the full rate only from that hop. Earlier
 versions of this table gave the full rate to all the hops. That was not correct,
 and it made all three values too large.
 
-Two rules of the calculation, because they change the values:
+Three rules of the calculation, because they change the values:
 
 - **The payments increase in the order of the actions.** In each round the player
   makes the spawn before the hops of that round.
 - **The participation bonus operates at the first action where the two conditions
   are true**: 28 hops and $0.60. Refer to section 7.
+- **The player hides after the payment gets to $0.60.** Section 5 gives the hide
+  rewards to the gate also. Thus this rule is worth 68 ROZ to a typical casual
+  player. Refer to the note about the order of the actions.
 
 | Player | Rounds and hops | Payment | Gets through at | **Established** | **New wallet** | Target |
 |---|---|---|---|---|---|---|
-| Light casual | 2 rounds, 20 hops each | $0.265 | **Never** | **6** | **6** | 25 - 70 |
-| Typical casual | 2.5 rounds, 25 hops each | $0.755 | Hop **55** | **114.1** | **101.1** | 140 - 280 |
-| Active | 4 rounds, 32 hops each | $3.435 | Hop **60** | **285.9** | **242.4** | 300 - 500 |
+| Light casual, no hide | 2 rounds, 20 hops each | $0.265 | **Never** | **6** | **6** | 25 - 70 |
+| Light casual, **2 hides** | 2 rounds, 20 hops each | $0.765 | Hop **34** | **~54** | ~54 | 25 - 70 |
+| Typical casual | 2.5 rounds, 25 hops each | $0.955 | The **round-3 hide** | **117.5** | **62.5** | 140 - 280 |
+| Active | 4 rounds, 32 hops each | $3.635 | Hop **60** | **285.9** | **202.4** | 300 - 500 |
 
 The established values include one hide cycle for the casual player and the
 active player. They include one find for the active player.
 
 A wallet leaves the new wallet condition at $3 of total payments. The active
 player needs 1 day. The typical casual player needs 4 days. The light casual
-player needs 12 days.
+player needs 12 days. A wallet that only hides needs **5** days, at $0.20 for
+each hide and 3 hides each day.
 
-The calculation for the typical casual player: 54 hops before the gate at 0.15
-(**8.1**), 8 hops after the gate at 1.0 (**8**), the participation bonus (**18**),
-and one hide cycle (**80**).
+The calculation for the typical casual player: 50 hops before the gate at 0.15
+(**7.5**), 12 hops after the gate at 1.0 (**12**), the participation bonus
+(**18**), and one full hide cycle (**80**).
 
-**No player type gets the target now.** The targets were correct for the older
-values. The correction moved all three players down. The smaller hop rate of 0.15
-moved them down a small amount more:
+**The section 5 hide changes do almost nothing to the established players.** The
+typical casual player *gets 3.4 ROZ more*, because the $0.20 hide fee is a payment
+and moves this player through the gate sooner. The active player gets the same and
+pays $0.20 more. The new wallet values decrease, which is correct.
 
-| Player | Before | With the correction, at 0.3 | **With the correction, at 0.15** |
-|---|---|---|---|
-| Light casual | 12 | 12 | **6** |
-| Typical casual | 160 | 122.2 | **114.1** |
-| Active | 336 | 294.7 | **285.9** |
+**Two player types are still below the target, and this is not new.** You made the
+targets when the values still gave the full rate to all the hops:
+
+| Player | The first values | With the correction, at 0.3 | At 0.15 | **With the gate on hides** |
+|---|---|---|---|---|
+| Light casual | 12 | 12 | 6 | **6** (~54 with 2 hides) |
+| Typical casual | 160 | 122.2 | 114.1 | **117.5** |
+| Active | 336 | 294.7 | 285.9 | **285.9** |
+
+**A light casual player who hides 2 times is now in the target**, at approximately
+54 ROZ. This is new. Two hides cost $0.40. With the hop and spawn payments this
+moves the player through the gate at hop 34, and then all the rewards are full.
+The route into the target changed: before it was one hide at the full 30, and now
+it is two hides that get through the gate. One hide alone gives 18, which is not
+sufficient.
 
 **The correction is the larger cause, not the new rate.** The correction removes
 37.8 ROZ from the typical casual player and 41.3 ROZ from the active player. The
@@ -207,10 +231,14 @@ player. Section 9.3 calls this the value that controls the wallets that pay
 nothing. It is also the value that controls the start of each correct player's
 day.
 
-**The rewards change with the order of the actions.** A player who makes the spawn
-at the start of a round gets through the gate more quickly. Thus this player earns
-more than a player who makes the same actions in a different order. Refer to
-section 11.
+**The rewards change with the order of the actions, and the hides make this much
+larger.** A player who makes the spawn at the start of a round gets through the
+gate more quickly, and earns more. That was a small quantity. Now the gate also
+operates on the hide rewards. Thus **the same typical casual player gets 117.5 ROZ
+with a round-3 hide, and 50.35 ROZ with a round-2 hide** - a difference of 67 ROZ
+from the order only. A hide before the gate gives 12 and not 80, and the rule in
+section 7 makes this permanent. The player cannot see this. A message that says
+"hide after you pay $0.60" gives real help. Refer to section 11.
 
 There are three more causes for the light casual value of 6:
 
@@ -222,7 +250,7 @@ There are three more causes for the light casual value of 6:
 3. The participation bonus operates one time each day, not in each round. This
    removes 54 ROZ from the active player.
 
-### Hops alone do not get to the light casual target
+### The light casual target needs hides, not hops
 
 The light casual target is a target **below the gate**. Thus you must make sure
 that a player below the gate can get it. Hops alone do not get it:
@@ -237,16 +265,34 @@ that a player below the gate can get it. Hops alone do not get it:
 at 25. Hop number 65 costs $0.615 and gets through the gate. Then the player is
 not a player below the gate.
 
-Thus the player must use the rewards that stay full below the gate. These are the
-instant hide (30), the full hide cycle (80) and the find or steal (110). The
-light casual player with **one instant hide gets 36 ROZ**. This is in the target
-of 25 to 70. A full hide cycle gives 86 ROZ, which is more than the target.
+**Hides increase this maximum to 30.3, which gets to the target.** Two hides cost
+$0.40 in fees. This leaves space for 42 hops before $0.60:
+
+| | ROZ | Payment |
+|---|---|---|
+| 2 hide cycles below the gate (4.5 + 7.5 each) | 24 | $0.40 |
+| 42 hops x 0.15 | 6.3 | $0.185 |
+| Participation bonus - the gate still stops it | 0 | - |
+| **Total, below the gate** | **30.3** | **$0.585** |
+
+Thus a player below the gate can get to the bottom of the target. This is a
+change: before, the target was not possible below the gate. The gate decreased
+each hide, but the $0.20 fee also made a hide a way to pay. The maximum increased
+from 9.6 to 30.3.
+
+The better result for the player is to get **through** the gate: **the same two
+hides move the light casual player over $0.60, to approximately 54 ROZ**, because
+all the rewards are full then. One hide gives 18 ROZ. This is less than the target,
+and also less than a careful day below the gate. **The worst position is between
+the two.**
 
 This is the meaning of the target now: **a light casual player must hide. Hops
-alone are not sufficient.** This is a correct design, because the gate does not
-decrease the hide rewards. But section 9.2 shows that the hide loop is also the
-cheapest route for a farmer ($0.00016 for each ROZ). Thus the only route into the
-target is the route with the fewest controls. Refer to section 11.
+alone are not sufficient.** The conflict here is much smaller than before. Before,
+no control operated on a hide, thus the route into the target and the cheapest
+farm route were the same **uncontrolled** action. Sections 5 and 5.2 now put the
+gate on the hides also. Thus the two share an action but not a danger: section 9.2
+gives the hide loop a minimum of $22.8M and not $0.8M. A new control on the hide
+loop still operates on this player. Keep the two together. Refer to section 11.
 
 Two more points are important:
 
@@ -275,18 +321,38 @@ are also too large, and all three players are below them. Refer to section 11.
 
 | Action | Price | Notes |
 |---|---|---|
-| Hide a treasure | Free | The contract locks the $5 stake only |
+| Hide a treasure | **$0.20** and a $5 stake | **Maximum 3 each day.** The contract never returns the $0.20. It returns the $5 |
 | One hop | $0.005 to $0.04 | The price increases. Refer to section 5.1 |
 | Spawn a new position | $0.10 | Was $1.00 |
 
 The hop price and the spawn price decrease 10 times.
 
-The hide price does not change, and the contract does not change. The $5 is a
-stake, not a fee. The player gets the stake back if a finder does not take the
-treasure.
+### A hide is not free now, and the quantity has a maximum
 
-**The stake is at risk.** A finder can take it. Also, the contract keeps 12,833
-units (approximately $0.0128) at each claim. Thus a hide is not fully free.
+Two changes. Both operate on the hide loop in section 9.2 - the route that no
+other control reached:
+
+| Setting | Value | Storage | Reason |
+|---|---|---|---|
+| Hide fee | **$0.20** | `hideFee` `200000` | Gives a hide a real price that never comes back |
+| Daily hide maximum | **3 for each wallet, each day** | `dailyHideCap` | Controls the number of treasures from one wallet |
+
+**The maximum counts treasures, not transactions.** Thus `hide_treasure_bulk`
+also cannot place more than 3. Refer to section 7.6.
+
+**The $0.20 is a payment for the section 5.2 limits. The $5 stake is not.** The
+contract never returns the fee, thus rule 1 makes it a payment. The contract
+returns the stake, thus it is not a payment. This difference stops a farmer from
+getting through the gate for nothing. Rule 1 gives the exact division.
+
+One result is important early: **3 hides is exactly $0.60**, which is
+`dailySpendThreshold`. A wallet at the daily hide maximum has got through the
+daily gate exactly. This is correct, and it means that the three settings operate
+together. Refer to section 5.2.
+
+**The stake is also at risk.** A finder can take it. Also, the contract keeps
+12,833 units (approximately $0.0128) at each claim. Thus a hide that survives
+costs **$0.2128** in total. A hide that a finder takes costs $5.20.
 
 ### The four limits
 
@@ -475,9 +541,9 @@ The rates are absolute values. They are not multipliers. Refer to rule 2 below.
 |---|---|---|
 | Each hop | **0.15** | **1.0** |
 | Participation bonus | **None** | **18** |
-| Hide a treasure | Full | Full |
-| The treasure is not found | Full | Full |
-| Find or steal | Full | Full |
+| Hide a treasure | **4.5** | 30 |
+| The treasure is not found | **7.5** | 50 |
+| Find or steal | **110 - full** | **110 - full** |
 
 **Rule 3 - a wallet is new until $3 of total payments:**
 
@@ -486,11 +552,20 @@ The rates are absolute values. They are not multipliers. Refer to rule 2 below.
 | Each hop | **0.5** |
 | Participation bonus | **9** |
 | Daily maximum for hops and participation | **80 ROZ** |
-| Hide a treasure | Full |
-| The treasure is not found | Full |
-| Find or steal | Full |
+| Hide a treasure | **15** |
+| The treasure is not found | **25** |
+| Find or steal | **110 - full** |
 
 A wallet leaves the new condition permanently at $3 of total payments.
+
+**Find or steal is the one reward that no rule decreases.** A find needs the
+hidden treasure of a different player, and it takes that player's stake. Thus a
+farmer cannot make a closed loop with it, as they can with hops and hides. It also
+controls the hide loop: each find is a farm hide that did not survive. Refer to
+section 9.2.
+
+**The hides came into this table in section 5**, with a $0.20 fee and a maximum of
+3 each day. Before that change, no control in this plan operated on a hide.
 
 **The rates operate from the moment the wallet gets to the limit. They do not
 operate on the earlier actions.** A player who gets to $0.60 at hop 65 earns 0.15
@@ -590,9 +665,10 @@ operate in the same direction.
 
 | Player | Hops | Payment each day | Gets through at | Established | New wallet | Target |
 |---|---|---|---|---|---|---|
-| Light casual | 40 | $0.265 | **Never** | **6** | **6** | 25 - 70 |
-| Typical casual | 62 | $0.755 | Hop 55 | 114.1 | 101.1 | 140 - 280 |
-| Active | 128 | $3.435 | Hop 60 | 285.9 | 242.4 | 300 - 500 |
+| Light casual, no hide | 40 | $0.265 | **Never** | **6** | **6** | 25 - 70 |
+| Light casual, 2 hides | 40 | $0.765 | Hop 34 | **~54** | ~54 | 25 - 70 |
+| Typical casual | 62 | $0.955 | The round-3 hide | 117.5 | 62.5 | 140 - 280 |
+| Active | 128 | $3.635 | Hop 60 | 285.9 | 202.4 | 300 - 500 |
 
 **A light casual player and a small farmer pay the same amount.** Thus the gate
 cannot see the difference. It decreases the rewards for both.
@@ -602,17 +678,19 @@ to $0.60 moved this player further from the limit.
 
 **The other two players are also below their targets now.** The new targets in
 section 4 were made when the values still gave the full rate to all the hops. The
-correction puts the typical casual player 25.9 ROZ below the minimum, and the
-active player 14.1 ROZ below. The correction is the larger cause. The rate of 0.15
-adds 8.1 ROZ and 8.8 ROZ more.
+correction puts the typical casual player 22.5 ROZ below the minimum, and the
+active player 14.1 ROZ below. The correction is the larger cause. The hop rate of
+0.15 adds 8.1 ROZ and 8.8 ROZ more.
 
 **More hops cannot correct the light casual player.** The maximum payment below
 $0.60 is $0.595, which is 64 hops. These hops give 64 x 0.15 = **9.6 ROZ**, and
-there is no participation bonus. Thus 9.6 ROZ is the maximum for a day below the
-gate, and the target starts at 25. Only the rewards that stay full below the gate
-can get to the target. One instant hide moves this player from 6 to **36 ROZ**.
-Refer to section 4. But refer also to section 9.2: the hide loop is the cheapest
-route for a farmer.
+there is no participation bonus. Thus 9.6 ROZ is the maximum for a day of hops
+below the gate, and the target starts at 25.
+
+**Hides can correct it, in two directions.** Two hides and 42 hops give **30.3
+ROZ** below the gate. Or the same two hides move the player **through** the gate,
+to approximately **54 ROZ**. Both get to the target. One hide gives 18 ROZ, which
+gets to neither. Refer to section 4.
 
 **The two rules operate on the same players at the bottom.** The light casual
 player is already at the minimum because of rule 1. Thus rule 3 takes nothing
@@ -622,35 +700,60 @@ Make this decision before the game operates. Refer to section 11.
 
 ### Two rules that you must obey
 
-**1. The hide stake is not a payment.**
+**1. A hide payment has two parts. Only one part is a payment.**
 
-The $5 hide fee comes back to the player. A hider gets `4,987,167` of
-`5,000,000`. Thus the true cost is $0.0128.
+Since section 5 a hide costs **$5.20**: a `$0.20` fee and a `$5.00` stake. The
+contract must treat them differently. An error here stops rules 1 and 3.
+
+| Part of the payment | Does it come back? | Is it a payment? |
+|---|---|---|
+| `hideFee` - $0.20 | **No, never** | **Yes** |
+| `currentHiderFee` - the $5 stake | **Yes**, less 12,833 units at the claim | **No** |
+| The 12,833 units at the claim | No | **Yes** |
+
+**Only the money that does not come back is a payment:** the hop fees, the spawn
+fees, the $0.20 hide fee, and the 12,833 units. Never the stake. A free hop is not
+a payment.
 
 If the stake was a payment, a farmer makes one hide and gets more than the $3
-limit for $0.0128. This is **234 times** less expensive. Thus rules 1 and 3 do
-not operate.
+limit for the $0.2128 that a hide really costs. This is **14 times** less
+expensive. The $0.20 fee already made this problem much smaller: before the fee, a
+hide cost $0.0128 and the difference was **234 times**. It is smaller, but it is
+not zero, and the rule stays.
 
-**Only these are payments:** the hop fees, the spawn fees, and the 12,833 units
-that the contract keeps at each claim. A free hop is not a payment.
+**The three hide settings operate together. This is correct and intentional:**
 
-This rule did not change with the new values. It is the most important rule in
-this section.
+```
+dailyHideCap (3)  x  hideFee ($0.20)  =  dailySpendThreshold ($0.60)
+```
+
+A wallet at the daily hide maximum has paid exactly the daily limit. Thus **the
+maximum number of hides gets through the gate exactly, and never more.** This
+gives a light player a route through the limit (section 4). It gives a farmer no
+route that is less expensive than the other routes.
+
+It also means that **a change to one of the three changes what the other two do.**
+`hideFee` at $0.25 lets two hides get through the gate. `dailyHideCap` at 2 stops
+hides from getting through the gate at all. The owner can change all three. Write
+the relation next to the set functions. Refer to section 11.
 
 **2. Use the lowest rate. Do not multiply the rates together.**
 
 A wallet can be new and also below the daily payment limit. The two tables do not
-agree: 0.15 or 0.5 for each hop, and no bonus or 9 for participation.
+agree: 0.15 or 0.5 for each hop, no bonus or 9 for participation, and 4.5 or 15
+for a hide.
 
 > **Select the lowest value for each reward line. Do this for each line
 > independently.**
 
-| Condition | Each hop | Participation |
-|---|---|---|
-| Established, paid $0.60 today | 1.0 | 18 |
-| Established, below $0.60 today | 0.15 | None |
-| A new wallet, paid $0.60 today | 0.5 | 9 |
-| **A new wallet, below $0.60 today** | **0.15** | **None** |
+| Condition | Each hop | Participation | Hide | Not found | Find |
+|---|---|---|---|---|---|
+| Established, paid $0.60 today | 1.0 | 18 | 30 | 50 | 110 |
+| Established, below $0.60 today | 0.15 | None | 4.5 | 7.5 | 110 |
+| A new wallet, paid $0.60 today | 0.5 | 9 | 15 | 25 | 110 |
+| **A new wallet, below $0.60 today** | **0.15** | **None** | **4.5** | **7.5** | **110** |
+
+The find column does not change. This is intentional - refer to the note above.
 
 Absolute values remove this danger. Before, the rates were multipliers. Three
 multipliers together gave 0.2 x 0.2 x 0.5 = **0.02**. Thus a new light player got
@@ -722,6 +825,17 @@ Change K by a maximum of 0.15 each round.
 median of past rounds. The function `start_new_game` already accepts the map size
 for each round. Thus the contract needs almost no new code for this.
 
+### The hide maximum in section 5 makes the range smaller
+
+With a maximum of 3 hides for each wallet each day, `T` for a round is now
+approximately (the number of hiders in that round x 3). The budget of one player
+no longer decides it. The $1,000 call that gave a 126 x 126 map is not possible
+from one wallet now.
+
+The formula does not change. But the values that K must operate on are fewer and
+more predictable. This makes the map size limits easier to select, not more
+difficult. Refer to section 7.6.
+
 ## 7. What the contract must do
 
 ### 7.1 New addresses and rates
@@ -742,16 +856,29 @@ The limits and the decreased rates from section 5.2:
 | `dailyFreeSpawns` | 1 | a count |
 | `dailySpendThreshold` | $0.60 | `600000` |
 | `lifetimeSpendThreshold` | $3.00 | `3000000` |
+| `hideFee` | $0.20 | `200000` — USDC, not ROZ. A **fee**, not the stake |
+| `dailyHideCap` | 3 | a count, for each calendar day, of **treasures** |
 | `hopRewardBelowThreshold` | 0.15 ROZ | `150000000000000000` |
 | `participationBelowThreshold` | 0 ROZ | `0` |
+| `rewardHideBelowThreshold` | **4.5 ROZ** | **`4500000000000000000`** |
+| `rewardHideSurvivedBelowThreshold` | **7.5 ROZ** | **`7500000000000000000`** |
 | `hopRewardNewWallet` | 0.5 ROZ | `500000000000000000` |
 | `participationNewWallet` | 9 ROZ | `9000000000000000000` |
+| `rewardHideNewWallet` | **15 ROZ** | **`15000000000000000000`** |
+| `rewardHideSurvivedNewWallet` | **25 ROZ** | **`25000000000000000000`** |
 | `newWalletSoftCapRoz` | 80 ROZ | `80000000000000000000` |
 | `dailySoftCapRoz` | 100 ROZ | `100000000000000000000` |
 
-The values 0.15 and 0.5 are exact in 18 decimals. Thus there is no rounding
-problem. Do not use fractions for these rates. Absolute values stop the danger in
-section 5.2 rule 2.
+**`dailyHideCap` x `hideFee` must equal `dailySpendThreshold`** - 3 x `200000` =
+`600000`. Section 5.2 rule 1 gives the reason. A set function that changes one and
+not the others changes the design, and nothing shows this.
+
+**There is no decreased value for a find.** A find or steal gives 110 ROZ to each
+wallet, in each condition. Refer to section 5.2.
+
+The values 0.15, 0.5, 4.5, 7.5, 15 and 25 are exact in 18 decimals. Thus there is
+no rounding problem. Do not use fractions for these rates. Absolute values stop
+the danger in section 5.2 rule 2.
 
 **`hopRewardBelowThreshold` is the most important of these values, and not only
 against the farmers.** Each day starts at zero payment. Thus it is the rate that
@@ -759,14 +886,75 @@ against the farmers.** Each day starts at zero payment. Thus it is the rate that
 controls the wallets that pay nothing and the start of each correct player's day
 at the same time.
 
+Two new maps for each player. Both use patterns that the contract has already:
+
+```cairo
+// Uses the day as a key, thus it starts again each day. This is the same
+// pattern as player_free_hops_used.
+player_hides_today:  LegacyMap<(u64, ContractAddress), u256>,
+
+// Uses the round as a key, with hider_share_amounts. It collects the survival
+// reward THAT THE CONTRACT SELECTED AT THE HIDE. Thus a later gate crossing
+// cannot change the value of an earlier hide.
+hider_survival_roz:  LegacyMap<(u256, ContractAddress), u256>,
+```
+
 Two counters record the payments:
 
 - `player_spend_today` - starts again each day.
 - `player_lifetime_spend` - never starts again.
 
 **Add to these two counters only when the player cannot get the money back.**
-Add the hop fees, the spawn fees, and the 12,833 units from each claim. Do not
-add the hide stake. Do not add a free hop.
+Add the hop fees, the spawn fees, the **$0.20 hide fee**, and the 12,833 units
+from each claim. **Do not add the $5 hide stake.** Do not add a free hop.
+
+### 7.1a How the contract selects a rate
+
+Four rewards use this sequence now: each hop, participation, the instant hide and
+the survival reward. Only find or steal does not - it gives 110 always.
+
+```
+0. Take the fee first, thus today's payment is correct before you read the rate
+1. Select the base rate:      rewardPerHop / rewardParticipation /
+                              rewardHide / rewardHideSurvived
+2. If total payment < $3:     take the lower of the rate and the new wallet rate
+3. If today's payment < $0.60: take the lower of the rate and the below rate
+4. Add the reward. Then apply the daily maximum one time, if necessary
+```
+
+Steps 2 and 3 **take the lower value**. They never multiply. Step 4 is the only
+multiplier, and it operates one time.
+
+**Step 0 gives the full rate to the action that gets through the gate.** The
+contract takes the fee, adds it to the counters, and reads the rate after that.
+Thus hop 65 gives 1.0, and the third hide of a day gives 30.
+
+**The participation bonus needs both conditions at each hop.** The contract must
+not give it at hop 28 and then forget it. A player can get to 28 hops below $0.60.
+The typical casual player in section 4 does this, at $0.145. This player must get
+the bonus when the payment gets to $0.60 later.
+
+**The contract selects the survival rate when the player hides, not at the
+claim.** This is important, because the simple method is wrong. `claim_reward`
+gives `hider_shares x rewardHideSurvived`, and a player can call it some days
+after the hide - on a new day, with that day's payment at zero. To select the rate
+at the claim would give a correct player 7.5 and not 50 for a claim on a Monday
+morning. It would also let a farmer claim only on the days they already paid
+$0.60. Both directions are wrong.
+
+Thus `hide_treasure` selects the survival rate with the sequence above and adds it
+to `hider_survival_roz`. `claim_reward` gives **that value**, and never a new one:
+
+```cairo
+// At the hide - the gate condition now is the condition that counts, always.
+let survivalRate = _resolveGatedRate(rewardHideSurvived, caller);
+hider_survival_roz.write((round, caller), stored + survivalRate);
+```
+
+**When a finder takes a share, subtract the average** - `stored / share_count`.
+The shares are one number, thus the contract cannot see which share the finder
+took. With a maximum of 3 hides each day the error is small. A map for each rate
+would be exact, but it uses more storage. Refer to section 11.
 
 ### 7.2 Add the rewards to a balance. Do not send them
 
@@ -814,30 +1002,40 @@ adds the ROZ to the balance. Thus a low ROZ balance does not stop the USDC.
 If the contract cannot add the ROZ, the player can come back later. A second flag
 records the ROZ part. The function `claim_reward_token_for_week` tries again.
 
-### 7.6 Bulk hiding
+### 7.6 Bulk hiding - the maximum is 3 now
 
-A player can hide many treasures in one transaction. The player sends an amount
-that divides exactly by the hide price. $1,000 gives 200 treasures.
+A player can hide some treasures in one transaction. The player sends an amount
+that divides exactly by the hide price.
+
+**The daily maximum in section 5 counts treasures, not transactions. Thus this
+function can never place more than 3.** `hide_treasure_bulk(15000000)` - three
+treasures - is the largest call that a wallet can make in a day. The $1,000 call
+that gave 200 treasures now fails with `'daily hide cap'`.
+
+**Keep the function.** It still saves two of the three transactions for a player
+who hides the daily maximum. Also, to remove an entry point is more difficult to
+reverse than to limit one. But it is a small function now. Section 11 asks if you
+still want the use that it was made for.
 
 **The contract does not need a loop.** The shares are a number. Thus the contract
 does two storage writes and one transfer, for any quantity.
 
 The contract must not compare the quantity with the map size. The map for the
 next round does not exist yet. The map size reads as 0. Thus each bulk hide fails.
-Use a maximum number of treasures for each round instead.
+Use a maximum number of treasures for each round instead. Since section 5 that
+maximum protects the **total** for the round, not one wallet.
 
 **You must also change the claim calculation.** The contract subtracts the fees
-one time for each claim. For 200 shares in one claim, this is 200 times less than
-200 separate claims. Change the calculation to subtract the fees for each share.
-The result for one share does not change.
+one time for each claim. This was 200 times less than 200 separate claims. With
+the maximum of 3 it is **3 times** less than 3 separate claims. Change the
+calculation to subtract the fees for each share. The result for one share does not
+change.
 
-**Make this change at the same time as bulk hiding.** Section 9.2 shows why. In a
-busy game the farmer loses the $5 stakes, and the deduction is a small part of the
-cost. In a quiet round the finders take almost nothing, the stakes come back, and
-**the deduction is the only cost that stays**. Thus without this change the cost
-to take all the Year 1 tokens by hiding falls from $375 each day to approximately
-**$1.88** each day. The change is least important for the safe condition and most
-important for the dangerous one.
+**The maximum of 3 has already removed most of this problem.** The error moves the
+cheapest farm wallet from $0.6835 to $0.6578 each day, which is approximately 4%.
+Before the maximum, the error was 200 times. Thus this is not urgent now. But the
+calculation is still wrong: the fees are for each treasure, and the contract must
+subtract them for each treasure. The change is one line.
 
 ### 7.7 New events
 
@@ -917,89 +1115,120 @@ Section 5.2 does not permit this.
 
 **Starknet gas is also a control.** Measure it.
 
-**But the gate does not operate on each route.** Section 9.2 gives the route that
-no control in this plan reaches.
+**But the hop route is not the cheapest route.** Section 9.2 gives the hide loop,
+which no control reached before section 5. The cheapest wallet now mixes the two:
+3 hides and 28 hops give 150 ROZ for $0.6835, which is **$0.00456** for each ROZ,
+or a market value of **$22.8M**. This is the value to watch.
 
-### 9.2 The hide loop
+### 9.2 The hide loop, and how section 5 controlled it
 
-A hider pays $5. If a finder does not take the treasure, the hider gets $4.99
-back. Thus the cost is $0.0128 for 80 ROZ. This is profitable if ROZ costs more
-than **$0.00016**.
+This was the worst route in the plan. Three changes in sections 5 and 5.2
+controlled it.
 
-**But $0.00016 is the minimum, not the usual cost.** That value is correct only
-when no finder takes the treasure. This part gives the true cost.
+#### What made a hide inexpensive before
 
-**No control in this plan operates on a hide.** This is the important point. The
-two tables in section 5.2 give the same values for the hide rewards, above the
-limit and below it:
+Keep this, because it gives the reason for the three changes. Before section 5, a
+hide was the one action that **no control in this plan reached**. The two tables in
+section 5.2 gave the hide rewards in full, above the limit and below it. Rule 1
+excluded the $5 stake, because the player gets it back. And
+`hide_treasure_bulk` placed 200 treasures in one transaction. A hide that survived
+gave 80 ROZ for the 12,833 units at the claim - **$0.00016 for each ROZ**,
+profitable at a market value of $0.8M, in **147 transactions each day**.
 
-| Reward | Below $0.60 | $0.60 or more | A new wallet |
-|---|---|---|---|
-| Each hop | 0.15 | 1.0 | 0.5 |
-| Participation | None | 18 | 9 |
-| **Instant hide** | **Full** | **Full** | **Full** |
-| **The treasure is not found** | **Full** | **Full** | **Full** |
-| **Find or steal** | **Full** | **Full** | **Full** |
+#### The three changes
 
-Rule 1 in section 5.2 also says that the hide stake is not a payment. This is
-correct, because the player gets it back. Thus a hide does not get through the
-gate, and the gate does not decrease a hide. The prices in section 5.1, the two
-payment limits, the daily maximums and the free allowance all operate on hops and
-participation. **No control operates on a hide.**
+| Change | Result for the route |
+|---|---|
+| The gate operates on the hide rewards (5.2) | A hide cycle below the gate gives **12**, not 80 |
+| The $0.20 fee (section 5) | A real cost that never comes back, and it **is a payment** |
+| 3 each day, counting treasures (section 5) | Bulk hiding cannot be more than 3, thus **gas is a control again** |
 
-**The cost depends on the number of treasures that the finders take.** A hide
-gives 30 ROZ always. It gives 50 ROZ more only when no finder takes it. When a
-finder takes it, the finder also takes the $5.
+The third change is the important one. A farmer cannot put 29,281 treasures from
+one wallet in 147 calls now. The farmer needs one wallet for each 3 hides.
 
-To take all the Year 1 tokens, a farmer needs approximately **29,281 hides each
-day**. This is approximately **7,320 hides in each round**. More hides do not make
+#### The cheapest wallet is 3 hides and 28 hops
+
+The hide fees get through the gate exactly - 3 x $0.20 = $0.60. Then the 22 free
+hops give the full 1.0 and not 0.15:
+
+| Step | Payment after | ROZ |
+|---|---|---|
+| Hide 1 | $0.20 - below | 4.5 + 7.5 |
+| Hide 2 | $0.40 - below | 4.5 + 7.5 |
+| Hide 3 | **$0.60 - gets through** | 30 + 50 |
+| 22 free hops | $0.60 | 22 |
+| Hops 23 to 28 (+$0.045) | $0.645 | 6 |
+| Participation | - | 18 |
+| **Total** | **$0.6835 in total** | **150 ROZ** |
+
+| | Before section 5 | **Now** |
+|---|---|---|
+| Cost for each ROZ, all hides survive | $0.00016 → **$0.8M** | **$0.00456 → $22.8M** |
+| Cost for each ROZ, a busy game | $0.0192 → $96M | **$0.0221 → $110M** |
+| Cost each day, a quiet round | $375 | **$10,674** |
+| Number of wallets | ~1 | **15,616 each day** |
+| **Transactions** | **~147 each day** | **~500,000 each day** |
+
+**The minimum increased 28 times, and the transactions increased 3,400 times.**
+
+#### The cost still depends on the treasures that the finders take
+
+A hide gives 30 ROZ always. It gives 50 ROZ more only when no finder takes it.
+When a finder takes it, the finder also takes the $5. For each wallet of 3 hides,
+the 39 ROZ of instant rewards and the 46 ROZ from the hops are certain. Only the
+65 ROZ of survival rewards is at risk.
+
+To take all the Year 1 tokens a farmer needs **15,616 wallets**, thus **46,848
+hides each day**, or approximately **11,712 in each round**. More hides do not make
 the treasures more difficult to find: section 6 makes the map `T x 40 x K` cells,
 thus the density stays the same.
 
 | Finds by the correct players, in each round | Treasures taken | Cost for each ROZ | Cost each day | Profitable above |
 |---|---|---|---|---|
-| ~1,875 - a busy game, ~5,000 players each day | 25.6% | **$0.0192** | $45,000 | **$96M** |
-| ~500 | 6.8% | $0.00461 | $10,800 | $23M |
-| ~100 - a quiet round | 1.4% | $0.00102 | $2,390 | $5.1M |
-| 0 - a round with no players | 0% | **$0.00016** | $375 | **$0.8M** |
+| ~1,875 - a busy game, ~5,000 players each day | 16.0% | **$0.0221** | $48,150 | **$110M** |
+| ~500 | 4.3% | $0.0100 | $21,700 | $50M |
+| ~100 - a quiet round | 0.9% | $0.00560 | $12,100 | $28M |
+| 0 - a round with no players | 0% | **$0.00456** | $10,674 | **$22.8M** |
 
-**Read the first line first.** In a busy game the hide loop costs $96M, and the
-hop route costs $107M. The two are approximately equal. The hide loop is **not**
-134 times less expensive in a busy game. The value of 134 times compares the last
-line with the hop route. That line is a round with no players.
+**Read the last line first now.** It is the best condition for the farmer, and
+$22.8M is not extreme. The same line gave $0.8M before section 5. The first line
+at $110M is **more** expensive than the hop route at $107M.
 
-**The danger is the time, not the quantity.** The farmer does not need a game with
-no players. The farmer needs some quiet rounds, and hides in those rounds only. A
-round is 6 hours, thus there will be quiet rounds. Nothing stops a farmer who
-selects them. The cost changes by 120 times between a busy round and a quiet
-round, and the farmer selects which one.
+**The danger from the time is much smaller.** A farmer still prefers the quiet
+rounds. But the difference between the first line and the last line is **4.8
+times** now, and it was 120 times. The contract takes the $0.20 fee if the treasure
+survives or not. Thus the fee gives a minimum that the farmer cannot avoid with a
+good time.
 
-**Gas does not control this route.** Sections 5.1 and 9.1 say that gas is the real
-control. `hide_treasure_bulk` removes it: 200 treasures in one transaction, for
-almost the gas of one hide.
+#### Gas controls this route again
 
-| | The hop route | The hide route |
-|---|---|---|
-| Transactions to take all the Year 1 tokens | ~5.3 million each day | **~147 each day** |
-| Cost | $50,371 each day | $375 to $45,000 each day |
-| Money necessary | None | $146,405, and the farmer **gets it back** |
+Sections 5.1 and 9.1 say that gas is the real control. `hide_treasure_bulk`
+removed it before: 200 treasures in one transaction. The maximum of 3 counts
+treasures, thus it does not remove it now:
 
-This is approximately **36,000 times fewer transactions**. It is true for each
-line of the table above.
+| | The hop route | The hide route, before | **The hide route now** |
+|---|---|---|---|
+| Transactions to take all the Year 1 tokens | ~5.3 million each day | ~147 each day | **~500,000 each day** |
+| Cost | $50,371 each day | $375 to $45,000 | **$10,674 to $48,150** |
+| Money necessary | None | $146,405, returned | $234,240, returned |
 
-**Two controls can stop this, and you have not made either one:**
+15,616 wallets x 32 transactions each - 3 hides, 28 hops and one claim. This is
+approximately **3,400 times more transactions** than before. Thus the same gas
+argument that controls the hops controls this route also.
 
-- **The deduction for each treasure (section 7.6).** Without it, the contract
-  takes the 12,833 units one time for each *claim*, not for each treasure. Thus a
-  farmer who claims in bulk pays approximately **$1.88 each day** and not $375.
-  This is the quiet round, where the deduction is the **only** cost that stays.
-- **`maxTreasuresPerRound`.** This value stops a farmer who puts 7,320 treasures
-  in one round. The value is in the contract, but section 11 says that you cannot
-  select it until you select the map size limits. **Thus the one control for this
-  route has no value in it.**
+**Two controls remain, and you have not made either one:**
 
-Section 4 also gives this route to the light casual player. Thus the cheapest farm
-route and the correct route for the lightest player are the same action.
+- **The deduction for each treasure (section 7.6).** The maximum of 3 makes this
+  error 3 times, not 200 times. Thus it is not urgent now, but the calculation is
+  still wrong and the change is one line.
+- **`maxTreasuresPerRound`.** This is a second control now, not the only one. The
+  maximum for each wallet stops one farmer. This value stops the **total**, which
+  the other maximum cannot see: 15,616 wallets with 3 hides each still put 46,848
+  treasures in a day. Section 11 says that you cannot select it until you select
+  the map size limits. **Thus this value is still empty.**
+
+Section 4 also gives this route to the light casual player. Thus the two use the
+same action. But since section 5 they no longer have the same danger.
 
 ### 9.3 Wallets that pay nothing
 
@@ -1064,7 +1293,8 @@ write "no game fee" and not "free" until the paymaster operates.
 
 1. `scarb build` gives no errors. The build makes three contract classes.
 2. The token gives `ROZ`, `18` and `5000000000000000000000000000`.
-3. A hide adds exactly 30 ROZ to the balance. No ROZ moves.
+3. A hide by a wallet that paid $0.60 that day adds exactly 30 ROZ to the balance.
+   No ROZ moves. The contract takes $5.20: the $5 stake and the $0.20 fee.
 4. Hop 28 gives the participation bonus one time. Hop 41 gives nothing.
 4a. The participation bonus operates one time each day. Make 28 hops in round 1,
    then make 28 hops in round 2. The bonus does not operate a second time.
@@ -1091,12 +1321,38 @@ write "no game fee" and not "free" until the paymaster operates.
    that hop. A wallet that never gets to $0.60 never gets the bonus. An error here
    removes 18 ROZ from each correct player, each day. A test that pays first does
    not find this error.
-4e. **A wallet that only hides gets no payment credit.** The payment totals stay
-   at zero, for any quantity of stake. This is the most important test for the
-   gate. If the stake is a payment, a farmer gets more than the $3 limit for
-   $0.0128. This is 234 times less expensive.
+4e. **A hide counts the fee as a payment and the stake as nothing. This is the
+   most important test for the gate.** A wallet that only hides, 3 times, must
+   finish with the two payment totals at **exactly `600000`** - the three $0.20
+   fees, and no unit of the $15 stake. Test the number, and not only that it is
+   more than zero: `15600000` means that the stake is a payment, and then a farmer
+   gets more than the $3 limit for the $0.2128 that a hide really costs. This is
+   **14 times** less expensive, and rules 1 and 3 stop. Refer to section 5.2
+   rule 1.
 4e-i. **A free hop gives no payment credit.** After 22 free hops, the two payment
    totals are still zero. Thus free play alone can never get to the limit.
+4e-ii. **Three hides get through the daily gate exactly, and the third gives the
+   full rate.** From test 4e: hides 1 and 2 give `4.5e18` each. Hide 3 - the hide
+   that makes the payment `600000` - gives **`30e18`**, because the contract takes
+   the fee before it selects the rate. Refer to section 7.1a. A fourth hide fails.
+4e-iii. **The daily hide maximum.** The 4th `hide_treasure` in a day fails with
+   `'daily hide cap'`. Move past midnight UTC and it operates. Also,
+   `hide_treasure_bulk(20000000)` - four treasures - fails from a wallet that did
+   not hide that day, because **the maximum counts treasures, not calls**. Refer to
+   section 7.6. `hide_treasure_bulk(15000000)` operates and leaves the count at 3.
+4e-iv. **The hide rates in the three conditions.** Below the limit a hide gives
+   `4.5e18`. A new wallet that paid $0.60 gives `15e18`. An established wallet that
+   paid $0.60 gives `30e18`.
+4e-v. **The contract selects the survival rate at the hide.** Hide one time below
+   $0.60 - `hider_survival_roz` must hold `7.5e18`. Then get through the gate, let
+   the round finish with no finder, and claim: the reward is **`7.5e18` and not
+   `50e18`**. Then test the other direction: hide after the gate, and claim some
+   days later with that day's payment at zero. The reward must still be `50e18`.
+   The two directions are both important. The first is the method of a farmer. The
+   second removes 42.5 ROZ from a correct player who claims on a Monday morning.
+4e-vi. **The contract never decreases a find.** A wallet below the daily limit,
+   that is also a new wallet with zero total payments, gets the full **`110e18`**
+   for a correct find. No condition decreases it. Refer to section 5.2.
 4f. A new wallet with a total payment of less than $3 gets 0.5 ROZ for a hop and
    9 ROZ for the bonus, also when the wallet paid more than $0.60 that day. At $3
    the same actions give 1 ROZ and 18 ROZ.
@@ -1120,8 +1376,11 @@ write "no game fee" and not "free" until the paymaster operates.
 7a. Give USDC to the same wallet. Let it hop to hop 65. The hops after `600000`
    give 1 ROZ. The earlier hops keep 0.15 ROZ. The contract does not calculate
    them again.
-8. A bulk hide of $1,000 gives 200 shares. The gas is almost the same as one hide.
-9. A claim for 1 share pays `4987167`. A claim for 10 shares pays `49871670`.
+8. A bulk hide of $1,000 **fails** with `'daily hide cap'`. This is the test that
+   closes the hide loop in section 9.2. A bulk hide of $15 gives 3 shares, and the
+   contract also takes `600000` of fees.
+9. A claim for 1 share pays `4987167`. A claim for 3 shares pays `14961501`, and
+   **not** `14987167`. Three shares is the largest claim that is possible now.
 10. The total of the balances is never more than the ROZ that the contract holds.
 
 ## 11. Decisions that you must make
@@ -1146,22 +1405,26 @@ write "no game fee" and not "free" until the paymaster operates.
    are 25 to 70, 140 to 280, and 300 to 500 now. You made these targets with the
    older values, which gave the full rate to all the hops. Section 5.2 does not
    permit this. With the correction, the light casual player gets **6**, the
-   typical casual player gets **114.1**, and the active player gets **285.9**. All
-   three are below their minimums again. The correction is the larger cause: it
-   removes 37.8 ROZ and 41.3 ROZ. The rate of 0.15 removes 8.1 ROZ and 8.8 ROZ
-   more. You can decrease the targets a second time, increase
+   typical casual player gets **117.5**, and the active player gets **285.9**. The
+   light casual player with 2 hides gets approximately 54, which is in the target.
+   The other two are below their minimums. The correction is the larger cause: it
+   removes 37.8 ROZ and 41.3 ROZ. The hop rate of 0.15 removes 8.1 ROZ and 8.8 ROZ
+   more. The hide changes in section 5 give 3.4 ROZ back to the typical casual
+   player. You can decrease the targets a second time, increase
    `hopRewardBelowThreshold`, or decrease `dailySpendThreshold` so that the players
    get through the gate sooner. Only the last one helps the light casual player,
    and it is also the one that makes the gate weaker.
-12. **The light casual player is the furthest below the target.** This player pays
-    $0.265 each day. The limit is $0.60. Thus the player gets 6 ROZ and not 58.
-    The target is 25 to 70. A light casual player and a small farmer pay the same
-    amount, thus the gate cannot see the difference. The change from $0.50 to
-    $0.60 moved this player further from the limit. You can accept this, because
-    one instant hide gives 36 ROZ (refer to decision 19). Or you can decrease the
-    limit, increase `hopRewardBelowThreshold` above 0.15, give a small
-    participation bonus below the limit instead of no bonus, or give new players
-    some free days.
+12. **The light casual player is the furthest below the target, and the middle is
+    a trap.** This player pays $0.265 each day. The limit is $0.60. Thus the player
+    gets 6 ROZ and not 58. The target is 25 to 70. A light casual player and a
+    small farmer pay the same amount, thus the gate cannot see the difference. The
+    change from $0.50 to $0.60 moved this player further from the limit. **Two
+    hides give approximately 54 ROZ, and 2 hides with 42 hops give 30.3 ROZ below
+    the gate. But one hide gives only 18 ROZ** - less than both. A player who hides
+    one time and stops is in the worst position, and nothing tells them this. You
+    can accept this and put it in the display. Or you can decrease the limit,
+    increase `hopRewardBelowThreshold` above 0.15, give a small participation bonus
+    below the limit instead of no bonus, or give new players some free days.
 15. **Is $3 the correct total payment limit?** $3 gives a cost of $245,712 one
     time. $5 gives $409,520. Thus $3 gives approximately one half of the control.
     The two values increased with the corrected number of wallets, but the ratio
@@ -1191,40 +1454,59 @@ write "no game fee" and not "free" until the paymaster operates.
 14. **How much does Starknet gas cost for each transaction?** If the gas is more
     than the game fees, the gas is the real control. Measure this before you
     change the prices again.
-9. **Is a hide fully free?** The contract keeps $0.0128 at each claim.
+9. **Is a hide fully free?** No - a hide costs $0.20 now. The contract also keeps
+   $0.0128 at each claim. Thus a hide that survives costs $0.2128.
 10. **Can a round stop early when the players find all the treasures?**
 11. **Must the sweep function protect the USDC that players can claim?**
 19. **A player below the gate must hide to get the target.** Hops give a maximum
     of 9.6 ROZ below the gate. This is 64 hops for $0.595, which is the maximum
-    payment below $0.60. Thus hops alone cannot get to the minimum of 25, and the
-    rate of 0.15 moved this further away. Only an instant hide (30) can, because
-    the gate does not decrease the hide rewards. One instant hide moves the light
-    casual player to 36 ROZ. But section 9.2 shows that the hide loop is also the
-    cheapest route for a farmer in a quiet round ($0.00016 for each ROZ). Thus the
-    lightest players use the route that no control reaches. Confirm that this is
-    correct. Or increase `hopRewardBelowThreshold`, so that hops alone can get to
-    25. Note that decision 22 operates on the same action.
+    payment below $0.60. Thus hops alone cannot get to the minimum of 25. Hides
+    can, in two directions: 2 hides and 42 hops give 30.3 ROZ below the gate, and
+    the same 2 hides move the player through the gate to approximately 54 ROZ.
+    One hide gives 18 ROZ and gets to neither. Confirm that "a light casual player
+    must hide" is the correct shape for the target. Or increase
+    `hopRewardBelowThreshold`, so that hops alone can get to 25. Note that decision
+    22 operates on the same action.
 20. **The rewards change with the order of the actions.** The payments increase in
     the order of the actions. Thus a player who makes a spawn at the start of a
-    round gets through the gate sooner, and earns more, than a player who makes the
-    same actions in a different order. All the values in this plan put the spawns
-    first. The effect is small, and the player cannot see it. You can accept it, or
-    you can select the rate for the day one time at a fixed moment.
+    round gets through the gate sooner, and earns more. Since section 5 this is
+    much larger: **a typical casual player gets 117.5 ROZ with a round-3 hide, and
+    50.35 ROZ with a round-2 hide.** A hide before the gate gives 12 and not 80,
+    and section 7.1a makes this permanent. This is 67 ROZ from the order only, and
+    the player cannot see it. You can put a message in the display ("hide after you
+    pay $0.60"). Or you can select the rate for the day one time at a fixed moment.
 21. **The participation bonus needs the two conditions at each hop.** If the
     contract gives the bonus at hop 28 only, a player who gets to 28 hops before
     $0.60 never gets the bonus. The typical casual player does this, at $0.145.
     That is 18 ROZ, and nothing shows the error. This is a rule and not a question,
     but a contract is easy to write the other way.
-22. **How do you control the hide loop?** No control in this plan operates on a
-    hide. Refer to section 9.2. In a busy game this is acceptable: the cost is
-    $0.0192 for each ROZ, and the hop route costs $0.0215. In a quiet round the
-    cost falls to $0.00016, which is a market value of $0.8M. A farmer selects the
-    quiet rounds. You have two controls, and you have made neither one:
+22. ~~**How do you control the hide loop?**~~ **Controlled** (sections 5, 5.2,
+    7.6). The gate operates on the hide rewards, a $0.20 fee applies, and the
+    maximum is 3 treasures for each wallet each day. Find or steal stays at 110 for
+    all the players, and this is intentional. The minimum for the route moves from
+    **$0.8M to $22.8M**, and the transactions move from ~147 each day to ~500,000.
+    Two smaller controls remain:
     - Select a value for `maxTreasuresPerRound`. Refer to decision 2 - you need the
-      map size limits first. A farmer needs 7,320 hides in one round to take all
-      the Year 1 tokens, and this value is the only control that can refuse them.
+      map size limits first. This is a second control now, not the only one. It
+      stops the **total**: 15,616 wallets with 3 hides each still put 46,848
+      treasures in a day.
     - Make the deduction operate for each treasure, at the same time as bulk
-      hiding. Refer to section 7.6.
+      hiding. Refer to section 7.6. The error is 3 times now, and it was 200 times.
 
     Be careful: decision 19 gives the same action to the light casual player. A
-    control on the hide loop also operates on that player.
+    new control on the hide loop also operates on that player.
+23. **Do you still want bulk hiding?** The maximum of 3 counts treasures, thus
+    `hide_treasure_bulk(1000000000)` - the $1,000 call that gave 200 treasures -
+    fails now. The function stays, and it still saves two of the three transactions
+    for a player who hides the daily maximum. But the use that it was made for is
+    gone, and one wallet cannot make the 126 x 126 map in section 6. Confirm that
+    nobody needs this. If a company must fill a map for an event, you can add a
+    list of approved addresses - but that is a new person that you must trust, with
+    the same problem as rule 4 - or a separate function that gives no ROZ.
+24. **Three settings operate together, and nothing protects the relation.**
+    `dailyHideCap` x `hideFee` = `dailySpendThreshold`, which is 3 x $0.20 = $0.60.
+    This makes the maximum number of hides get through the gate exactly. The owner
+    can change all three, and they are independent. `hideFee` at $0.25 lets two
+    hides get through the gate. `dailyHideCap` at 2 stops hides from getting
+    through at all. Put a test in the set functions, or write the relation next to
+    them and accept the danger.
