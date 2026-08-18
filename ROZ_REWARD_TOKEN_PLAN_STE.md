@@ -90,8 +90,8 @@ A game round is **6 hours**. There are 4 rounds each day.
 
 | Action | ROZ | Conditions |
 |---|---|---|
-| Hide a treasure | 30 | Immediately. The value decreases to 4.5 or 15. Costs $0.20, and the maximum is 3 each day. Refer to section 5 |
-| The treasure is not found in the round | 50 | At the claim. The value decreases to 7.5 or 25. The contract selects the rate **when the player hides**, not at the claim. Refer to section 7 |
+| Hide a treasure | 30 | Immediately. The value decreases to 4.5 or 15, and then the **Daily Volume Multiplier** operates. Costs $0.20 or $0.25, and the maximum is 10 each day. Refer to section 5 |
+| The treasure is not found in the round | 50 | At the claim. The value decreases to 7.5 or 25, and then the Daily Volume Multiplier operates. The contract selects the rate **when the player hides**, not at the claim. Refer to section 7 |
 | Find or steal a treasure | 110 | Also approximately $5 USDC. **This is the only reward that stays full for all the players** |
 | Each hop | 1 | Maximum 40 hops in a round. The value decreases to 0.15 or 0.5. Refer to section 5.2 |
 
@@ -120,7 +120,9 @@ not operate. Refer to section 11.
 
 1. Find or steal - the best single action.
 2. A successful hide - 30 + 50 = 80 for a player who paid $0.60 that day, and
-   12 for a player who did not.
+   12 for a player who did not. **The first 3 hides of a day give the full value.
+   The 4th hide and after give much less** (section 5). Thus this position is
+   correct for a player, and not for a farmer.
 3. Participation - less important. The player must make 28 of a maximum of 40
    hops. The player must also pay $0.60 in the day.
 4. Each hop - a small reward for exploration.
@@ -321,38 +323,69 @@ are also too large, and all three players are below them. Refer to section 11.
 
 | Action | Price | Notes |
 |---|---|---|
-| Hide a treasure | **$0.20** and a $5 stake | **Maximum 3 each day.** The contract never returns the $0.20. It returns the $5 |
+| Hide a treasure | **$0.20 or $0.25** and a $5 stake | **Maximum 10 each day.** The contract never returns the fee. It returns the $5 |
 | One hop | $0.005 to $0.04 | The price increases. Refer to section 5.1 |
 | Spawn a new position | $0.10 | Was $1.00 |
 
 The hop price and the spawn price decrease 10 times.
 
-### A hide is not free now, and the quantity has a maximum
+### A hide is not free now, and the quantity has a price
 
-Two changes. Both operate on the hide loop in section 9.2 - the route that no
-other control reached:
+Three controls. All operate on the hide loop in section 9.2 - the route that no
+other control reached. Together they let a player hide freely, and make a large
+quantity of hides not profitable:
 
-| Setting | Value | Storage | Reason |
-|---|---|---|---|
-| Hide fee | **$0.20** | `hideFee` `200000` | Gives a hide a real price that never comes back |
-| Daily hide maximum | **3 for each wallet, each day** | `dailyHideCap` | Controls the number of treasures from one wallet |
+| Setting | Value | Storage |
+|---|---|---|
+| Hide fee, treasures **1 to 3** of the day | **$0.20** | `hideFeeBase` `200000` |
+| Hide fee, treasure **4 and after** | **$0.25** | `hideFeeHigh` `250000` |
+| Where the fee increases | **3** | `hideFeeTierBoundary` |
+| Daily treasure maximum | **10 for each wallet, each day** | `dailyHideCap` |
 
-**The maximum counts treasures, not transactions.** Thus `hide_treasure_bulk`
-also cannot place more than 3. Refer to section 7.6.
+**All the limits count treasures, not transactions.** Thus a bulk call of four
+counts as four, and pays four fees. Refer to section 7.6.
 
-**The $0.20 is a payment for the section 5.2 limits. The $5 stake is not.** The
+**The fee is a payment for the section 5.2 limits. The $5 stake is not.** The
 contract never returns the fee, thus rule 1 makes it a payment. The contract
 returns the stake, thus it is not a payment. This difference stops a farmer from
-getting through the gate for nothing. Rule 1 gives the exact division.
+getting through the gate for nothing.
 
-One result is important early: **3 hides is exactly $0.60**, which is
-`dailySpendThreshold`. A wallet at the daily hide maximum has got through the
-daily gate exactly. This is correct, and it means that the three settings operate
-together. Refer to section 5.2.
+### The Daily Volume Multiplier
+
+The hide rewards decrease with the number of treasures that the wallet **already
+made today**, before this treasure:
+
+| Already made today | Multiplier | Thus it operates on treasure number |
+|---|---|---|
+| 0 to 2 | **1.00x** | 1, 2, 3 |
+| 3 to 4 | 0.70x | 4, 5 |
+| 5 to 6 | 0.40x | 6, 7 |
+| 7 to 8 | 0.20x | 8, 9 |
+| 9 to 10 | 0.08x | 10, 11 |
+| 11 and more | 0.03x | 12 and more - whitelisted addresses only |
+
+**The multiplier uses the daily count, not the number in the transaction.** This
+difference is important. An earlier version used the number in the transaction. A
+farmer avoided it: they made ten single hides and not one bulk call of ten. The
+daily count makes a single hide and a bulk hide give exactly the same result.
+Thus there is no method to avoid it. Section 9.2 shows the effect.
+
+**Three settings meet at 3, and this is intentional:**
+
+```
+hideFeeTierBoundary (3)  x  hideFeeBase ($0.20)  =  dailySpendThreshold ($0.60)
+                         ^
+        also the first band of the Daily Volume Multiplier
+```
+
+Thus the first 3 hides of a player cost the small fee, give the full multiplier,
+and put the player exactly on the payment limit. **Three hides is the correct
+shape of a normal day of hiding.** Each treasure after that has a price for the
+quantity. Section 5.2 rule 1 gives the relation that the set functions protect.
 
 **The stake is also at risk.** A finder can take it. Also, the contract keeps
-12,833 units (approximately $0.0128) at each claim. Thus a hide that survives
-costs **$0.2128** in total. A hide that a finder takes costs $5.20.
+12,833 units (approximately $0.0128) at each claim. Thus one of the first three
+hides costs **$0.2128** in total if it survives, and $5.20 if a finder takes it.
 
 ### The four limits
 
@@ -528,8 +561,16 @@ nothing can still play, but gets less.**
    can start immediately. The player gets less ROZ until the player pays.
 3. **A new wallet gets less ROZ** until the total payments of that wallet get to
    **$3**.
-4. **Optional: a bonus for a person.** A wallet with a social account can get a
-   higher maximum or a small bonus.
+
+**A fourth rule was considered and removed.** It gave a bonus to a wallet with a
+social account. It needed a person to approve each wallet, which is a new
+privileged writer and a target when ROZ has a value. It also gave little that the
+three payment rules do not give. The flag `player_verified` and the values
+`verifiedBonusNum`/`Den` are **not** in the design.
+
+One privilege does exist: the owner controls the bulk hide whitelist (section
+7.6a). This is a different thing - it gives no ROZ bonus, only higher hide limits,
+and the owner already controls each set function in section 7.1.
 
 ### The rates
 
@@ -564,8 +605,10 @@ farmer cannot make a closed loop with it, as they can with hops and hides. It al
 controls the hide loop: each find is a farm hide that did not survive. Refer to
 section 9.2.
 
-**The hides came into this table in section 5**, with a $0.20 fee and a maximum of
-3 each day. Before that change, no control in this plan operated on a hide.
+**The hides came into this table in section 5**, with a tiered fee and a maximum
+of 10 each day. Before that change, no control in this plan operated on a hide.
+The hide values above are the **wallet rate**. The contract then operates the
+section 5 Daily Volume Multiplier on the value that it selects - refer to rule 2.
 
 **The rates operate from the moment the wallet gets to the limit. They do not
 operate on the earlier actions.** A player who gets to $0.60 at hop 65 earns 0.15
@@ -702,18 +745,19 @@ Make this decision before the game operates. Refer to section 11.
 
 **1. A hide payment has two parts. Only one part is a payment.**
 
-Since section 5 a hide costs **$5.20**: a `$0.20` fee and a `$5.00` stake. The
-contract must treat them differently. An error here stops rules 1 and 3.
+Since section 5 a hide costs **$5.20** or **$5.25**: a fee of `$0.20` or `$0.25`,
+and a `$5.00` stake. The contract must treat the two parts differently. An error
+here stops rules 1 and 3.
 
 | Part of the payment | Does it come back? | Is it a payment? |
 |---|---|---|
-| `hideFee` - $0.20 | **No, never** | **Yes** |
+| `hideFeeBase` / `hideFeeHigh` - $0.20 or $0.25 | **No, never** | **Yes** |
 | `currentHiderFee` - the $5 stake | **Yes**, less 12,833 units at the claim | **No** |
 | The 12,833 units at the claim | No | **Yes** |
 
 **Only the money that does not come back is a payment:** the hop fees, the spawn
-fees, the $0.20 hide fee, and the 12,833 units. Never the stake. A free hop is not
-a payment.
+fees, the hide fee at the correct tier, and the 12,833 units. Never the stake. A
+free hop is not a payment.
 
 If the stake was a payment, a farmer makes one hide and gets more than the $3
 limit for the $0.2128 that a hide really costs. This is **14 times** less
@@ -721,21 +765,30 @@ expensive. The $0.20 fee already made this problem much smaller: before the fee,
 hide cost $0.0128 and the difference was **234 times**. It is smaller, but it is
 not zero, and the rule stays.
 
-**The three hide settings operate together. This is correct and intentional:**
+**The gate uses the fee tier, not the daily maximum:**
 
 ```
-dailyHideCap (3)  x  hideFee ($0.20)  =  dailySpendThreshold ($0.60)
+hideFeeTierBoundary (3)  x  hideFeeBase ($0.20)  =  dailySpendThreshold ($0.60)
 ```
 
-A wallet at the daily hide maximum has paid exactly the daily limit. Thus **the
-maximum number of hides gets through the gate exactly, and never more.** This
-gives a light player a route through the limit (section 4). It gives a farmer no
-route that is less expensive than the other routes.
+The first 3 hides of a day cost the small fee and put the wallet exactly on the
+limit - not less, not more. This gives a light player a clear route through the
+limit (section 4). It gives a farmer no route that is less expensive than the
+other routes.
 
-It also means that **a change to one of the three changes what the other two do.**
-`hideFee` at $0.25 lets two hides get through the gate. `dailyHideCap` at 2 stops
-hides from getting through the gate at all. The owner can change all three. Write
-the relation next to the set functions. Refer to section 11.
+**The set functions must test this relation, and it is easy to write the wrong
+one.** The relation is **not** `dailyHideCap x hideFeeBase`: the maximum is 10,
+and 10 x $0.20 is $2.00. Three values can change, and each one breaks the relation
+in a different way:
+
+| Change | Result |
+|---|---|
+| `hideFeeBase` to $0.25 | two hides get through the gate; the third pays too much |
+| `hideFeeTierBoundary` to 2 | hides alone cannot get to $0.60 at the small fee |
+| `dailySpendThreshold` to $0.50 | two hides get through; the fee tier means nothing |
+
+`dailyHideCap` (10) is **not** in this relation. It controls the quantity. It has
+no part in getting through the gate. Refer to section 7.1 for the test.
 
 **2. Use the lowest rate. Do not multiply the rates together.**
 
@@ -759,8 +812,20 @@ Absolute values remove this danger. Before, the rates were multipliers. Three
 multipliers together gave 0.2 x 0.2 x 0.5 = **0.02**. Thus a new light player got
 **2%** of the rewards on the first day.
 
-The daily maximum is the only multiplier now. **Apply it one time, after you
-select the rate. Do not multiply it with anything else.**
+**The section 5 Daily Volume Multiplier does not make this danger again, because
+no reward line ever gets two multipliers:**
+
+| Reward line | The contract selects | Then it operates | Number of multipliers |
+|---|---|---|---|
+| Each hop | an absolute rate | the daily maximum, if necessary | **1 maximum** |
+| Participation | an absolute rate | the daily maximum, if necessary | **1 maximum** |
+| Hide a treasure | an absolute rate | the Daily Volume Multiplier | **exactly 1** |
+| The treasure is not found | an absolute rate | the Daily Volume Multiplier | **exactly 1** |
+| Find or steal | 110, always | nothing | **0** |
+
+The daily maximum operates on the hops and the participation bonus only. The
+volume multiplier operates on the hides only. **They never meet.** Select the
+absolute rate first, operate the one multiplier that the line permits, and stop.
 
 **Warning: do not check the last line of the table by memory.** The correct value
 of **0.15** is also the value that the old multipliers gave from 0.5 x 0.3. Thus
@@ -770,12 +835,6 @@ with the stored value of `hopRewardBelowThreshold`. Refer to test 4g.
 
 The new wallet maximum of 80 ROZ almost never operates. A new wallet must make
 approximately 142 hops in one day before it operates.
-
-### Rule 4 adds a person that you must trust
-
-A verified flag needs a person or a server to approve each wallet. This is a new
-privileged writer. It becomes a target when ROZ has a value. The flag is only as
-good as the person who controls it.
 
 ## 6. Map size control
 
@@ -790,17 +849,32 @@ Number of cells = T x 40 x K
 
 - `T` is the number of treasures for the round.
 - `40` is the target number of hops for each find.
-- `K` is the search inefficiency factor. The first range is 1.8 to 2.5.
+- `K` is the search inefficiency factor. The range is 1.8 to 2.5. **It starts at
+  2.2.**
+
+**K starts at 2.2.** This is the middle of the range, and a small quantity toward
+the sparse side. A map that is too easy is more difficult to correct than a map
+that is too difficult. Examine this value again when you know the real `T` of the
+first round. You will not know this until the launch is near.
 
 The map side increases with the square root of T:
 
-| T | K = 1.8 | K = 2.0 | K = 2.5 |
+| T | K = 1.8 | **K = 2.2** | K = 2.5 |
 |---|---|---|---|
-| 10 | 27 x 27 | 29 x 29 | 32 x 32 |
-| 100 | 85 x 85 | 90 x 90 | 100 x 100 |
-| 196 | 119 x 119 | 126 x 126 | 140 x 140 |
-| 500 | 190 x 190 | 200 x 200 | 224 x 224 |
-| 1000 | 269 x 269 | 283 x 283 | 317 x 317 |
+| 10 | 27 x 27 | **30 x 30** | 32 x 32 |
+| 100 | 85 x 85 | **94 x 94** | 100 x 100 |
+| 196 | 119 x 119 | **131 x 131** | 140 x 140 |
+| 500 | 190 x 190 | **210 x 210** | 224 x 224 |
+| 1000 | 269 x 269 | **297 x 297** | 317 x 317 |
+| **2,840** - `maxTreasuresPerRound` | 452 x 452 | **500 x 500** | 533 x 533 |
+
+**The last line gives the maximum map size.** `maxTreasuresPerRound` is **2,840**
+(section 7.6). Thus at the first K the largest map is `2,840 x 40 x 2.2` =
+249,920 cells, which is **500 x 500**. This is 11.4 treasures for each 1,000
+cells, which is inside the density limit. **If you increase
+`maxTreasuresPerRound`, the map becomes larger with the square root of T.** 5,000
+treasures need 663 x 663. Thus you must test what the display and the merkle tools
+can do first.
 
 ### How to change K
 
@@ -825,16 +899,16 @@ Change K by a maximum of 0.15 each round.
 median of past rounds. The function `start_new_game` already accepts the map size
 for each round. Thus the contract needs almost no new code for this.
 
-### The hide maximum in section 5 makes the range smaller
+### `T` now has a limit at each end
 
-With a maximum of 3 hides for each wallet each day, `T` for a round is now
-approximately (the number of hiders in that round x 3). The budget of one player
-no longer decides it. The $1,000 call that gave a 126 x 126 map is not possible
-from one wallet now.
+No wallet can make more than 10 treasures each day, or 250 in a round if it is
+whitelisted. And no round can hold more than **2,840** treasures in total. Thus
+`T` moves inside a range that you know. The budget of one player no longer decides
+it, and K never receives a large sudden change that it cannot correct at 0.15
+each round.
 
-The formula does not change. But the values that K must operate on are fewer and
-more predictable. This makes the map size limits easier to select, not more
-difficult. Refer to section 7.6.
+The formula does not change. The values that it must operate on do. Refer to
+section 7.6.
 
 ## 7. What the contract must do
 
@@ -856,8 +930,14 @@ The limits and the decreased rates from section 5.2:
 | `dailyFreeSpawns` | 1 | a count |
 | `dailySpendThreshold` | $0.60 | `600000` |
 | `lifetimeSpendThreshold` | $3.00 | `3000000` |
-| `hideFee` | $0.20 | `200000` — USDC, not ROZ. A **fee**, not the stake |
-| `dailyHideCap` | 3 | a count, for each calendar day, of **treasures** |
+| `hideFeeBase` | $0.20 | `200000` — treasures 1 to 3 of the day. A **fee**, not the stake |
+| `hideFeeHigh` | $0.25 | `250000` — treasure 4 and after |
+| `hideFeeTierBoundary` | 3 | a count — where the fee increases |
+| `dailyHideCap` | **10** | a count, for each calendar day, of **treasures** |
+| `maxTreasuresPerRound` | **2,840** | a count — the total for the round, everyone |
+| `whitelistRoundCap` | **250** | a count — for each whitelisted address, each round |
+| `whitelistCollectiveCap` | **1,200** | a count — for **all** the whitelisted addresses together, each round |
+| `whitelistHourlyCap` | **80** | a count — for each whitelisted address, each hour |
 | `hopRewardBelowThreshold` | 0.15 ROZ | `150000000000000000` |
 | `participationBelowThreshold` | 0 ROZ | `0` |
 | `rewardHideBelowThreshold` | **4.5 ROZ** | **`4500000000000000000`** |
@@ -867,11 +947,41 @@ The limits and the decreased rates from section 5.2:
 | `rewardHideNewWallet` | **15 ROZ** | **`15000000000000000000`** |
 | `rewardHideSurvivedNewWallet` | **25 ROZ** | **`25000000000000000000`** |
 | `newWalletSoftCapRoz` | 80 ROZ | `80000000000000000000` |
-| `dailySoftCapRoz` | 100 ROZ | `100000000000000000000` |
+| `dailySoftCapRoz` | **136 ROZ** | `136000000000000000000` |
 
-**`dailyHideCap` x `hideFee` must equal `dailySpendThreshold`** - 3 x `200000` =
-`600000`. Section 5.2 rule 1 gives the reason. A set function that changes one and
-not the others changes the design, and nothing shows this.
+There is no `verifiedBonusNum`/`Den` and no `player_verified`. Section 5.2 removed
+the fourth rule.
+
+**The Daily Volume Multiplier from section 5.** Six bands, and the owner can
+change each one. Store each as a numerator and a denominator, thus the values are
+exact:
+
+| Treasures already made today | Multiplier | Num / Den |
+|---|---|---|
+| 0 to 2 | 1.00x | 1 / 1 |
+| 3 to 4 | 0.70x | 7 / 10 |
+| 5 to 6 | 0.40x | 2 / 5 |
+| 7 to 8 | 0.20x | 1 / 5 |
+| 9 to 10 | 0.08x | 2 / 25 |
+| 11 and more | 0.03x | 3 / 100 |
+
+**The test in the set functions - write this one with care:**
+
+```cairo
+// 5.2 rule 1. The gate uses the FEE TIER, not the daily maximum: the first
+// hideFeeTierBoundary hides of a day must put a wallet exactly on
+// dailySpendThreshold. Each set function that changes one of the three
+// values must test this again.
+assert(
+    self.hideFeeTierBoundary.read() * self.hideFeeBase.read()
+        == self.dailySpendThreshold.read(),
+    'hide fee gate mismatch',
+);
+```
+
+It is **not** `dailyHideCap x hideFeeBase`. That was the relation when the maximum
+was 3, and 10 x `200000` is `2000000`. `dailyHideCap` controls the quantity and
+has no part in getting through the gate.
 
 **There is no decreased value for a find.** A find or steal gives 110 ROZ to each
 wallet, in each condition. Refer to section 5.2.
@@ -890,7 +1000,9 @@ Two new maps for each player. Both use patterns that the contract has already:
 
 ```cairo
 // Uses the day as a key, thus it starts again each day. This is the same
-// pattern as player_free_hops_used.
+// pattern as player_free_hops_used. It controls BOTH the section 5 fee tier
+// and the Daily Volume Multiplier. Thus you must read it BEFORE you count the
+// current treasure, and write it after.
 player_hides_today:  LegacyMap<(u64, ContractAddress), u256>,
 
 // Uses the round as a key, with hider_share_amounts. It collects the survival
@@ -899,14 +1011,43 @@ player_hides_today:  LegacyMap<(u64, ContractAddress), u256>,
 hider_survival_roz:  LegacyMap<(u256, ContractAddress), u256>,
 ```
 
+**The bulk hide whitelist** (section 7.6a). One root and three counters. The
+counters exist because a whitelisted address does not obey `dailyHideCap` and
+needs its own limits:
+
+```cairo
+// Only the owner writes this. A leaf is the address as felt252, with the
+// Poseidon hash. Refer to section 7.6a for the tree and the proof.
+whitelist_merkle_root: felt252,
+
+// 250 treasures in each ROUND for a whitelisted address, thus one address
+// cannot take all of the 2,840 of the round. The round is the key, thus it
+// starts again each round.
+whitelist_round_count: LegacyMap<(ContractAddress, u64), u32>,
+
+// 1,200 treasures in each ROUND for ALL the whitelisted addresses together.
+// The value above limits one address. This value limits the group, because
+// 250 for each address does not add together: eleven addresses would take
+// 2,750 of the 2,840 and leave 90 for all the other players. Each treasure
+// from a whitelisted caller increases it, single or bulk. A hide that is not
+// whitelisted never changes it.
+whitelist_round_total: LegacyMap<u64, u32>,
+
+// 80 treasures in each HOUR, thus a whitelisted address cannot put all of its
+// round quantity in the first minutes and stop the normal players.
+whitelist_hour_start: LegacyMap<ContractAddress, u64>,
+whitelist_hour_count: LegacyMap<ContractAddress, u32>,
+```
+
 Two counters record the payments:
 
 - `player_spend_today` - starts again each day.
 - `player_lifetime_spend` - never starts again.
 
 **Add to these two counters only when the player cannot get the money back.**
-Add the hop fees, the spawn fees, the **$0.20 hide fee**, and the 12,833 units
-from each claim. **Do not add the $5 hide stake.** Do not add a free hop.
+Add the hop fees, the spawn fees, the **hide fee at the correct tier**, and the
+12,833 units from each claim. **Do not add the $5 hide stake.** Do not add a free
+hop.
 
 ### 7.1a How the contract selects a rate
 
@@ -919,11 +1060,23 @@ the survival reward. Only find or steal does not - it gives 110 always.
                               rewardHide / rewardHideSurvived
 2. If total payment < $3:     take the lower of the rate and the new wallet rate
 3. If today's payment < $0.60: take the lower of the rate and the below rate
-4. Add the reward. Then apply the daily maximum one time, if necessary
+4. Operate the ONE multiplier that the line permits:
+     - each hop / participation -> the daily maximum, if the day total is more
+     - hide / not found         -> the Daily Volume Multiplier for the number
+                                   of this treasure (section 5)
+     - find / steal             -> none, never
 ```
 
-Steps 2 and 3 **take the lower value**. They never multiply. Step 4 is the only
-multiplier, and it operates one time.
+Steps 2 and 3 **take the lower value**. They never multiply. Step 4 operates **one
+multiplier at most**, and the two multipliers never operate on the same line.
+Refer to section 5.2 rule 2.
+
+**The volume multiplier reads the count BEFORE this treasure.** Treasure 1 of the
+day sees `player_hides_today == 0` and takes the 1.00x band. Treasure 4 sees 3 and
+takes 0.70x. Inside a bulk call the count increases for each treasure. Thus
+`hide_treasure_bulk(4)` pays 1.00x, 1.00x, 1.00x, 0.70x - which is the same as
+four single hides. **This equality is the design**: it stops a farmer who divides
+a bulk call to avoid the multiplier.
 
 **Step 0 gives the full rate to the action that gets through the gate.** The
 contract takes the fee, adds it to the counters, and reads the rate after that.
@@ -1002,40 +1155,260 @@ adds the ROZ to the balance. Thus a low ROZ balance does not stop the USDC.
 If the contract cannot add the ROZ, the player can come back later. A second flag
 records the ROZ part. The function `claim_reward_token_for_week` tries again.
 
-### 7.6 Bulk hiding - the maximum is 3 now
+### 7.6 Bulk hiding - open to everyone, with four limits
 
 A player can hide some treasures in one transaction. The player sends an amount
-that divides exactly by the hide price.
+that divides exactly by the hide price. **Each address can call this function.**
+The difference is the number of treasures that each address may make.
 
-**The daily maximum in section 5 counts treasures, not transactions. Thus this
-function can never place more than 3.** `hide_treasure_bulk(15000000)` - three
-treasures - is the largest call that a wallet can make in a day. The $1,000 call
-that gave 200 treasures now fails with `'daily hide cap'`.
+| The address | In one transaction | Each day | Each round | Each hour |
+|---|---|---|---|---|
+| Not whitelisted | what stays of the daily quantity | **10** | - | - |
+| Whitelisted (section 7.6a) | no limit | no limit | **250** | **80** |
+| **All the whitelisted together** | - | - | **1,200** | - |
+| **Everyone** | - | - | **2,840 in total** | - |
 
-**Keep the function.** It still saves two of the three transactions for a player
-who hides the daily maximum. Also, to remove an entry point is more difficult to
-reverse than to limit one. But it is a small function now. Section 11 asks if you
-still want the use that it was made for.
+The fourth line stops the third line from adding together: 250 is a limit for one
+address, and not for a group of addresses.
 
-**The contract does not need a loop.** The shares are a number. Thus the contract
-does two storage writes and one transfer, for any quantity.
+**Each limit counts treasures, not transactions.** The section 5 fee tier does the
+same, and so does the Daily Volume Multiplier. This one rule is what makes bulk
+hiding safe: **a bulk call of N gives exactly the same result as N single hides** -
+the same fees, the same multipliers, the same ROZ. Thus there is no advantage to
+divide a call, and none to join calls together.
 
-The contract must not compare the quantity with the map size. The map for the
-next round does not exist yet. The map size reads as 0. Thus each bulk hide fails.
-Use a maximum number of treasures for each round instead. Since section 5 that
-maximum protects the **total** for the round, not one wallet.
+**The contract does not need a loop for the shares.** They are a number, thus the
+transfer and the share write stay simple. But the fee and the reward change for
+each treasure, because both use the quantity that the wallet already made. The
+contract calculates both from a count that increases, not from a loop over the
+storage.
+
+The contract must not compare the quantity with the map size. The map for the next
+round does not exist yet. The map size reads as 0. Thus each bulk hide fails. Use
+`maxTreasuresPerRound` instead. That value protects the **total** for the round,
+across all the wallets - it is the only limit that a whitelisted address cannot
+pass.
 
 **You must also change the claim calculation.** The contract subtracts the fees
-one time for each claim. This was 200 times less than 200 separate claims. With
-the maximum of 3 it is **3 times** less than 3 separate claims. Change the
-calculation to subtract the fees for each share. The result for one share does not
-change.
+one time for each claim. This was 200 times less than 200 separate claims. A
+normal wallet can now make 10 treasures each day, thus the error is **10 times**.
+On the cheapest farm route, which uses 5, it is 5 times. Change the calculation to
+subtract the fees for each share. The result for one share does not change.
 
-**The maximum of 3 has already removed most of this problem.** The error moves the
-cheapest farm wallet from $0.6835 to $0.6578 each day, which is approximately 4%.
-Before the maximum, the error was 200 times. Thus this is not urgent now. But the
-calculation is still wrong: the fees are for each treasure, and the contract must
-subtract them for each treasure. The change is one line.
+**The limits have removed most of this problem.** The error moves the cheapest farm
+wallet from $1.209 to $1.158 each day, which is approximately 4%. Thus this is not
+urgent now. But the calculation is still wrong: the fees are for each treasure, and
+the contract must subtract them for each treasure. The change is one line. A
+whitelisted address that claims 250 shares one time would still pay 250 times too
+little, and that is the condition that keeps this change necessary.
+
+### 7.6a The bulk hide whitelist
+
+Some addresses must make more than 10 treasures each day - to fill a map for an
+event, or for a partner with a promotion. The whitelist permits this, and **it
+permits nothing else**: no ROZ bonus, no different rate, and no exception from the
+fee tiers or the Daily Volume Multiplier. It removes one limit and adds two
+smaller ones.
+
+| | Not whitelisted | Whitelisted |
+|---|---|---|
+| Daily treasure maximum | **10** | none |
+| Each round, one address | - | **250** |
+| Each round, **all the whitelisted together** | - | **1,200** |
+| Each hour | - | **80** |
+| Round total, shared | 2,840 | 2,840 |
+| Fee tiers, volume multiplier, wallet rate | operate | **operate the same** |
+
+**Why a Merkle root and not a map.** A map costs one write for each address, and
+one transaction for each change. A root is one `felt252`. The list stays off the
+contract, and the caller gives a proof. To add fifty addresses costs one call.
+
+```cairo
+// Only the owner writes this. A new root replaces the whole list. There is no
+// function to add or remove one address, and this is intentional: the list is
+// always exactly what the published tree says.
+whitelist_merkle_root: felt252,
+
+fn set_whitelist_merkle_root(ref self: ContractState, new_root: felt252) {
+    self.ownable.assert_only_owner();
+    self.whitelist_merkle_root.write(new_root);
+}
+```
+
+**The contract tests the proof with Poseidon.** The index tells the contract if
+each step is on the left or the right:
+
+```cairo
+use core::poseidon::PoseidonTrait;
+use core::hash::{HashStateTrait, HashStateExTrait};
+
+fn verify_merkle_proof(
+    leaf: felt252, proof: Span<felt252>, root: felt252, mut index: u32,
+) -> bool {
+    let mut computed_hash = leaf;
+    let mut i: u32 = 0;
+
+    while i < proof.len() {
+        let sibling = *proof.at(i);
+
+        // The lowest bit of the index gives the side of this node. If you use
+        // the wrong side, the hash looks correct but never equals the root.
+        // Then a whitelisted caller silently returns to the 10 a day maximum.
+        computed_hash = if index % 2 == 0 {
+            PoseidonTrait::new().update(computed_hash).update(sibling).finalize()
+        } else {
+            PoseidonTrait::new().update(sibling).update(computed_hash).finalize()
+        };
+
+        index = index / 2;
+        i += 1;
+    };
+
+    computed_hash == root
+}
+```
+
+**A leaf is the address of the caller as `felt252`, and nothing more.** Not the
+address with a limit, and not a hash of the address. The tool below makes the tree
+the same way. The two must agree exactly, or each proof fails.
+
+**The order of the tests, and the order is important:**
+
+```
+1. Test the proof            -> is this caller whitelisted?
+2. The round maximum         -> 250 for THIS address in this round?
+3. The hour maximum          -> 80 for THIS address in the last 3,600 seconds?
+4. The group maximum         -> 1,200 for ALL the whitelisted in this round?
+5. The round total           -> 2,840 for everyone?
+6. Fees, volume multiplier, wallet rate
+7. Make the treasures, and write each counter
+```
+
+**The order is personal, then group, then everyone.** This is what makes the three
+errors mean three different things:
+
+| The error | What it tells the caller |
+|---|---|
+| `'whitelist round cap'` | **you** used your 250 |
+| `'whitelist group cap'` | the whitelist together used its 1,200 |
+| `'round treasure cap'` | the round is full, for everyone |
+
+A whitelisted address that used its own quantity must not read that the round is
+full. An address that the group maximum stops must not think that its own maximum
+stopped it. A player who is not whitelisted can only ever see the third error.
+
+**The hour limit is a simple counter that starts again**, and not a true moving
+window. It is less expensive, and it is sufficient:
+
+```cairo
+fn enforce_whitelist_rate_limit(
+    ref self: ContractState, caller: ContractAddress, treasures: u32,
+) {
+    let now = get_block_timestamp();
+    let mut window_start = self.whitelist_hour_start.read(caller);
+    let mut count = self.whitelist_hour_count.read(caller);
+
+    // A simple counter: after one hour the window starts again. Thus two full
+    // groups CAN arrive 1 second apart, on the two sides of the hour. This is
+    // acceptable, because the 250 round maximum still protects the round.
+    if now >= window_start + 3600 {
+        window_start = now;
+        count = 0;
+    }
+
+    assert(count + treasures <= self.whitelistHourlyCap.read(), 'whitelist hourly limit');
+
+    self.whitelist_hour_start.write(caller, window_start);
+    self.whitelist_hour_count.write(caller, count + treasures);
+}
+```
+
+**The contract tests the group maximum with a total for the round:**
+
+```cairo
+// 1,200 for ALL the whitelisted addresses in this round. The 250 above limits
+// one address. This limits the group, because the maximums for each address do
+// not add together: eleven addresses at 250 each would take 2,750 of the 2,840
+// and leave 90 for all the other players.
+let groupSoFar: u32 = self.whitelist_round_total.read(gameWeek);
+
+assert(
+    groupSoFar + treasures <= self.whitelistCollectiveCap.read(),
+    'whitelist group cap',
+);
+
+self.whitelist_round_total.write(gameWeek, groupSoFar + treasures);
+```
+
+**What the three limits give.**
+
+| The limit | The result |
+|---|---|
+| **250** in a round, for one address | one address takes a maximum of **8.8%** of the round |
+| **1,200** in a round, for all together | the whitelist takes a maximum of **42.3%**, with any number of addresses |
+| **80** each hour, for one address | to place 250 needs **3.1 hours** of a 6-hour round |
+
+The first stops one address from taking the round. The second stops a **group** of
+addresses from taking it. The third stops any of them from taking the first
+minutes.
+
+**Thus 1,640 places - 57.7% - are always free for the normal players**, with any
+number of whitelisted addresses. Before the group maximum this value was **90**,
+because eleven addresses at 250 each take 2,750 of the 2,840.
+
+**The group maximum first operates at five whitelisted addresses.** Four can each
+use their full 250 (1,000 in total, which is below the maximum). A fifth would make
+the group 1,250, thus the contract stops it at 200. Below five addresses it never
+operates, thus a short list pays nothing for it.
+
+**1,640 is a minimum, and not a maximum.** The normal players have only the 2,840
+limit. If the whitelist places nothing, they can take all the round. The 1,200
+limits the whitelist group; the contract does not keep it for them.
+
+And a farm is still not profitable: at 250 in each round and 4 rounds, the 0.03x
+band controls almost all of it, thus **1,000 treasures give 2,834 ROZ for $263** -
+which is **$0.0928** for each ROZ, or a market value of **$464M**. **To whitelist
+an address does not make a farm profitable for it**, and the group maximum now
+also limits what a group of stolen whitelist keys could take.
+
+**To make the tree, off the contract.** Use `starknet-merkle-tree` with Poseidon
+and one element in each leaf:
+
+```js
+import * as Merkle from "starknet-merkle-tree";
+import fs from "fs";
+
+const whitelistedAddresses = ["0x123...", "0x456..."];
+
+// One element in each leaf, and that element is the address. This must be the
+// same as `let leaf: felt252 = caller.into();` in the contract.
+const tree = Merkle.StarknetMerkleTree.create(
+  whitelistedAddresses.map(addr => [addr]),
+  Merkle.HashType.Poseidon,
+);
+
+const proofs = {};
+whitelistedAddresses.forEach((address, index) => {
+  // The index is part of the proof. The contract needs it for the side of each
+  // step. Keep it with the proof. Do not make it again separately.
+  proofs[address] = { index, proof: tree.getProof(index) };
+});
+
+fs.writeFileSync("whitelist-root.json", JSON.stringify({ root: tree.root }, null, 2));
+fs.writeFileSync("whitelist-proofs.json", JSON.stringify(proofs, null, 2));
+```
+
+**The sequence:** the owner makes the tree and calls `set_whitelist_merkle_root`.
+The server gives the proofs from `whitelist-proofs.json`. The display asks for the
+proof and the index of the caller, and gives both to `hide_treasure_bulk`.
+
+**Make the proofs again each time the list changes.** Each index moves when you
+make the tree again. Thus an old proof file silently returns addresses to the 10 a
+day maximum. Publish the root and the proof file together.
+
+A caller who is not whitelisted gives an empty proof and any index. The test fails
+and the daily maximum operates. **A failed proof is not an error** - it is the
+normal condition for almost every caller.
 
 ### 7.7 New events
 
@@ -1057,9 +1430,37 @@ Add these events:
 Change `withdraw_token_balance` to accept a token address. Then the owner can
 recover any token.
 
-**This needs a guard.** The ROZ that the players earned is not yours. When the
-function sweeps ROZ, it must release only the surplus. If it does not, the
-coverage rule in 7.3 fails.
+**This needs a guard for the two tokens.** The ROZ that the players earned is not
+yours, and the USDC that they can claim is not yours.
+
+For the ROZ, the guard is one line: subtract `total_reward_token_pending`. If you
+do not, the coverage rule in 7.3 fails.
+
+**For the USDC the guard needs a new value.** The contract calculates the USDC
+that it owes from the shares, when a player asks. It never adds the total
+together. Thus there is nothing to subtract. Add this value:
+
+```cairo
+// The same idea as total_reward_token_pending. Increase it by currentHiderFee
+// at each treasure that a player hides. Decrease it when a claim pays, or when
+// a finder takes a stake. Then the sweep releases only the surplus.
+total_usdc_claimable: u256,
+```
+
+Then the two conditions read the same way, and this is the purpose - one rule,
+two tokens:
+
+```cairo
+if (tokenAddress == self.game_reward_token_contract_address.read()) {
+    sweepableAmount -= self.total_reward_token_pending.read();
+} else if (tokenAddress == self.game_token_contract_address.read()) {
+    sweepableAmount -= self.total_usdc_claimable.read();
+}
+```
+
+This is a new value and not a guard on a value that exists. Thus it costs a write
+at the hide and at the claim. This is correct: without it, the sweep can take
+money that the players own, and nothing shows the error.
 
 ## 8. How to deploy
 
@@ -1113,12 +1514,15 @@ This is a large value for a game token. Thus this danger is not near. The older
 value of $37M came from a calculation that gave the full rate to all 65 hops.
 Section 5.2 does not permit this.
 
-**Starknet gas is also a control.** Measure it.
+**Starknet gas is the largest control, and you have measured it.** A transaction
+costs **$0.025 to $0.04**. The hop route needs 66 transactions for 28.6 ROZ, thus
+gas adds $1.65 to $2.64 to the $0.615 of fees. The true cost is **$0.079 to
+$0.114** for each ROZ, which is a market value of **$396M to $569M**. **The hop
+route is not profitable.**
 
-**But the hop route is not the cheapest route.** Section 9.2 gives the hide loop,
-which no control reached before section 5. The cheapest wallet now mixes the two:
-3 hides and 28 hops give 150 ROZ for $0.6835, which is **$0.00456** for each ROZ,
-or a market value of **$22.8M**. This is the value to watch.
+**The cheapest route mixes hides and hops.** Section 9.2 gives it: 5 hides and 28
+hops give 262 ROZ for $1.209 of fees and $0.85 to $1.36 of gas. This is **$0.0079
+to $0.0098** for each ROZ, or **$39M to $49M**. This is the value to watch.
 
 ### 9.2 The hide loop, and how section 5 controlled it
 
@@ -1140,26 +1544,47 @@ profitable at a market value of $0.8M, in **147 transactions each day**.
 | Change | Result for the route |
 |---|---|
 | The gate operates on the hide rewards (5.2) | A hide cycle below the gate gives **12**, not 80 |
-| The $0.20 fee (section 5) | A real cost that never comes back, and it **is a payment** |
-| 3 each day, counting treasures (section 5) | Bulk hiding cannot be more than 3, thus **gas is a control again** |
+| The tiered fee (section 5) | A real cost that never comes back, and it **is a payment** |
+| **The Daily Volume Multiplier** (section 5) | Treasure 4 of a day gives 0.70x, treasure 10 gives 0.08x |
+| The maximums for each wallet and each round | 10 each day for one wallet, 2,840 in each round |
 
-The third change is the important one. A farmer cannot put 29,281 treasures from
-one wallet in 147 calls now. The farmer needs one wallet for each 3 hides.
+**The volume multiplier is what makes the maximum of 10 safe.** The maximum is 10
+and not 3. Alone, that would make a farm **less** expensive: each hide that
+survives adds 80 ROZ for $0.25. The multiplier removes this. After the third
+treasure the ROZ decreases more quickly than the fee increases.
 
-#### The cheapest wallet is 3 hides and 28 hops
+#### The cheapest wallet is still 3 hides and 28 hops
 
 The hide fees get through the gate exactly - 3 x $0.20 = $0.60. Then the 22 free
-hops give the full 1.0 and not 0.15:
+hops give the full 1.0 and not 0.15. All three hides are in the 1.00x band:
 
-| Step | Payment after | ROZ |
-|---|---|---|
-| Hide 1 | $0.20 - below | 4.5 + 7.5 |
-| Hide 2 | $0.40 - below | 4.5 + 7.5 |
-| Hide 3 | **$0.60 - gets through** | 30 + 50 |
-| 22 free hops | $0.60 | 22 |
-| Hops 23 to 28 (+$0.045) | $0.645 | 6 |
-| Participation | - | 18 |
-| **Total** | **$0.6835 in total** | **150 ROZ** |
+| Step | Payment after | Volume | ROZ |
+|---|---|---|---|
+| Hide 1 | $0.20 - below | 1.00x | 4.5 + 7.5 |
+| Hide 2 | $0.40 - below | 1.00x | 4.5 + 7.5 |
+| Hide 3 | **$0.60 - gets through** | 1.00x | 30 + 50 |
+| 22 free hops | $0.60 | - | 22 |
+| Hops 23 to 28 (+$0.045) | $0.645 | - | 6 |
+| Participation | - | - | 18 |
+| **Total** | **$0.6835 in total** | | **150 ROZ** |
+
+**More than three hides is worse, and this is the purpose.** The complete curve
+for the farmer:
+
+| Hides | ROZ | Cost | For each ROZ | Market value |
+|---|---|---|---|---|
+| 1 | 39.1 | $0.628 | 0.01606 | $80.3M |
+| 2 | 49.4 | $0.631 | 0.01275 | $63.8M |
+| **3** | **150.0** | **$0.683** | **0.00456** | **$22.8M** |
+| 4 | 206.0 | $0.946 | 0.00459 | $23.0M |
+| 5 | 262.0 | $1.209 | 0.00461 | $23.1M |
+| 7 | 326.0 | $1.735 | 0.00532 | $26.6M |
+| 10 | 364.4 | $2.523 | 0.00692 | $34.6M |
+
+**The change from 3 to 10 cost nothing.** The minimum stays at $22.8M, which is
+the same value that the maximum of 3 gave. One hide and two hides are much worse,
+not better: a wallet without three hides must **hop** to $0.60, and it uses 44 to
+55 hops at 0.15 to arrive.
 
 | | Before section 5 | **Now** |
 |---|---|---|
@@ -1200,32 +1625,62 @@ times** now, and it was 120 times. The contract takes the $0.20 fee if the treas
 survives or not. Thus the fee gives a minimum that the farmer cannot avoid with a
 good time.
 
-#### Gas controls this route again
+#### Gas controls this route again, and you have measured the gas
 
 Sections 5.1 and 9.1 say that gas is the real control. `hide_treasure_bulk`
-removed it before: 200 treasures in one transaction. The maximum of 3 counts
-treasures, thus it does not remove it now:
+removed it before: 200 treasures in one transaction. The maximums count treasures,
+thus they do not remove it now:
 
 | | The hop route | The hide route, before | **The hide route now** |
 |---|---|---|---|
 | Transactions to take all the Year 1 tokens | ~5.3 million each day | ~147 each day | **~500,000 each day** |
-| Cost | $50,371 each day | $375 to $45,000 | **$10,674 to $48,150** |
+| Fees | $50,371 each day | $375 to $45,000 | **$10,674 to $48,150** |
 | Money necessary | None | $146,405, returned | $234,240, returned |
 
 15,616 wallets x 32 transactions each - 3 hides, 28 hops and one claim. This is
-approximately **3,400 times more transactions** than before. Thus the same gas
-argument that controls the hops controls this route also.
+approximately **3,400 times more transactions** than before.
 
-**Two controls remain, and you have not made either one:**
+**At $0.025 to $0.04 for each transaction, gas is now more than the game fees on
+each route.** Thus the values above are too small:
 
-- **The deduction for each treasure (section 7.6).** The maximum of 3 makes this
-  error 3 times, not 200 times. Thus it is not urgent now, but the calculation is
-  still wrong and the change is one line.
-- **`maxTreasuresPerRound`.** This is a second control now, not the only one. The
-  maximum for each wallet stops one farmer. This value stops the **total**, which
-  the other maximum cannot see: 15,616 wallets with 3 hides each still put 46,848
-  treasures in a day. Section 11 says that you cannot select it until you select
-  the map size limits. **Thus this value is still empty.**
+| Route | Fees | Gas | Total | For each ROZ | Market value |
+|---|---|---|---|---|---|
+| 3 hides + 28 hops (32 tx) | $0.683 | $0.80 to $1.28 | $1.48 to $1.96 | $0.0099 to $0.0131 | **$49M to $65M** |
+| **5 hides + 28 hops (34 tx)** | $1.209 | $0.85 to $1.36 | $2.06 to $2.57 | **$0.0079 to $0.0098** | **$39M to $49M** |
+| 65 hops only (66 tx) | $0.615 | $1.65 to $2.64 | $2.27 to $3.26 | $0.079 to $0.114 | $396M to $569M |
+
+**Gas changes the best wallet for the farmer.** With the fees only, the farmer
+stops at three hides. With the gas, the best number is **five**, because more
+treasures in one wallet divide the fixed cost of the 29 hop and claim
+transactions. The minimum increases from $22.8M to **$39M to $49M**.
+
+#### The round maximum gives a limit on the quantity
+
+The values above give the price. `maxTreasuresPerRound` gives **how much a farmer
+can take at any price**, and this is the limit that operates:
+
+```
+2,840 in each round  x  4 rounds  =  11,360 treasures each day
+11,360  /  5 for each wallet      =   2,272 farm wallets
+2,272   x  262 ROZ                = 595,264 ROZ each day
+```
+
+The Year 1 budget is 2,342,466 ROZ each day. Thus this is **25.4%**. **A hide farm
+cannot take all the tokens** - not at any price, and not with any number of
+wallets. After one quarter of the daily tokens the farmer must use the hop route
+at $396M or more, and nobody does this.
+
+This is a different type of protection, and a better one: it does not change with
+the ROZ price, with the gas, or with the number of treasures that the finders take.
+But honest hiders use the same 2,840 places. Refer to section 11.
+
+**One change remains:**
+
+- **The deduction for each treasure (section 7.6).** The maximum of 10 makes this
+  error 10 times, not 200 times, and it moves the cheapest wallet approximately
+  4%. Thus it is not urgent now, but the calculation is still wrong and the change
+  is one line. A whitelisted address that claims 250 shares one time makes the
+  error 250 times, and that condition keeps the change necessary.
 
 Section 4 also gives this route to the light casual player. Thus the two use the
 same action. But since section 5 they no longer have the same danger.
@@ -1281,8 +1736,33 @@ A round is 6 hours. Thus you must call `start_new_game` 1,460 times each year. T
 function has eight arguments and no checks. One error damages the economics of
 that round. This error occurred before.
 
-You cannot do this by hand. You must use a server, or add a function with no
-arguments.
+**Decided: a server outside the contract, on AWS.** An **EventBridge** schedule
+operates every 6 hours and starts a **Lambda** function. The Lambda calls
+`start_new_game` with the values from section 6. The contract does not change.
+
+Three points that you must design for:
+
+- **The Lambda must operate two times safely.** EventBridge tries again after a
+  failure. To call `start_new_game` two times for the same round would change that
+  round's values a second time, which is the error that this section describes.
+  Test the current round number before you write.
+- **The key of the Lambda is privileged.** It is the only account that can start a
+  round. If a person takes it, they stop or damage the game. Protect it like the
+  owner key.
+- **The eight arguments still have no checks.** To calculate them in one Lambda
+  that you examined is much better than to do it by hand 1,460 times each year.
+  But the contract still accepts a wrong value with no error.
+
+**Decided: a round can stop early** when the players find each treasure. The
+contract can see this now: `total_reward_shares_for_hiders` decreases at each
+correct find, thus zero means that the players found all of them. The
+recommendation is that **the server does this**, and not the player whose find
+makes the count zero - that player would pay the gas for everyone. The cost is a
+maximum of 6 hours of an empty round.
+
+A function `advance_round()` in the contract is still the better answer for later.
+It removes the eight arguments, and anyone could call it after a time limit if the
+server stops. Refer to section 11.
 
 ### 9.5 "Free" is not free
 
@@ -1334,25 +1814,54 @@ write "no game fee" and not "free" until the paymaster operates.
 4e-ii. **Three hides get through the daily gate exactly, and the third gives the
    full rate.** From test 4e: hides 1 and 2 give `4.5e18` each. Hide 3 - the hide
    that makes the payment `600000` - gives **`30e18`**, because the contract takes
-   the fee before it selects the rate. Refer to section 7.1a. A fourth hide fails.
-4e-iii. **The daily hide maximum.** The 4th `hide_treasure` in a day fails with
+   the fee before it selects the rate. Refer to section 7.1a. All three are in the
+   1.00x volume band, thus no multiplier operates.
+4e-iii. **The fee increases at treasure 4.** Hides 1 to 3 each send `200000` of
+   `hideFeeBase`. Hide 4 sends `250000`. After ten hides `player_spend_today` is
+   exactly `600000 + 7 x 250000 = 2350000`, and no unit of the `$50` of stake is
+   in either counter.
+4e-iv. **The Daily Volume Multiplier, band by band.** With a wallet that got
+   through the gate at hide 3, the instant hide rewards for ten hides must be:
+
+   | Treasure | 1 to 3 | 4 to 5 | 6 to 7 | 8 to 9 | 10 |
+   |---|---|---|---|---|---|
+   | Band | 1.00x | 0.70x | 0.40x | 0.20x | 0.08x |
+   | Reward | `30e18` | `21e18` | `12e18` | `6e18` | `2.4e18` |
+
+   Test the **10th** reward specifically - `2.4e18`. This is the band that a farmer
+   arrives at, and an error of one in the index gives the wrong value here.
+4e-v. **A bulk call equals the same number of single hides - the test that closes
+   section 9.2.** Use one wallet with `hide_treasure` ten times, and a second
+   wallet with `hide_treasure_bulk(50000000)`. **The two must finish with the same
+   ROZ balance and the same `player_spend_today`.** If the bulk is less expensive
+   or more generous by any quantity, a farmer divides or joins calls to use the
+   difference.
+4e-vi. **The daily hide maximum.** The 11th `hide_treasure` in a day fails with
    `'daily hide cap'`. Move past midnight UTC and it operates. Also,
-   `hide_treasure_bulk(20000000)` - four treasures - fails from a wallet that did
+   `hide_treasure_bulk(55000000)` - eleven treasures - fails from a wallet that did
    not hide that day, because **the maximum counts treasures, not calls**. Refer to
-   section 7.6. `hide_treasure_bulk(15000000)` operates and leaves the count at 3.
-4e-iv. **The hide rates in the three conditions.** Below the limit a hide gives
+   section 7.6. `hide_treasure_bulk(50000000)` operates and leaves the count at 10.
+4e-vii. **The hide rates in the three conditions.** Below the limit a hide gives
    `4.5e18`. A new wallet that paid $0.60 gives `15e18`. An established wallet that
-   paid $0.60 gives `30e18`.
-4e-v. **The contract selects the survival rate at the hide.** Hide one time below
-   $0.60 - `hider_survival_roz` must hold `7.5e18`. Then get through the gate, let
-   the round finish with no finder, and claim: the reward is **`7.5e18` and not
-   `50e18`**. Then test the other direction: hide after the gate, and claim some
-   days later with that day's payment at zero. The reward must still be `50e18`.
-   The two directions are both important. The first is the method of a farmer. The
-   second removes 42.5 ROZ from a correct player who claims on a Monday morning.
-4e-vi. **The contract never decreases a find.** A wallet below the daily limit,
+   paid $0.60 gives `30e18`. All at the 1.00x band, thus the volume multiplier does
+   not change the result.
+4e-viii. **The contract selects the survival rate at the hide.** Hide one time
+   below $0.60 - `hider_survival_roz` must hold `7.5e18`. Then get through the
+   gate, let the round finish with no finder, and claim: the reward is **`7.5e18`
+   and not `50e18`**. Then test the other direction: hide after the gate, and claim
+   some days later with that day's payment at zero. The reward must still be
+   `50e18`. The two directions are both important. The first is the method of a
+   farmer. The second removes 42.5 ROZ from a correct player who claims on a Monday
+   morning.
+4e-ix. **The contract never decreases a find.** A wallet below the daily limit,
    that is also a new wallet with zero total payments, gets the full **`110e18`**
    for a correct find. No condition decreases it. Refer to section 5.2.
+4e-x. **The test in the set function (section 7.1).** `set_hide_fee_base(250000)`
+   must fail with `'hide fee gate mismatch'` while `hideFeeTierBoundary` is 3 and
+   `dailySpendThreshold` is `600000`, because 3 x `250000` is `750000`. To change
+   the base and the limit together, so that the multiplication is correct, must
+   operate. Test also that a change to `dailyHideCap` alone - to 5, or to 50 -
+   **never** fails: the maximum is not part of the relation.
 4f. A new wallet with a total payment of less than $3 gets 0.5 ROZ for a hop and
    9 ROZ for the bonus, also when the wallet paid more than $0.60 that day. At $3
    the same actions give 1 ROZ and 18 ROZ.
@@ -1376,137 +1885,222 @@ write "no game fee" and not "free" until the paymaster operates.
 7a. Give USDC to the same wallet. Let it hop to hop 65. The hops after `600000`
    give 1 ROZ. The earlier hops keep 0.15 ROZ. The contract does not calculate
    them again.
-8. A bulk hide of $1,000 **fails** with `'daily hide cap'`. This is the test that
-   closes the hide loop in section 9.2. A bulk hide of $15 gives 3 shares, and the
-   contract also takes `600000` of fees.
-9. A claim for 1 share pays `4987167`. A claim for 3 shares pays `14961501`, and
-   **not** `14987167`. Three shares is the largest claim that is possible now.
+8. A bulk hide of $1,000 **fails** with `'daily hide cap'` from a wallet that is
+   not whitelisted. A bulk hide of $50 gives 10 shares, and the contract also
+   takes `2350000` of fees.
+8a. **The whitelist (section 7.6a).** A wallet in the published tree, with the
+   correct proof and index, can make more than 10 treasures in a day. The **same
+   wallet with an empty proof returns to the 10 a day maximum** - a failed proof is
+   the normal condition, not an error. A wallet with a correct proof and the
+   **wrong index** also fails and returns to 10; this is the most probable error
+   with the tools, and it fails silently. The 251st treasure in one round fails
+   with `'whitelist round cap'`. The 81st treasure in one hour fails with
+   `'whitelist hourly limit'`; move 3,600 seconds and it operates. Only the owner
+   can call `set_whitelist_merkle_root`.
+8b. **The group maximum for the whitelist (section 7.6a).** Five whitelisted
+   addresses each try 250 treasures in one round. The first four operate (1,000 in
+   total). The fifth places **200 and then fails** with `'whitelist group cap'`,
+   thus the group total is exactly **1,200** and not 1,250. **Then a wallet that
+   is not whitelisted can still hide.** This is the reason for the whole maximum:
+   with the whitelist finished, 1,640 places stay, and a normal player must not
+   see `'round treasure cap'`. Test also that the three errors are different: an
+   address that used its own 250 gets `'whitelist round cap'` and **not**
+   `'whitelist group cap'`; a new whitelisted address, after the group is full,
+   gets `'whitelist group cap'` and **not** `'round treasure cap'`. The total
+   starts again in the next round. With four addresses or fewer the maximum never
+   operates, and a hide that is not whitelisted never changes the total.
+9. A claim for 1 share pays `4987167`. A claim for 10 shares pays `49871670`, and
+   **not** `49987167`. Ten is the largest claim for a normal wallet. A whitelisted
+   address can get to 250, where the error would be 250 times.
 10. The total of the balances is never more than the ROZ that the contract holds.
+11. **The sweep function protects the two tokens (section 7.8).** With ROZ in the
+    balances and USDC that players can claim, the sweep must release only the
+    surplus of each one. Take the ROZ and test that `claim_reward_tokens` still
+    pays in full. Take the USDC and test that `claim_reward` still pays `4987167`.
+    A third, different token releases all of its balance.
+12. **The server that starts each round operates two times safely.** To call
+    `start_new_game` two times for the same round must not change the values of
+    that round. AWS EventBridge tries again, thus this will happen.
 
-## 11. Decisions that you must make
+## 11. Decisions
 
-1. **How do you start each round?** A server, or a new function. This is the most
-   urgent decision.
-2. **What are the map size limits?** You cannot set the maximum number of
-   treasures until you know them.
-3. **What is the first value of K?** A wrong value needs many rounds to correct.
+### The decisions that you made
+
+1. ~~**How do you start each round?**~~ **AWS EventBridge every 6 hours, with an
+   AWS Lambda function** that calls `start_new_game`. The contract does not
+   change. Refer to section 9.4. The Lambda must operate two times safely, because
+   EventBridge tries again. Its key is as important as the owner key.
+2. ~~**What are the map size limits?**~~ **`maxTreasuresPerRound` is 2,840**, with
+   a set function. At the first K this gives a maximum map of **500 x 500** and
+   11.4 treasures for each 1,000 cells. Refer to section 6.
+3. ~~**What is the first value of K?**~~ **2.2**, and you examine it again when you
+   know the real `T` of the first round.
 4. ~~**Does the hop reward limit agree with the map size formula?**~~ **Corrected.**
-   The formula targets 35 to 45 hops for each find. The reward limit is 40 now.
-   But refer to decision 13: the daily maximum can still stop these rewards.
-5. **Is 4,700 to 16,700 players each day correct for Year 1?** The first targets
-   gave 4,000 to 13,000. The new targets in section 4 give more.
-6. **Does the per-hop reward stay at 1 in year 2?** The calculation gives 0.74.
-7. **Must the game have a retention reward?** The daily reward operated when a
-   player made a spawn. A spawn gives no ROZ now, thus the daily reward and the
-   streak bonus do not operate. You can accept this. Or you can give the reward
-   for the first hop of each day. The first hop keeps the spawn free of rewards,
-   as you decided.
-8. **No player gets the target reward. This decision is open again.** The targets
-   are 25 to 70, 140 to 280, and 300 to 500 now. You made these targets with the
-   older values, which gave the full rate to all the hops. Section 5.2 does not
-   permit this. With the correction, the light casual player gets **6**, the
-   typical casual player gets **117.5**, and the active player gets **285.9**. The
-   light casual player with 2 hides gets approximately 54, which is in the target.
-   The other two are below their minimums. The correction is the larger cause: it
-   removes 37.8 ROZ and 41.3 ROZ. The hop rate of 0.15 removes 8.1 ROZ and 8.8 ROZ
-   more. The hide changes in section 5 give 3.4 ROZ back to the typical casual
-   player. You can decrease the targets a second time, increase
-   `hopRewardBelowThreshold`, or decrease `dailySpendThreshold` so that the players
-   get through the gate sooner. Only the last one helps the light casual player,
-   and it is also the one that makes the gate weaker.
-12. **The light casual player is the furthest below the target, and the middle is
-    a trap.** This player pays $0.265 each day. The limit is $0.60. Thus the player
-    gets 6 ROZ and not 58. The target is 25 to 70. A light casual player and a
-    small farmer pay the same amount, thus the gate cannot see the difference. The
-    change from $0.50 to $0.60 moved this player further from the limit. **Two
-    hides give approximately 54 ROZ, and 2 hides with 42 hops give 30.3 ROZ below
-    the gate. But one hide gives only 18 ROZ** - less than both. A player who hides
-    one time and stops is in the worst position, and nothing tells them this. You
-    can accept this and put it in the display. Or you can decrease the limit,
-    increase `hopRewardBelowThreshold` above 0.15, give a small participation bonus
-    below the limit instead of no bonus, or give new players some free days.
-15. **Is $3 the correct total payment limit?** $3 gives a cost of $245,712 one
-    time. $5 gives $409,520. Thus $3 gives approximately one half of the control.
-    The two values increased with the corrected number of wallets, but the ratio
-    did not change: the cost is still 4.9 days of the daily cost. The daily limit
-    decides where the light casual player stops. The total limit decides the cost
-    for a farmer.
-16. **Is rule 4 correct?** A verified flag needs a person that you trust. This
-    person becomes a target when ROZ has a value.
-17. **Rule 3 decreases the rewards only for the players who pay.** A light casual
-    player is already at the minimum from rule 1. Confirm that this is correct.
-18. **Must the contract calculate the day again when a player gets to $0.60?**
-    The plan says no. The rates operate from that moment only.
-
-    **This is not a small decision now.** It is worth approximately 55 ROZ each
-    day to the cheapest farm wallet - the difference between 28.6 and 83. It is
-    worth 37.8 ROZ to the typical casual player. It is the largest control in the
-    gate, larger than the $0.60 limit. All the values in this plan use it. If you
-    change it, the farm cost goes back to $0.00741 for each ROZ, which is a market
-    value of $37M. But all three players also go back into their targets. The two
-    effects are large, and they operate against each other.
-13. **What is the value of the daily maximum reward?** Use a value near 100. A
-    wallet can get 136.35 ROZ on the usual route, and 178 ROZ only if it gets
-    through the gate before it hops. Thus 150 to 160 almost never operates. But an
-    active player gets only 95.85 ROZ, thus a maximum of 100 also almost never
-    operates. Refer to decision 4: the daily maximum and the 40-hop maximum operate
-    against each other, and neither one gets to the correct player.
-14. **How much does Starknet gas cost for each transaction?** If the gas is more
-    than the game fees, the gas is the real control. Measure this before you
-    change the prices again.
-9. **Is a hide fully free?** No - a hide costs $0.20 now. The contract also keeps
-   $0.0128 at each claim. Thus a hide that survives costs $0.2128.
-10. **Can a round stop early when the players find all the treasures?**
-11. **Must the sweep function protect the USDC that players can claim?**
-19. **A player below the gate must hide to get the target.** Hops give a maximum
-    of 9.6 ROZ below the gate. This is 64 hops for $0.595, which is the maximum
-    payment below $0.60. Thus hops alone cannot get to the minimum of 25. Hides
-    can, in two directions: 2 hides and 42 hops give 30.3 ROZ below the gate, and
-    the same 2 hides move the player through the gate to approximately 54 ROZ.
-    One hide gives 18 ROZ and gets to neither. Confirm that "a light casual player
-    must hide" is the correct shape for the target. Or increase
-    `hopRewardBelowThreshold`, so that hops alone can get to 25. Note that decision
-    22 operates on the same action.
-20. **The rewards change with the order of the actions.** The payments increase in
-    the order of the actions. Thus a player who makes a spawn at the start of a
-    round gets through the gate sooner, and earns more. Since section 5 this is
-    much larger: **a typical casual player gets 117.5 ROZ with a round-3 hide, and
-    50.35 ROZ with a round-2 hide.** A hide before the gate gives 12 and not 80,
-    and section 7.1a makes this permanent. This is 67 ROZ from the order only, and
-    the player cannot see it. You can put a message in the display ("hide after you
-    pay $0.60"). Or you can select the rate for the day one time at a fixed moment.
-21. **The participation bonus needs the two conditions at each hop.** If the
-    contract gives the bonus at hop 28 only, a player who gets to 28 hops before
-    $0.60 never gets the bonus. The typical casual player does this, at $0.145.
-    That is 18 ROZ, and nothing shows the error. This is a rule and not a question,
-    but a contract is easy to write the other way.
+   The formula targets 35 to 45 hops for each find. The reward limit is 40. At
+   `dailySoftCapRoz` = 136 the daily maximum no longer stops these rewards.
+6. ~~**Does the per-hop reward stay at 1 in year 2?**~~ **No. It decreases with the
+   tokens of that year.** 630M / 855M = **0.7368**, which gives the 0.74. The same
+   proportion operates for each later year.
+7. ~~**Must the game have a retention reward?**~~ **No, accepted as it is.** The
+   game has no retention reward.
+11. ~~**Is rule 4 correct?**~~ **No. Rule 4 is removed** (section 5.2). A verified
+    flag needs a person to approve each wallet, which is a new privileged writer
+    and a target when ROZ has a value. Section 5.2 has three rules now. The bulk
+    hide whitelist (section 7.6a) does exist, but it gives no ROZ bonus - only
+    higher hide limits.
+12. ~~**Rule 3 decreases the rewards only for the players who pay.**~~ **Confirmed
+    correct.** A light casual player is already at the minimum from rule 1, thus
+    rule 3 takes nothing more from them. The name is not correct for this, and the
+    behaviour is: the rule prices the change of wallets, and a wallet that never
+    pays is not worth changing.
+13. ~~**Must the contract calculate the day again at $0.60?**~~ **No.** The rates
+    operate from that moment only. To change this would return the farm cost to
+    $0.00741 for each ROZ and would put the typical casual and active players back
+    in their targets - but the farm effect is the larger of the two.
+14. ~~**What is the daily maximum reward?**~~ **`dailySoftCapRoz` = 136.** It is a
+    small quantity below the natural maximum of 136.35, thus it stops only the
+    route that pays for spawns before it hops. Refer to section 5.1.
+15. ~~**How much does Starknet gas cost?**~~ **$0.025 to $0.04 for each
+    transaction**, measured. It is now more than the game fees on each route
+    (section 9.2), and this is why the cheapest farm wallet moved from three hides
+    to five.
+16. ~~**Is a hide fully free?**~~ **No.** A hide costs $0.20 or $0.25, and the
+    contract also keeps $0.0128 at each claim. Thus one of the first three hides
+    costs $0.2128 if it survives.
+17. ~~**Can a round stop early?**~~ **Yes**, when the players find each treasure.
+    The recommendation is that the server does this and not the finder, thus one
+    player does not pay the gas for everyone. Refer to section 9.4.
+18. ~~**Must the sweep function protect the USDC?**~~ **Yes** (section 7.8). This
+    needs a new value - a total of the USDC that players can claim - because the
+    contract calculates the USDC from the shares and never adds it together.
+19. ~~**Is "a light casual player must hide" correct?**~~ **Yes.** Two hides give
+    approximately 54 ROZ, and 2 hides with 42 hops give 30.3 ROZ below the gate.
+20. ~~**The rewards change with the order of the actions.**~~ **Put a message in
+    the display: "hide after you pay $0.60".**
+21. ~~**The participation bonus needs the two conditions.**~~ **Confirmed.** The
+    contract obeys the rule, and the player gets the bonus after they pass the
+    payment limit. Refer to section 7.1a.
 22. ~~**How do you control the hide loop?**~~ **Controlled** (sections 5, 5.2,
-    7.6). The gate operates on the hide rewards, a $0.20 fee applies, and the
-    maximum is 3 treasures for each wallet each day. Find or steal stays at 110 for
-    all the players, and this is intentional. The minimum for the route moves from
-    **$0.8M to $22.8M**, and the transactions move from ~147 each day to ~500,000.
-    Two smaller controls remain:
-    - Select a value for `maxTreasuresPerRound`. Refer to decision 2 - you need the
-      map size limits first. This is a second control now, not the only one. It
-      stops the **total**: 15,616 wallets with 3 hides each still put 46,848
-      treasures in a day.
-    - Make the deduction operate for each treasure, at the same time as bulk
-      hiding. Refer to section 7.6. The error is 3 times now, and it was 200 times.
+    7.6). `maxTreasuresPerRound` is 2,840, and the deduction operates for each
+    treasure with the bulk hiding.
+23. ~~**Do you still want bulk hiding?**~~ **Yes**, and section 7.6 gives the new
+    specification. Each address can use it. The Daily Volume Multiplier and the
+    tiered fee control the quantity, and section 7.6a gives the whitelist.
+24. ~~**Nothing protects the relation between the three settings.**~~ **The set
+    functions test it** (section 7.1). The relation is
+    `hideFeeTierBoundary x hideFeeBase == dailySpendThreshold`, and **not**
+    `dailyHideCap x hideFeeBase`.
 
-    Be careful: decision 19 gives the same action to the light casual player. A
-    new control on the hide loop also operates on that player.
-23. **Do you still want bulk hiding?** The maximum of 3 counts treasures, thus
-    `hide_treasure_bulk(1000000000)` - the $1,000 call that gave 200 treasures -
-    fails now. The function stays, and it still saves two of the three transactions
-    for a player who hides the daily maximum. But the use that it was made for is
-    gone, and one wallet cannot make the 126 x 126 map in section 6. Confirm that
-    nobody needs this. If a company must fill a map for an event, you can add a
-    list of approved addresses - but that is a new person that you must trust, with
-    the same problem as rule 4 - or a separate function that gives no ROZ.
-24. **Three settings operate together, and nothing protects the relation.**
-    `dailyHideCap` x `hideFee` = `dailySpendThreshold`, which is 3 x $0.20 = $0.60.
-    This makes the maximum number of hides get through the gate exactly. The owner
-    can change all three, and they are independent. `hideFee` at $0.25 lets two
-    hides get through the gate. `dailyHideCap` at 2 stops hides from getting
-    through at all. Put a test in the set functions, or write the relation next to
-    them and accept the danger.
+### The decisions that stay open
+
+5. **Is 4,700 to 16,700 players each day correct for Year 1?** **You cannot know
+   this before the launch** - it depends on the response of the public. Measure it
+   in the first week. If the game has more players, the tokens for Year 1 stop
+   early.
+8. **No player type gets the target reward - accepted as it is.** The targets are
+   25 to 70, 140 to 280, and 300 to 500. The light casual player gets **6** (or
+   approximately 54 with two hides), the typical casual player gets **117.5**, and
+   the active player gets **285.9**. You examined the three options - decrease the
+   targets again, increase `hopRewardBelowThreshold`, or decrease
+   `dailySpendThreshold` - and **you took none of them**, because only the last one
+   helps the light casual player and it is also the one that makes the gate weaker.
+   Examine this first if the real players stop early.
+12. **The light casual player is the furthest below the target, and the middle is
+    a trap - accepted as it is.** This player pays $0.265 each day and gets 6 ROZ,
+    and the target starts at 25. **Two hides give approximately 54 ROZ, and 2 hides
+    with 42 hops give 30.3 ROZ below the gate. But one hide gives only 18 ROZ** -
+    less than both. A player who hides one time and stops is in the worst position,
+    and nothing tells them this. Put it in the display.
+15. **Is $3 the correct total payment limit? - accepted as it is.** $3 gives a
+    cost of $245,712 one time. $5 gives $409,520, thus $3 gives approximately one
+    half of the control. Accepted: the ratio does not change - the cost is 4.9 days
+    of the daily cost with each value - and the daily limit decides where the light
+    casual player stops.
+25. ~~**The whitelist protects each address, and not the group.**~~ **Corrected
+    with a maximum for the group** (section 7.6a). The maximum of 250 for each
+    address did not add together: eleven such addresses would take 2,750 of the
+    2,840 and leave **90** for all the other players. `whitelistCollectiveCap` =
+    **1,200** now limits all the whitelisted addresses together. Thus **1,640
+    places - 57.7% - are always free for the normal players**, with any number of
+    addresses on the list. The maximum first operates at **five** addresses, thus a
+    short list pays nothing for it, and it costs one counter for each round. A farm
+    was never the danger here (a whitelisted address needs a market value of
+    **$464M**); to stop the normal players was the danger.
+30. **The 1,640 places are sufficient for one hide from each player, and not for
+    two** (section 7.6a). With the honest demand from decision 27:
+
+    | 5,000 players each day, each hiding | In a round | Against 1,640 | Against 2,840 |
+    |---|---|---|---|
+    | one time | 1,250 | **it fits** | it fits |
+    | two times - what section 4 asks of a light casual player | 2,500 | **it does not fit** | it fits |
+
+    With two hides from each player, the normal players need the whitelist to use
+    less than 340 of its 1,200. The contract does not stop them - 1,640 is a
+    minimum and not a maximum, and all the 2,840 stays available. But **the minimum
+    alone does not cover the behaviour that the design asks for.** To give both
+    groups all that they want needs **3,700 in a round**, which at K = 2.2 is a map
+    of **571 x 571** - larger than the 500 x 500 that section 6 gives as the
+    maximum. Thus you cannot correct this with a larger `maxTreasuresPerRound`
+    until you examine the map size limit again. Watch it with the 70% measurement
+    in decision 27.
+26. **Is 25.4% of the tokens the correct limit for a hide farm?** (section 9.2).
+    Each round has **2,840 places for treasures**. All the players share them. If
+    a farmer takes each place in each round, the farmer earns **595,264 ROZ each
+    day - one quarter of the tokens for that day**. This is the worst condition
+    that the limit permits. The question is simple: is one quarter too much to
+    give to a farmer?
+
+    A smaller limit decreases this by the same proportion. 1,420 gives the farmer
+    12.7%. But **the contract cannot see whose treasure is in a place.** A place is
+    a place. The first player to arrive takes it, and nothing on it says who. Thus
+    a smaller limit also decreases honest hiding by the same quantity. There is one
+    control, and it moves the two sides together.
+
+    **A place that a farmer uses is worth less than a place that a player uses.
+    This is a reason to keep 2,840:**
+
+    | Who | ROZ for each place |
+    |---|---|
+    | An honest player, 1 hide | **80** |
+    | A farm wallet, 5 hides (216 / 5) | **43.2** |
+
+    Treasures 4 and 5 of a farmer give 0.70x. Thus a farmer gets **1.9 times less
+    for each place** than a player who hides one time. A smaller limit costs the
+    honest players almost two times more than it costs a farm.
+27. **The places are more full at the launch than they appear** (section 7.6). The
+    capacity is 2,840 in a round, and 11,360 each day. The honest demand with
+    5,000 players each day:
+
+    | Each player hides | In a round | Capacity used |
+    |---|---|---|
+    | one time | 1,250 | **44%** |
+    | two times - what section 4 asks of a light casual player | 2,500 | **88%** |
+
+    **Plan for two.** Section 4 tells a light casual player to hide two times,
+    because this is the route to the target of 25 to 70. Thus many hides is what
+    the design asks for, and not a maximum. With 16,700 players each day - the top
+    of the Year 1 range - two hides each is **8,350 in a round, which is
+    approximately 3 times the capacity**.
+
+    **When the places finish, the first player to arrive takes them, and one side
+    is a machine.** A program can hide at the second that a round starts. A person
+    cannot. Thus the places do not fill equally: they fill with the wallets that
+    watch for the block, and the honest players get `'round treasure cap'`. Time in
+    the game gives no priority: a wallet from this morning has the same right as a
+    wallet that played for one year.
+
+    Watch this. Do not correct it before it happens - but use a number and not an
+    opinion: **measure the places used in each round, and act if it passes 70%.**
+    Then you can give each wallet a maximum for each round, and not only the
+    whitelisted addresses. Or you can increase 2,840 - but the map increases with
+    the square root of T, thus you must first test 500 x 500. Refer to section 6.
+28. **The gas does more against the farmers than the price list does** (section
+    9.2). The cheapest farm wallet pays **$1.209 of fees and $0.85 to $1.36 of
+    gas** - the gas is the larger part. Thus section 5.1 has four price tiers for
+    the smaller of the two costs. One flat price could give the same protection
+    with less complexity. Examine this when you have measured the real gas.
+29. **The server is one point of failure** (section 9.4). EventBridge and Lambda
+    is decided, but the key of the Lambda can start or damage any round, and one
+    invocation that fails means a round never starts. A function `advance_round()`
+    in the contract, that anyone can call after a time limit, would remove this
+    privilege. Keep it for later.
