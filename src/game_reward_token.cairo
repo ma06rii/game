@@ -1,14 +1,21 @@
 // SPDX-License-Identifier: MIT
-// Compatible with OpenZeppelin Contracts for Cairo ^3.0.0
+// Compatible with OpenZeppelin Contracts for Cairo v2.0.0
 
 #[starknet::contract]
 mod ROZToken {
-    use openzeppelin_access::ownable::OwnableComponent;
-    use openzeppelin_interfaces::upgrades::IUpgradeable;
-    use openzeppelin_token::erc20::{
+    // These four paths are the v2.0.0 ones. The file was generated against a
+    // v3 preview, whose flat package names (openzeppelin_access, and so on) do
+    // NOT resolve here: Scarb.toml depends on the single umbrella package
+    // "openzeppelin", which re-exports each sub-package under a nested path -
+    // openzeppelin_access as access, openzeppelin_upgrades as upgrades, and so
+    // on. There is no openzeppelin_interfaces package at all in v2.0.0; the
+    // IUpgradeable trait lives beside the component it belongs to.
+    use openzeppelin::access::ownable::OwnableComponent;
+    use openzeppelin::token::erc20::{
         DefaultConfig as ERC20DefaultConfig, ERC20Component, ERC20HooksEmptyImpl,
     };
-    use openzeppelin_upgrades::UpgradeableComponent;
+    use openzeppelin::upgrades::UpgradeableComponent;
+    use openzeppelin::upgrades::interface::IUpgradeable;
     use starknet::{ClassHash, ContractAddress, get_caller_address};
 
     component!(path: ERC20Component, storage: erc20, event: ERC20Event);
