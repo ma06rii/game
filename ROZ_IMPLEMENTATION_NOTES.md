@@ -3,7 +3,18 @@
 Status of the Cairo work against `ROZ_REWARD_TOKEN_PLAN.md` and its STE mirror.
 
 **Everything builds; 29 of 29 tests pass.** Nine of the ten planned slices are
-implemented. Nothing has been declared or deployed.
+implemented, and **both contracts are now live on Sepolia**.
+
+| | Address | Verified |
+|---|---|---|
+| Game contract | `0x0783f2409b051a0ec8db4f93c4ce0cf370617956ff31880d0c35a61bb1d350a9` | Answers `get_reward_token_pending`, so it is running this code |
+| ROZ token | `0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b` | `symbol()` = `"ROZ"`, `decimals()` = 18, supply 5,000,000,000 |
+
+`get_game_reward_token()` on the game contract returns the ROZ address, so the
+two are wired to each other. **The game contract's ROZ balance is 0**, so the
+coverage rule in §4c-i is refusing every credit: gameplay works, but
+`RewardTokenAccrualSkipped` fires and nobody earns. Funding it is §5 step 6 —
+see §9 below.
 
 ---
 
@@ -234,3 +245,65 @@ questions block it:
 | `src/mock_erc20.cairo` | **New.** Test-only ERC-20 with an unrestricted mint — never deploy to mainnet |
 | `tests/test_contract.cairo` | 29 tests, wired harness |
 | `Scarb.toml` / `Scarb.lock` | `snforge_std` v0.24.0 → v0.62.1 |
+
+---
+
+## 9. Funding the contract with a tranche
+
+Until the game contract holds ROZ, the coverage rule refuses every credit —
+gameplay succeeds, `RewardTokenAccrualSkipped` fires, and players earn nothing.
+The contract currently holds **0**.
+
+The token has no mint function, so **transferring one year's tranche at a time
+is what enforces the emission schedule** — the balance is the cap, with no
+contract code involved.
+
+| Year | Tranche | Raw, 18 dp |
+|---|---|---|
+| 1 | 855,000,000 | `855000000000000000000000000` |
+| 2 | 630,000,000 | `630000000000000000000000000` |
+| 3 | 405,000,000 | `405000000000000000000000000` |
+| 4 | 225,000,000 | `225000000000000000000000000` |
+| 5+ | 135,000,000 | released across years 5–8 |
+
+`transfer` moves from the caller, and the owner account holds the whole supply:
+
+```bash
+# Year 1: 855,000,000 ROZ. Fits in one felt, so as a u256 this is
+# (low = 855000000000000000000000000, high = 0).
+# Append --dry-run first to see the fee without sending.
+sncast --account=account_braavos invoke \
+  --contract-address 0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b \
+  --function transfer \
+  --arguments '0x0783f2409b051a0ec8db4f93c4ce0cf370617956ff31880d0c35a61bb1d350a9, 855000000000000000000000000' \
+  --network sepolia
+```
+
+`--arguments` takes the u256 as a single value. With `--calldata` you must pass
+both limbs: `<recipient> 855000000000000000000000000 0`.
+
+**On `--network sepolia`:** `FIX_CLAIM_REWARDS.md` records it failing with
+`-32603` for a *declare* — estimating a 550 KB class broke the public provider.
+That does not apply to an invoke; every read-only call against these contracts
+worked over `--network sepolia`. If it does fail, use `--url` with the spec-0.10
+endpoint instead.
+
+**Verify afterwards:**
+
+```bash
+sncast call --contract-address 0x03a5c876…5d445b --function balance_of \
+  --arguments '0x0783f240…d350a9' --network sepolia     # -> 855000000000000000000000000
+```
+
+Then take one gameplay action and confirm `get_reward_token_pending(<player>)`
+is non-zero. That is the real proof the coverage rule is satisfied — a balance
+alone only means the tokens arrived.
+
+**Order matters at a year boundary.** Transfer the tranche *first*, then apply
+the taper with the rate setters. Lowering the rates first pays anyone claiming in
+between at the new, reduced rate out of the old balance.
+
+**Consider under-funding first.** §7 test 7 covers the unfunded path — gameplay
+succeeds, the skip event fires, and `claim_reward` still pays USDC in full.
+Sending the full tranche removes the chance to exercise that on Sepolia. A small
+transfer, a check, then a top-up costs one extra transaction.
