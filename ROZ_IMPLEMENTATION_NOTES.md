@@ -7,7 +7,7 @@ implemented, and **both contracts are now live on Sepolia**.
 
 | | Address | Verified |
 |---|---|---|
-| Game contract | `0x0783f2409b051a0ec8db4f93c4ce0cf370617956ff31880d0c35a61bb1d350a9` | Answers `get_reward_token_pending`, so it is running this code |
+| Game contract | `0x0771fdfb9c6f81b19a08b6f883878f52f6264b00b92d55516dfaa8a913cd834c` | Answers `get_reward_token_pending`, so it is running this code |
 | ROZ token | `0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b` | `symbol()` = `"ROZ"`, `decimals()` = 18, supply 5,000,000,000 |
 
 `get_game_reward_token()` on the game contract returns the ROZ address, so the
@@ -275,7 +275,7 @@ contract code involved.
 sncast --account=account_braavos invoke \
   --contract-address 0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b \
   --function transfer \
-  --arguments '0x0783f2409b051a0ec8db4f93c4ce0cf370617956ff31880d0c35a61bb1d350a9, 855000000000000000000000000' \
+  --arguments '0x0771fdfb9c6f81b19a08b6f883878f52f6264b00b92d55516dfaa8a913cd834c, 855000000000000000000000000' \
   --network sepolia
 ```
 
@@ -292,7 +292,7 @@ endpoint instead.
 
 ```bash
 sncast call --contract-address 0x03a5c876…5d445b --function balance_of \
-  --arguments '0x0783f240…d350a9' --network sepolia     # -> 855000000000000000000000000
+  --arguments '0x0771fdfb…cd834c' --network sepolia     # -> 855000000000000000000000000
 ```
 
 Then take one gameplay action and confirm `get_reward_token_pending(<player>)`

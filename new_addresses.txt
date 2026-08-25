@@ -1,4 +1,4 @@
-Game Contract Address: 0x0783f2409b051a0ec8db4f93c4ce0cf370617956ff31880d0c35a61bb1d350a9
+Game Contract Address: 0x0771fdfb9c6f81b19a08b6f883878f52f6264b00b92d55516dfaa8a913cd834c
 
 VRF Contract Address: 0x01baad38bde8d3d60eebab5b96f72a297d52e6d1386bc3d4ec5344d9a30388bd
 

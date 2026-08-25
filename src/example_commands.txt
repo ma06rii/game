@@ -1,3 +1,12 @@
 0x052a2b0b20d8796e57f0f00e99adfd61e0b40c4a49553d4197e4da6c1c023833
 
 sncast --account account_braavos deploy --class-hash 0x18b856e4e22c7b1d38a984ec82028c4aa707f2a4f727fe8ece609df5afe807f --arguments '0x052a2b0b20d8796e57f0f00e99adfd61e0b40c4a49553d4197e4da6c1c023833, 0x052a2b0b20d8796e57f0f00e99adfd61e0b40c4a49553d4197e4da6c1c023833' --network sepolia
+
+
+sncast --account account_braavos deploy --class-hash 0x1800d7de5b30b9934fb87c04c3eb29476a6d91ca06d5412d054ae45e1e34a1a --arguments '0x01baad38bde8d3d60eebab5b96f72a297d52e6d1386bc3d4ec5344d9a30388bd, 0x0512feAc6339Ff7889822cb5aA2a86C848e9D392bB0E3E237C008674feeD8343, 0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b' --network sepolia
+
+
+sncast --account=account_braavos declare --contract-name HelloStarknet --network sepolia
+
+
+sncast --account account_braavos deploy --class-hash 0x7a4c04589409fd53e43f233e722f6273df4e98693e708c2bcbb70edfd4def19 --arguments '0x01baad38bde8d3d60eebab5b96f72a297d52e6d1386bc3d4ec5344d9a30388bd, 0x0512feAc6339Ff7889822cb5aA2a86C848e9D392bB0E3E237C008674feeD8343, 0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b' --network sepolia

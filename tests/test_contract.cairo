@@ -1633,3 +1633,241 @@ fn test_sweep_leaves_what_players_are_owed() {
     assert(heldUsdc == STAKE + FEE_BASE, 'contract should hold 5.20');
     assert(dispatcher.get_sweepable_balance(gameToken) == FEE_BASE, 'only the fee is sweepable');
 }
+
+// ---------------------------------------------------------------------------
+// CLAIM DISCOVERY - get_reward_claimed and get_claimable_weeks
+// ---------------------------------------------------------------------------
+
+// Open the next round as the owner.
+//
+// THE WEEK ARITHMETIC IS THE TRAP IN EVERY TEST BELOW. _hideTreasure credits
+// currentGameWeek + 1 ("hide treasure for the week upcoming"), while
+// _claimReward requires gameWeek < currentGameWeek. So a hide made at week 0
+// lands on week 1, and the week has to reach 2 before it can be claimed -
+// this must be called TWICE after a hide, not once.
+//
+// The fees replay what the constructor deployed with, because the hider fee is
+// what a claim is later paid from. The merkle root is a placeholder: nothing on
+// the claim path reads it.
+//
+// totalNumberOfHidersFromThePreviousWeek is passed as 0 rather than the
+// constructor's 3 deliberately. That argument overwrites
+// total_reward_shares_for_hiders for the round being opened - a slot hides have
+// ALREADY written to, because they credit a week ahead. Zero keeps these tests
+// measuring claim discovery rather than that interaction.
+fn advance_round_with_hider_fee(game: ContractAddress, hiderFee: u256) {
+    let owner: ContractAddress = contract_address_const::<
+        0x052a2b0b20d8796e57f0f00e99adfd61e0b40c4a49553d4197e4da6c1c023833,
+    >();
+
+    let dispatcher = IHelloStarknetDispatcher { contract_address: game };
+
+    start_cheat_caller_address(game, owner);
+    dispatcher
+        .start_new_game(
+            0x1234, // root - unread by anything on the claim path
+            100000, // $0.10 finder fee, as deployed
+            hiderFee,
+            1000000, // $1.00 spawn fee, as deployed
+            14,
+            14,
+            0, // see the note above
+            0,
+        );
+    stop_cheat_caller_address(game);
+}
+
+fn advance_round(game: ContractAddress) {
+    advance_round_with_hider_fee(game, STAKE);
+}
+
+// TEST 1 - the flag flips, and it is visible.
+//
+// get_reward_claimed is the whole point: claimed_rewards was storage-only, so
+// before this view nothing outside the contract could tell a settled round from
+// an unclaimed one. There is no USDC claim event to index either.
+#[test]
+fn test_get_reward_claimed_flips_when_the_usdc_is_taken() {
+    let player: ContractAddress = contract_address_const::<0xaaaa>();
+    let (game, _, _) = deploy_wired(player, 100000000);
+    let dispatcher = IHelloStarknetDispatcher { contract_address: game };
+
+    // Hidden at week 0, so the share lands on week 1.
+    start_cheat_caller_address(game, player);
+    dispatcher.hide_treasure();
+    stop_cheat_caller_address(game);
+
+    assert(dispatcher.get_reward_claimed(player, 1) == false, 'not claimed yet');
+
+    // Twice - week 1 needs the counter at 2 before it is finished.
+    advance_round(game);
+    advance_round(game);
+
+    assert(dispatcher.get_reward_claimed(player, 1) == false, 'still not claimed');
+
+    start_cheat_caller_address(game, player);
+    dispatcher.claim_reward(1);
+    stop_cheat_caller_address(game);
+
+    assert(dispatcher.get_reward_claimed(player, 1) == true, 'claim must be recorded');
+}
+
+// TEST 2 - THE TEST THE FRONTEND DEPENDS ON.
+//
+// One call has to answer "which rounds can this wallet collect", and the answer
+// has to stop including a round the moment it is collected. Without this the
+// panel either needs a backend or has to guess.
+#[test]
+fn test_claimable_weeks_finds_the_round_then_forgets_it() {
+    let player: ContractAddress = contract_address_const::<0xbbbb>();
+    let (game, _, _) = deploy_wired(player, 100000000);
+    let dispatcher = IHelloStarknetDispatcher { contract_address: game };
+
+    start_cheat_caller_address(game, player);
+    dispatcher.hide_treasure();
+    stop_cheat_caller_address(game);
+
+    advance_round(game);
+    advance_round(game);
+
+    let before = dispatcher.get_claimable_weeks(player, 0, 8);
+    assert(before.len() == 1, 'one round to collect');
+    assert(*before.at(0) == 1_u256, 'it should be week 1');
+
+    // Every week the view returns must be one claim_reward accepts. If this
+    // reverts the view is lying, which is worse than not existing.
+    start_cheat_caller_address(game, player);
+    dispatcher.claim_reward(*before.at(0));
+    stop_cheat_caller_address(game);
+
+    let after = dispatcher.get_claimable_weeks(player, 0, 8);
+    assert(after.len() == 0, 'collected round must drop out');
+}
+
+// TEST 3 - condition 1 on its own.
+//
+// A share sitting in the round now under way is not collectable yet. Advance
+// only once after the hide and the week is still the current one.
+#[test]
+fn test_claimable_weeks_excludes_the_unfinished_round() {
+    let player: ContractAddress = contract_address_const::<0xcccc>();
+    let (game, _, _) = deploy_wired(player, 100000000);
+    let dispatcher = IHelloStarknetDispatcher { contract_address: game };
+
+    start_cheat_caller_address(game, player);
+    dispatcher.hide_treasure();
+    stop_cheat_caller_address(game);
+
+    // One short of what week 1 needs.
+    advance_round(game);
+
+    assert(dispatcher.get_game_week() == 1_u256, 'week should be 1');
+
+    let weeks = dispatcher.get_claimable_weeks(player, 0, 8);
+    assert(weeks.len() == 0, 'current round not collectable');
+}
+
+// TEST 4 - a wallet that has never played gets an empty list, not a revert.
+#[test]
+fn test_claimable_weeks_empty_for_a_wallet_with_no_shares() {
+    let player: ContractAddress = contract_address_const::<0xdddd>();
+    let stranger: ContractAddress = contract_address_const::<0xeeee>();
+    let (game, _, _) = deploy_wired(player, 100000000);
+    let dispatcher = IHelloStarknetDispatcher { contract_address: game };
+
+    start_cheat_caller_address(game, player);
+    dispatcher.hide_treasure();
+    stop_cheat_caller_address(game);
+
+    advance_round(game);
+    advance_round(game);
+
+    // The round is collectable - but not by this wallet.
+    assert(dispatcher.get_claimable_weeks(player, 0, 8).len() == 1, 'player has one');
+    assert(dispatcher.get_claimable_weeks(stranger, 0, 8).len() == 0, 'stranger has none');
+}
+
+// TEST 5 - THE REGRESSION _isRewardClaimable EXISTS TO PREVENT.
+//
+// _calculateRewardDue ASSERTS the hider fee exceeds the three deductions. Reach
+// it through _playerRewardDue on a round funded below that line and the call
+// reverts - which in a scan would destroy the answer for every other week in
+// the range, not just the bad one.
+//
+// Here week 2 is funded by week 1's hider fee of $0.001, far under the $0.012833
+// of deductions. get_player_reward_due(2) therefore reverts, and the scan across
+// it must still come back with week 1.
+#[test]
+#[feature("safe_dispatcher")]
+fn test_claimable_weeks_survives_a_round_funded_below_its_fees() {
+    let player: ContractAddress = contract_address_const::<0xf00d>();
+    let (game, _, _) = deploy_wired(player, 100000000);
+    let dispatcher = IHelloStarknetDispatcher { contract_address: game };
+    let safe = IHelloStarknetSafeDispatcher { contract_address: game };
+
+    // Week 1 gets a normal share, funded by the constructor's $5.00.
+    start_cheat_caller_address(game, player);
+    dispatcher.hide_treasure();
+    stop_cheat_caller_address(game);
+
+    // Open week 1 with a hider fee UNDER the deductions.
+    advance_round_with_hider_fee(game, 1000);
+
+    // This hide credits week 2, whose funding week is now that $0.001 round.
+    start_cheat_caller_address(game, player);
+    dispatcher.hide_treasure();
+    stop_cheat_caller_address(game);
+
+    // Carry on so both week 1 and week 2 are finished.
+    advance_round(game);
+    advance_round(game);
+
+    // The single-week getter reverts on week 2, exactly as documented.
+    let probe = safe.get_player_reward_due(2, player);
+    assert(probe.is_err(), 'week 2 must revert');
+
+    // The scan spans it anyway, and still reports the round that is good.
+    let weeks = dispatcher.get_claimable_weeks(player, 0, 8);
+    assert(weeks.len() == 1, 'bad round must not kill scan');
+    assert(*weeks.at(0) == 1_u256, 'week 1 survives');
+}
+
+// TEST 6 - bounds.
+//
+// A reversed range is a caller error. A range of 256 rounds or more would run
+// into the step limit for a call and fail obscurely, so it is refused clearly
+// instead.
+#[test]
+#[feature("safe_dispatcher")]
+fn test_claimable_weeks_rejects_bad_ranges() {
+    let player: ContractAddress = contract_address_const::<0x1111>();
+    let (game, _, _) = deploy_wired(player, 100000000);
+    let safe = IHelloStarknetSafeDispatcher { contract_address: game };
+
+    assert(safe.get_claimable_weeks(player, 5, 4).is_err(), 'reversed range must fail');
+    assert(safe.get_claimable_weeks(player, 0, 256).is_err(), 'wide range must fail');
+
+    // 255 apart is the widest that is allowed, and must not fail.
+    assert(safe.get_claimable_weeks(player, 0, 255).is_ok(), '255 apart is fine');
+}
+
+// TEST 7 - week 0, where the clamp would underflow.
+//
+// Nothing has finished on a fresh contract, so the answer is empty. The view has
+// to return before computing currentGameWeek - 1: a u256 cannot go negative and
+// the subtraction would panic.
+#[test]
+fn test_claimable_weeks_empty_before_any_round_finishes() {
+    let player: ContractAddress = contract_address_const::<0x2222>();
+    let (game, _, _) = deploy_wired(player, 100000000);
+    let dispatcher = IHelloStarknetDispatcher { contract_address: game };
+
+    assert(dispatcher.get_game_week() == 0_u256, 'fresh contract is week 0');
+
+    start_cheat_caller_address(game, player);
+    dispatcher.hide_treasure();
+    stop_cheat_caller_address(game);
+
+    let weeks = dispatcher.get_claimable_weeks(player, 0, 8);
+    assert(weeks.len() == 0, 'nothing finished yet');
+}

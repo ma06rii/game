@@ -12,7 +12,7 @@ and how to run the tests, see `ROZ_IMPLEMENTATION_NOTES.md`.
 
 | Contract | Address |
 |---|---|
-| **Game** | `0x0783f2409b051a0ec8db4f93c4ce0cf370617956ff31880d0c35a61bb1d350a9` |
+| **Game** | `0x0771fdfb9c6f81b19a08b6f883878f52f6264b00b92d55516dfaa8a913cd834c` |
 | **ROZ reward token** | `0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b` |
 | **USDC (game token)** | `0x0512feAc6339Ff7889822cb5aA2a86C848e9D392bB0E3E237C008674feeD8343` |
 | **VRF provider (mock)** | `0x01baad38bde8d3d60eebab5b96f72a297d52e6d1386bc3d4ec5344d9a30388bd` |
@@ -22,16 +22,29 @@ and how to run the tests, see `ROZ_IMPLEMENTATION_NOTES.md`.
 
 | Check | Result |
 |---|---|
-| Game contract runs the new code | `get_reward_token_pending` answers `0_u256` — the entrypoint only exists in the ROZ build |
+| Game contract runs the claim-view build | `get_claimable_weeks` answers `array![]` — the entrypoint exists on no earlier deployment |
 | Game is wired to the token | `get_game_reward_token()` → `0x03a5c876…5d445b` |
+| Game is wired to USDC | `get_game_token()` → `0x0512feac…eed8343` |
 | Token identity | `symbol()` = `"ROZ"`, `decimals()` = 18 |
 | Total supply | 5,000,000,000 ROZ |
 | Owner balance | 5,000,000,000 ROZ — the whole supply |
-| **Game contract balance** | **0 ROZ** |
+| **Game contract balance** | **0 ROZ, 0 USDC** — freshly deployed, `get_game_week()` is `0` |
 
-**A superseded game contract exists at `0x0407390e…c1e2e0`.** The frontend's
-`controllerPolicies.js:8` still points at it. It predates this work and does not
-have the two-token sweep.
+### Two superseded game contracts
+
+| Address | Why it was replaced | Two-token sweep? |
+|---|---|---|
+| `0x0783f240…d350a9` | no `get_reward_claimed` / `get_claimable_weeks` | **yes** |
+| `0x0407390e…c1e2e0` | predates the ROZ work entirely | **no** |
+
+**`0x0783f240…d350a9` still holds $15.60 of USDC**, of which $15.00 is owed to
+players as hider stakes and only $0.60 is sweepable. Those stakes did not
+migrate and need claiming or writing off before that address is abandoned.
+
+**The frontend still points at `0x0783f240…d350a9`** — `controllerPolicies.js:14`
+and `Middle.vue:41`, which must stay in step with each other. The `0x0407390e…`
+in `controllerPolicies.js:9` is one of three commented-out historical entries,
+not a live reference.
 
 ---
 
@@ -67,7 +80,7 @@ Year 1 is 17.1% of supply.
 sncast --account=account_braavos invoke \
   --contract-address 0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b \
   --function transfer \
-  --arguments '0x0783f2409b051a0ec8db4f93c4ce0cf370617956ff31880d0c35a61bb1d350a9, 855000000000000000000000000' \
+  --arguments '0x0771fdfb9c6f81b19a08b6f883878f52f6264b00b92d55516dfaa8a913cd834c, 855000000000000000000000000' \
   --network sepolia \
   --dry-run
 
@@ -75,7 +88,7 @@ sncast --account=account_braavos invoke \
 sncast --account=account_braavos invoke \
   --contract-address 0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b \
   --function transfer \
-  --arguments '0x0783f2409b051a0ec8db4f93c4ce0cf370617956ff31880d0c35a61bb1d350a9, 855000000000000000000000000' \
+  --arguments '0x0771fdfb9c6f81b19a08b6f883878f52f6264b00b92d55516dfaa8a913cd834c, 855000000000000000000000000' \
   --network sepolia
 ```
 
@@ -84,7 +97,7 @@ below 2¹²⁸ and so fits in one felt. `--arguments` takes it as a single value
 With `--calldata` you must pass both limbs yourself:
 
 ```bash
-  --calldata 0x0783f2409b051a0ec8db4f93c4ce0cf370617956ff31880d0c35a61bb1d350a9 \
+  --calldata 0x0771fdfb9c6f81b19a08b6f883878f52f6264b00b92d55516dfaa8a913cd834c \
              855000000000000000000000000 0
 ```
 
@@ -100,7 +113,7 @@ contracts worked over `--network sepolia`. If it does fail, substitute
 
 ```bash
 ROZ=0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b
-GAME=0x0783f2409b051a0ec8db4f93c4ce0cf370617956ff31880d0c35a61bb1d350a9
+GAME=0x0771fdfb9c6f81b19a08b6f883878f52f6264b00b92d55516dfaa8a913cd834c
 OWNER=0x052a2b0b20d8796e57f0f00e99adfd61e0b40c4a49553d4197e4da6c1c023833
 
 # Game contract holds the tranche
@@ -150,9 +163,12 @@ other token is fully sweepable.
 
 Check before acting with `get_sweepable_balance(tokenAddress)`.
 
-**This is why funding the current contract is safe.** The superseded contract at
-`0x0407390e…` swept only the configured game token — ROZ sent there would have
-been stuck permanently, with no recovery path at all.
+**This is why funding the current contract is safe**, and why the address in §3
+matters. `0x0407390e…` swept only the configured game token, so ROZ sent there
+would be stuck permanently with no recovery path at all. `0x0783f240…` does have
+the two-token sweep, so ROZ sent there by mistake is recoverable — but it is a
+wasted round trip on a transfer worth 17% of supply, and the sweep would have to
+be run from the owner account before the tokens could be sent on.
 
 ---
 

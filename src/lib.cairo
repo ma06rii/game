@@ -84,6 +84,14 @@ pub trait IHelloStarknet<TContractState> {
     fn get_reward_token_claimed(
         self: @TContractState, gamerWalletAddress: ContractAddress, gameWeek: u256,
     ) -> bool;
+    // The USDC counterparts of the two entries above. Claim discovery is
+    // impossible without them - see the comments on the implementations.
+    fn get_reward_claimed(
+        self: @TContractState, gamerWalletAddress: ContractAddress, gameWeek: u256,
+    ) -> bool;
+    fn get_claimable_weeks(
+        self: @TContractState, gamerWalletAddress: ContractAddress, fromWeek: u256, toWeek: u256,
+    ) -> Array<u256>;
     fn get_reward_token_due(
         self: @TContractState, gamerWalletAddress: ContractAddress, gameWeek: u256,
     ) -> (u256, u256, u256);
@@ -276,6 +284,9 @@ trait InternalFunctionsTrait<TContractState> {
         self: @TContractState, gamerWalletAddress: ContractAddress, gameWeek: u256,
     ) -> u256;
     fn _calculateRewardDue(self: @TContractState, claimShareCount: u256, gameWeek: u256) -> u256;
+    fn _isRewardClaimable(
+        self: @TContractState, gamerWalletAddress: ContractAddress, gameWeek: u256,
+    ) -> bool;
     fn _claimReward(
         ref self: TContractState, gamerWalletAddress: ContractAddress, gameWeek: u256,
     ) -> bool;
@@ -1997,6 +2008,82 @@ mod HelloStarknet {
             }
         }
 
+        // The three conditions _claimReward asserts, asked as a question
+        // instead. Returns true only for a week claim_reward would accept.
+        //
+        // THIS DELIBERATELY NEVER REVERTS, and that is the entire reason it
+        // exists rather than get_claimable_weeks simply calling
+        // _playerRewardDue. That path reaches _calculateRewardDue, which
+        // ASSERTS the hider fee exceeds the three deductions - so a single
+        // unconfigured week in the middle of a scan would revert the whole
+        // range and lose the answer for every other week in it. A week whose
+        // funding week was never opened has a hider fee of zero and trips
+        // exactly that assert.
+        //
+        // Returning false there is not a white lie: if _calculateRewardDue
+        // would revert, claim_reward reverts too, so the week genuinely is
+        // not claimable. The caller learns the same thing without losing the
+        // rest of the scan.
+        //
+        // Keep this in step with _claimReward. If an assertion is ever added
+        // there, it belongs here as a condition - otherwise this view starts
+        // promising weeks the claim will refuse.
+        fn _isRewardClaimable(
+            self: @ContractState, gamerWalletAddress: ContractAddress, gameWeek: u256,
+        ) -> bool {
+            // 1. Only finished rounds. Shares in the round now under way stay
+            //    locked until start_new_game moves past it.
+            if (gameWeek >= self.currentGameWeek.read()) {
+                return false;
+            }
+
+            // 2. Not already settled. This is the flag no caller could read
+            //    before get_reward_claimed existed.
+            if (self.claimed_rewards.read((gameWeek, gamerWalletAddress))) {
+                return false;
+            }
+
+            // 3. There is something to pay. Held apart from the reward
+            //    arithmetic below so a wallet with no shares never reaches the
+            //    fee comparison at all.
+            let claimShareCount: u256 = self
+                .claim_share_amounts
+                .read((gameWeek, gamerWalletAddress));
+
+            if (claimShareCount == 0) {
+                return false;
+            }
+
+            // _calculateRewardDue's assert, reproduced as a test. Same funding
+            // week (the round BEFORE this one, which is where the hider fee
+            // that pays this claim was set) and the same comparison.
+            let fundingWeek: u256 = if gameWeek == 0 {
+                0
+            } else {
+                gameWeek - 1
+            };
+
+            let (_, _, gameHiderFee) = self.main_game.read(fundingWeek);
+
+            let deductions: u256 = self.gasFeeReservation.read()
+                + self.gameMasterFee.read()
+                + self.gameLandownerFee.read();
+
+            if (gameHiderFee <= deductions) {
+                return false;
+            }
+
+            // Safe now - the guard above is the only assert on this path.
+            let reward: u256 = self._calculateRewardDue(claimShareCount, gameWeek);
+
+            // Mirrors 'No reward available' and 'No infinity reward amount'.
+            if (reward == 0 || reward == BoundedInt::max()) {
+                return false;
+            }
+
+            return true;
+        }
+
         fn _claimReward(
             ref self: ContractState, gamerWalletAddress: ContractAddress, gameWeek: u256,
         ) -> bool {
@@ -2768,6 +2855,94 @@ mod HelloStarknet {
             self: @ContractState, gamerWalletAddress: ContractAddress, gameWeek: u256,
         ) -> bool {
             return self.reward_token_claimed.read((gameWeek, gamerWalletAddress));
+        }
+
+        // Whether the USDC leg of a given week has been claimed - the exact
+        // counterpart of get_reward_token_claimed above.
+        //
+        // WITHOUT THIS, CLAIM DISCOVERY IS IMPOSSIBLE FROM OUTSIDE. Nothing
+        // else exposes claimed_rewards:
+        //
+        //   - _transfer_token is a raw call_contract_syscall and emits no
+        //     event, so a claim leaves no trace for an indexer to find.
+        //   - Probing claim_reward with a read-only call does not work
+        //     either, because get_caller_address() is 0 in a call - the probe
+        //     reports address zero's state, not the player's.
+        //   - get_reward_token_claimed is not a usable substitute. It stays
+        //     false whenever the ROZ leg was skipped for want of funding,
+        //     which is every claim made while the contract holds no ROZ.
+        //
+        // Note the parameters read (address, week) while the storage key is
+        // (week, address). That inversion is the convention every getter here
+        // already follows.
+        fn get_reward_claimed(
+            self: @ContractState, gamerWalletAddress: ContractAddress, gameWeek: u256,
+        ) -> bool {
+            return self.claimed_rewards.read((gameWeek, gamerWalletAddress));
+        }
+
+        // Every week in fromWeek..=toWeek this wallet can still claim USDC for.
+        //
+        // One call in place of a probe per round. Each week returned is one
+        // claim_reward will accept, because _isRewardClaimable applies all
+        // three of its conditions - so a caller can batch the returned weeks
+        // into a multicall without checking them again. Amounts come from
+        // get_player_reward_due, which is safe on exactly these weeks.
+        //
+        // Both bounds are INCLUSIVE.
+        fn get_claimable_weeks(
+            self: @ContractState,
+            gamerWalletAddress: ContractAddress,
+            fromWeek: u256,
+            toWeek: u256,
+        ) -> Array<u256> {
+            assert(fromWeek <= toWeek, 'bad week range');
+
+            // A view carries no gas meter, but it does have a step limit, and
+            // an unbounded range would quietly hit it and fail the call. 256
+            // rounds is far beyond any window a caller needs - the frontend
+            // reads the most recent handful.
+            assert(toWeek - fromWeek < 256, 'week range too wide');
+
+            let mut claimable = ArrayTrait::<u256>::new();
+
+            let currentWeek: u256 = self.currentGameWeek.read();
+
+            // Nothing has finished yet, so nothing can be claimed. Returned
+            // early because the clamp below subtracts one from this and a u256
+            // cannot go negative - at week 0 that would panic.
+            if (currentWeek == 0) {
+                return claimable;
+            }
+
+            // Condition 1 can never hold above the last finished round, so
+            // there is no point walking past it.
+            let lastFinishedWeek: u256 = currentWeek - 1;
+
+            let upperBound: u256 = if toWeek > lastFinishedWeek {
+                lastFinishedWeek
+            } else {
+                toWeek
+            };
+
+            // The clamp can pull the top below the bottom - asking about
+            // future rounds only. That is a legitimate question with an empty
+            // answer, not an error.
+            if (fromWeek > upperBound) {
+                return claimable;
+            }
+
+            let mut week: u256 = fromWeek;
+
+            while (week <= upperBound) {
+                if (self._isRewardClaimable(gamerWalletAddress, week)) {
+                    claimable.append(week);
+                }
+
+                week += 1_u256;
+            }
+
+            return claimable;
         }
 
         // The typed share counts behind a week's ROZ, and the survival reward

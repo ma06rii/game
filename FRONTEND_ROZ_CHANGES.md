@@ -17,7 +17,7 @@ purely mechanical port will ship a UI that misreports what players earn.
 
 | | Address |
 |---|---|
-| Game contract | `0x0783f2409b051a0ec8db4f93c4ce0cf370617956ff31880d0c35a61bb1d350a9` |
+| Game contract | `0x0771fdfb9c6f81b19a08b6f883878f52f6264b00b92d55516dfaa8a913cd834c` |
 | ROZ reward token | `0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b` |
 | USDC (game token) | `0x0512feAc6339Ff7889822cb5aA2a86C848e9D392bB0E3E237C008674feeD8343` |
 | VRF provider (mock) | `0x01baad38bde8d3d60eebab5b96f72a297d52e6d1386bc3d4ec5344d9a30388bd` |
@@ -254,7 +254,11 @@ daily spend. It cannot be derived from a share count and an env multiplier. Read
 
 ### 5.1 Rewire — do this first
 
-1. **New game contract address** in `controllerPolicies.js:8` after redeploy.
+1. **New game contract address** — `controllerPolicies.js:14` **and**
+   `Middle.vue:41`. Both hold `SEPOLIA_GAME_CONTRACT_ADDRESS` and must stay in
+   step, or every call falls outside the session policy and the keychain prompts
+   each time. The commented-out addresses at `controllerPolicies.js:5/7/9` are
+   history, not live.
 2. **Regenerate the ABI** into `src/contracts/game/sepolia_game_abi_1.json`.
    78 entrypoints, up from ~40. Do not hand-edit.
 3. **Add the ROZ token address** — `Middle.vue:46` and a session-policy entry.
