@@ -17,7 +17,7 @@ purely mechanical port will ship a UI that misreports what players earn.
 
 | | Address |
 |---|---|
-| Game contract | `0x0771fdfb9c6f81b19a08b6f883878f52f6264b00b92d55516dfaa8a913cd834c` |
+| Game contract | `0x007030fb8aec5eb20ed893bb2147fefe0dd07b204d55be12fedf9ce4579f7a4f` |
 | ROZ reward token | `0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b` |
 | USDC (game token) | `0x0512feAc6339Ff7889822cb5aA2a86C848e9D392bB0E3E237C008674feeD8343` |
 | VRF provider (mock) | `0x01baad38bde8d3d60eebab5b96f72a297d52e6d1386bc3d4ec5344d9a30388bd` |
@@ -254,14 +254,14 @@ daily spend. It cannot be derived from a share count and an env multiplier. Read
 
 ### 5.1 Rewire — do this first
 
-1. **New game contract address** — `controllerPolicies.js:14` **and**
-   `Middle.vue:41`. Both hold `SEPOLIA_GAME_CONTRACT_ADDRESS` and must stay in
+1. **New game contract address** — `controllerPolicies.js:18-19` **and**
+   `Middle.vue:47`. Both hold `SEPOLIA_GAME_CONTRACT_ADDRESS` and must stay in
    step, or every call falls outside the session policy and the keychain prompts
-   each time. The commented-out addresses at `controllerPolicies.js:5/7/9` are
-   history, not live.
+   each time. Every superseded address sits commented out directly above the live
+   one in both files — history, not live.
 2. **Regenerate the ABI** into `src/contracts/game/sepolia_game_abi_1.json`.
    78 entrypoints, up from ~40. Do not hand-edit.
-3. **Add the ROZ token address** — `Middle.vue:46` and a session-policy entry.
+3. **Add the ROZ token address** — `Middle.vue:52` and a session-policy entry.
 4. **Remove `get_game_token_reward()`** at `Middle.vue:318` and its store setter.
 5. **`withdraw_token_balance` now takes the token first** — fix if exposed.
 
@@ -331,7 +331,7 @@ Add to `controllerPolicies.js`: `hide_treasure_bulk`, `claim_reward_tokens`,
   the active component. Do not edit all five in parallel.
 - **Whether `src/contracts2/` is dead.** It duplicates `src/contracts/`; the
   imports found all point at `src/contracts/`.
-- **The existing reward-token plumbing** (`Middle.vue:46`, `:492`,
+- **The existing reward-token plumbing** (`Middle.vue:52`, `:492`,
   `:1225–1241`) already points at the correct ROZ token, so the *address* work is
   done. What is superseded is how the **amount** is derived — `rewardLegs()` in
   the store, see §4.1. Keep the contract wiring, replace the maths.

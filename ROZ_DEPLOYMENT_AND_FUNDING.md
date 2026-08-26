@@ -12,7 +12,7 @@ and how to run the tests, see `ROZ_IMPLEMENTATION_NOTES.md`.
 
 | Contract | Address |
 |---|---|
-| **Game** | `0x0771fdfb9c6f81b19a08b6f883878f52f6264b00b92d55516dfaa8a913cd834c` |
+| **Game** | `0x007030fb8aec5eb20ed893bb2147fefe0dd07b204d55be12fedf9ce4579f7a4f` |
 | **ROZ reward token** | `0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b` |
 | **USDC (game token)** | `0x0512feAc6339Ff7889822cb5aA2a86C848e9D392bB0E3E237C008674feeD8343` |
 | **VRF provider (mock)** | `0x01baad38bde8d3d60eebab5b96f72a297d52e6d1386bc3d4ec5344d9a30388bd` |
@@ -30,21 +30,27 @@ and how to run the tests, see `ROZ_IMPLEMENTATION_NOTES.md`.
 | Owner balance | 5,000,000,000 ROZ — the whole supply |
 | **Game contract balance** | **0 ROZ, 0 USDC** — freshly deployed, `get_game_week()` is `0` |
 
-### Two superseded game contracts
+### Three superseded game contracts
+
+Newest first. **State never migrates between deployments** — each redeploy leaves
+its player money behind.
 
 | Address | Why it was replaced | Two-token sweep? |
 |---|---|---|
+| `0x0771fdfb…cd834c` | no missed-ROZ ledger | **yes** |
 | `0x0783f240…d350a9` | no `get_reward_claimed` / `get_claimable_weeks` | **yes** |
 | `0x0407390e…c1e2e0` | predates the ROZ work entirely | **no** |
 
-**`0x0783f240…d350a9` still holds $15.60 of USDC**, of which $15.00 is owed to
-players as hider stakes and only $0.60 is sweepable. Those stakes did not
-migrate and need claiming or writing off before that address is abandoned.
+**`0x0771fdfb…cd834c` is at week 5 and still holds $22.13 of USDC**, of which
+**$20.08 is owed to players** as hider stakes and only $2.05 is sweepable. Those
+stakes are claimable only while the frontend still points there — settle or
+write them off before repointing. `0x0783f240…d350a9` holds $15.60 on the same
+footing, $15.00 of it owed.
 
-**The frontend still points at `0x0783f240…d350a9`** — `controllerPolicies.js:14`
-and `Middle.vue:41`, which must stay in step with each other. The `0x0407390e…`
-in `controllerPolicies.js:9` is one of three commented-out historical entries,
-not a live reference.
+**The frontend still points at `0x0771fdfb…cd834c`**, the previous deployment —
+`controllerPolicies.js:18-19` and `Middle.vue:47`, which must stay in step with
+each other. Every earlier address sits commented out directly above the live one
+and is not a live reference.
 
 ---
 
@@ -80,7 +86,7 @@ Year 1 is 17.1% of supply.
 sncast --account=account_braavos invoke \
   --contract-address 0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b \
   --function transfer \
-  --arguments '0x0771fdfb9c6f81b19a08b6f883878f52f6264b00b92d55516dfaa8a913cd834c, 855000000000000000000000000' \
+  --arguments '0x007030fb8aec5eb20ed893bb2147fefe0dd07b204d55be12fedf9ce4579f7a4f, 855000000000000000000000000' \
   --network sepolia \
   --dry-run
 
@@ -88,7 +94,7 @@ sncast --account=account_braavos invoke \
 sncast --account=account_braavos invoke \
   --contract-address 0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b \
   --function transfer \
-  --arguments '0x0771fdfb9c6f81b19a08b6f883878f52f6264b00b92d55516dfaa8a913cd834c, 855000000000000000000000000' \
+  --arguments '0x007030fb8aec5eb20ed893bb2147fefe0dd07b204d55be12fedf9ce4579f7a4f, 855000000000000000000000000' \
   --network sepolia
 ```
 
@@ -97,7 +103,7 @@ below 2¹²⁸ and so fits in one felt. `--arguments` takes it as a single value
 With `--calldata` you must pass both limbs yourself:
 
 ```bash
-  --calldata 0x0771fdfb9c6f81b19a08b6f883878f52f6264b00b92d55516dfaa8a913cd834c \
+  --calldata 0x007030fb8aec5eb20ed893bb2147fefe0dd07b204d55be12fedf9ce4579f7a4f \
              855000000000000000000000000 0
 ```
 
@@ -113,7 +119,7 @@ contracts worked over `--network sepolia`. If it does fail, substitute
 
 ```bash
 ROZ=0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b
-GAME=0x0771fdfb9c6f81b19a08b6f883878f52f6264b00b92d55516dfaa8a913cd834c
+GAME=0x007030fb8aec5eb20ed893bb2147fefe0dd07b204d55be12fedf9ce4579f7a4f
 OWNER=0x052a2b0b20d8796e57f0f00e99adfd61e0b40c4a49553d4197e4da6c1c023833
 
 # Game contract holds the tranche
@@ -163,6 +169,12 @@ other token is fully sweepable.
 
 Check before acting with `get_sweepable_balance(tokenAddress)`.
 
+**From the §8 build onward the ROZ guard also subtracts
+`total_reward_token_missed`** — rewards players earned while the contract was
+unfunded and have not converted yet. Equally theirs, just not yet in a payable
+form. Note the cost: a wallet that never returns to call
+`claim_missed_reward_token` holds that much back from the owner permanently.
+
 **This is why funding the current contract is safe**, and why the address in §3
 matters. `0x0407390e…` swept only the configured game token, so ROZ sent there
 would be stuck permanently with no recovery path at all. `0x0783f240…` does have
@@ -181,3 +193,159 @@ the credit and emits the skip event. But an address pointing at nothing makes
 
 It fails loudly on the first transaction rather than silently, but it does
 contradict the principle that gameplay never depends on reward plumbing.
+
+---
+
+## 8. Redeploying the game contract
+
+**The game contract has no upgrade path** — no `UpgradeableComponent`, no
+`replace_class_syscall`. The ROZ token has one; the game contract does not. So
+every contract change, however small, means declare → deploy → repoint. This
+sequence has now been needed three times.
+
+### Declare and deploy
+
+```bash
+cd /home/ii/development/personal/game-worktrees/bug-vrf-game
+export SCARB_CACHE="$CLAUDE_JOB_DIR/tmp/scarb-cache"
+export CARGO_HOME="$CLAUDE_JOB_DIR/tmp/cargo-home"
+
+# 1. Build clean, and refuse to ship if anything is red.
+scarb build && snforge test || echo "STOP - do not declare"
+
+# 2. Declare. Prints the class hash; step 3 needs it.
+sncast --account=account_braavos declare \
+  --contract-name=HelloStarknet \
+  --network=sepolia
+
+# 3. Deploy. Constructor order is (vrfProvider, gameToken, rewardToken).
+CLASS_HASH=<paste from step 2>
+
+sncast --account=account_braavos deploy \
+  --class-hash "$CLASS_HASH" \
+  --arguments '0x01baad38bde8d3d60eebab5b96f72a297d52e6d1386bc3d4ec5344d9a30388bd, 0x0512feac6339ff7889822cb5aa2a86c848e9d392bb0e3e237c008674feed8343, 0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b' \
+  --network sepolia
+```
+
+All three constructor arguments are plain `ContractAddress`, one felt each, so
+`--arguments` and `--constructor-calldata` are equivalent here. **The ROZ token
+does not change** — the same address is reused every time.
+
+**The owner is hardcoded**, not a constructor argument. Deploying from any
+account still produces a contract owned by `0x052a2b0b…023833`, which is
+`account_braavos`.
+
+### The declare is the step that fails
+
+`FIX_CLAIM_REWARDS.md` records `--network sepolia` returning **`-32603`** on a
+declare — estimating a large class broke the public provider. That was a 550 KB
+class and they have only grown since, so treat this as likely rather than
+possible:
+
+```bash
+sncast --account=account_braavos declare \
+  --contract-name=HelloStarknet \
+  --url "$STARKNET_RPC_V0_10"
+```
+
+Set `STARKNET_RPC_V0_10` to the spec-0.10 endpoint first. **The API key is
+currently in plaintext in `FIX_CLAIM_REWARDS.md:77`, which is committed** — worth
+rotating and moving into the environment.
+
+`--network sepolia` is fine for the deploy and for every call below. The
+estimation problem is specific to declaring a large class.
+
+### Verify before trusting it
+
+```bash
+GAME=<address from step 3>
+
+# Proves this is the intended build - pick an entrypoint no earlier
+# deployment has. get_total_reward_token_missed for the missed-ROZ build,
+# get_claimable_weeks for the claim-view build before it.
+sncast call --contract-address $GAME --function get_total_reward_token_missed \
+  --network sepolia                                          # -> 0_u256
+
+sncast call --contract-address $GAME --function get_game_reward_token --network sepolia
+sncast call --contract-address $GAME --function get_game_token        --network sepolia
+sncast call --contract-address $GAME --function get_vrf_provider      --network sepolia
+sncast call --contract-address $GAME --function get_game_week         --network sepolia  # -> 0_u256
+sncast call --contract-address $GAME --function owner                 --network sepolia
+```
+
+### Then, in this order
+
+1. **Settle the old contract first.** It holds player money — USDC stakes that
+   are claimable while the frontend still points at it, and unreachable
+   afterwards. Check with `get_sweepable_balance`; only the surplus above
+   `total_usdc_claimable` is the owner's.
+2. Sweep whatever is left with `withdraw_token_balance(tokenAddress, receiver)`.
+3. **Repoint both frontend sites**, which must stay in step or every call falls
+   outside the session policy and the keychain prompts each time:
+   `controllerPolicies.js:18-19` and `Middle.vue:47`. **Leave the ROZ address at
+   `Middle.vue:52` alone** — it is correct and has never changed.
+4. `start_new_game` to open round 1 (§9 below).
+5. Update the address in the docs that carry it —
+   `ROZ_DEPLOYMENT_AND_FUNDING.md`, `ROZ_IMPLEMENTATION_NOTES.md`,
+   `FRONTEND_ROZ_CHANGES.md`, `FRONTEND_CLAIM_DEFECTS.md` and
+   `CLAIM_REWARDS_ASSESSMENT.md`.
+
+**ROZ funding is deliberately not in this list.** A new contract starts with a
+zero balance, so accrual is skipped and — from the missed-ROZ build onward —
+recorded rather than lost. Gameplay and USDC claims are unaffected. Fund it as a
+separate decision, using §3 pointed at the new address.
+
+---
+
+## 9. Opening a round
+
+`start_new_game` is the only thing that advances the game week, and it takes **no
+week argument** — it reads the current week and adds one. Owner only.
+
+**The seventh argument is a trap.** `totalNumberOfHidersFromThePreviousWeek` is
+misnamed: `_createNewGame` writes it straight into
+`total_reward_shares_for_hiders[newWeek]`, the live counter every hide
+increments. Because hides credit `currentGameWeek + 1`, the round being opened
+may **already hold real shares**.
+
+**Read the counter first and pass what it already says**, so the write is a
+no-op:
+
+```bash
+sncast call --contract-address $GAME --function get_total_number_of_hiders \
+  --calldata <currentWeek + 1> 0 --network sepolia
+```
+
+Passing a smaller number destroys the count of treasures that exist, and
+`_removeGamerReward` asserts the counter is `> 0` before decrementing — so a
+finder taking one of those treasures would revert.
+
+```bash
+# 14 felts. Replays the deploy values; the 3 marked ** is the counter read above.
+sncast --account=account_braavos invoke \
+  --contract-address $GAME \
+  --function start_new_game \
+  --calldata \
+    0x92fe3fb625937ab468940c4c58966849 0xbc19a39ffdeb3ff487a290fd65626b95 \
+    100000 0 \
+    5000000 0 \
+    1000000 0 \
+    14 \
+    14 \
+    0 0 \
+    0 0 \
+  --network sepolia
+```
+
+**Use `--calldata`, not `--arguments`.** The merkle root is larger than the
+felt252 field, so it exists only as a u256 low/high pair — unlike the funding
+amount in §3, which fits in one felt.
+
+Order of the 14 felts: root (2, **low first**), finder (2), hider (2), spawn (2),
+gridX (**1**), gridY (**1**), hiders (2), value (2). **`gameGridSizeX` and
+`gameGridSizeY` are `u128`** — one felt each while everything around them takes
+two, which is the mistake `FIX_CLAIM_REWARDS.md` already records.
+
+**Two calls are needed before a hide is claimable.** A hide made during week `K`
+credits week `K+1`, and `_claimReward` requires `week < currentGameWeek`. The
+eighth argument feeds `game_totals`, which nothing but its own getter reads.

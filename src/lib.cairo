@@ -81,6 +81,13 @@ pub trait IHelloStarknet<TContractState> {
         self: @TContractState, gamerWalletAddress: ContractAddress,
     ) -> u256;
     fn get_total_reward_token_pending(self: @TContractState) -> u256;
+    // ROZ earned while the contract could not pay for it, and the call that
+    // turns it back into a withdrawable balance once it can.
+    fn get_reward_token_missed(
+        self: @TContractState, gamerWalletAddress: ContractAddress,
+    ) -> u256;
+    fn get_total_reward_token_missed(self: @TContractState) -> u256;
+    fn claim_missed_reward_token(ref self: TContractState) -> u256;
     fn get_reward_token_claimed(
         self: @TContractState, gamerWalletAddress: ContractAddress, gameWeek: u256,
     ) -> bool;
@@ -287,6 +294,9 @@ trait InternalFunctionsTrait<TContractState> {
     fn _isRewardClaimable(
         self: @TContractState, gamerWalletAddress: ContractAddress, gameWeek: u256,
     ) -> bool;
+    fn _recordMissedRewardToken(
+        ref self: TContractState, gamerWalletAddress: ContractAddress, amount: u256,
+    );
     fn _claimReward(
         ref self: TContractState, gamerWalletAddress: ContractAddress, gameWeek: u256,
     ) -> bool;
@@ -343,6 +353,7 @@ mod HelloStarknet {
         RewardTokenAccrued: RewardTokenAccrued,
         RewardTokenAccrualSkipped: RewardTokenAccrualSkipped,
         RewardTokenClaimed: RewardTokenClaimed,
+        RewardTokenMissedRecovered: RewardTokenMissedRecovered,
         #[flat]
         OwnableEvent: OwnableComponent::Event,
     }
@@ -402,6 +413,19 @@ mod HelloStarknet {
         #[key]
         user: ContractAddress,
         amount: u256,
+    }
+
+    // Fired when a player converts ROZ that was previously skipped into a
+    // pending balance they can actually withdraw. `remaining` is what is still
+    // waiting on further funding - non-zero means the conversion was PARTIAL
+    // because the contract could not cover the whole backlog yet, and calling
+    // again after the next top-up will move more.
+    #[derive(Drop, starknet::Event)]
+    struct RewardTokenMissedRecovered {
+        #[key]
+        user: ContractAddress,
+        amount: u256,
+        remaining: u256,
     }
 
     #[derive(Drop, starknet::Event)]
@@ -673,6 +697,33 @@ mod HelloStarknet {
         //rule in 4c-i is a single read rather than a walk over every player,
         //and so the sweep in 4j can release only the surplus.
         total_reward_token_pending: u256,
+        //Reward_token_missed: LegacyMap::<gamerWalletAddress, rozEarnedButRefused>
+        //
+        //ROZ that was EARNED and then REFUSED, because the coverage rule could
+        //not cover it at the time. This is not an IOU the contract can pay right
+        //now - that is reward_token_pending above - it is a record that the
+        //reward is still owed once there is ROZ to pay it from.
+        //
+        //WITHOUT THIS A SKIPPED REWARD IS SIMPLY LOST. The skip emits an event
+        //and returns, and a contract cannot read its own logs, so nothing on
+        //chain remembers the amount. Only the claim leg escaped that, and not
+        //because it has a retry entrypoint: its inputs (hider_survival_roz and
+        //finder_share_amounts) stay in storage, so claim_reward_token_for_week
+        //recalculates rather than replays. A hide or hop reward cannot be
+        //recalculated later - it depended on the gate status, volume band and
+        //hop counters AT THAT MOMENT, and backdating rates is forbidden
+        //everywhere else in this design. Writing the number down at the time is
+        //the only thing that can work.
+        //
+        //Same token caveat as the pending total below: these amounts are
+        //denominated in whatever reward token was configured when they were
+        //earned, and update_game_reward_token does not convert them.
+        reward_token_missed: LegacyMap<ContractAddress, u256>,
+        //The sum of every reward_token_missed balance, for the same reason
+        //total_reward_token_pending exists - the sweep in 4j subtracts it, so
+        //the owner cannot withdraw the backing for rewards players are still
+        //owed but have not converted yet.
+        total_reward_token_missed: u256,
         //The sum of every USDC a player can still claim. USDC owed is computed
         //from shares on demand and never totalled, so without this the sweep
         //has nothing to subtract and would strand outstanding claims.
@@ -1321,6 +1372,30 @@ mod HelloStarknet {
             return underCap + scaledRemainder;
         }
 
+        // Write down a reward that was earned and then refused.
+        //
+        // Called from both skip paths in _accrueRewardToken below, which is the
+        // single choke point every reward passes through - hide, hop,
+        // participation and claim alike. Recording here is what makes all four
+        // recoverable without any of them being touched, and it is why a skip
+        // stopped meaning "lost".
+        //
+        // This does NOT make the amount payable. It cannot: the whole reason it
+        // was skipped is that the contract could not cover it. It becomes
+        // payable when the player calls claim_missed_reward_token after the
+        // contract is funded, which is the only place this map is reduced.
+        fn _recordMissedRewardToken(
+            ref self: ContractState, gamerWalletAddress: ContractAddress, amount: u256,
+        ) {
+            let missedSoFar: u256 = self.reward_token_missed.read(gamerWalletAddress);
+
+            self.reward_token_missed.write(gamerWalletAddress, missedSoFar + amount);
+
+            let totalMissed: u256 = self.total_reward_token_missed.read();
+
+            self.total_reward_token_missed.write(totalMissed + amount);
+        }
+
         // Credit ROZ to a player's pending balance. NEVER transfers.
         //
         // This is the single most important design decision in the reward
@@ -1366,6 +1441,7 @@ mod HelloStarknet {
             // same reason as an uncovered credit: gameplay must not depend on
             // reward plumbing being finished.
             if (rewardTokenAddress.is_zero()) {
+                self._recordMissedRewardToken(gamerWalletAddress, amount);
                 self
                     .emit(
                         Event::RewardTokenAccrualSkipped(
@@ -1390,6 +1466,7 @@ mod HelloStarknet {
             let alreadyOwed: u256 = self.total_reward_token_pending.read();
 
             if (alreadyOwed + amount > heldBalance) {
+                self._recordMissedRewardToken(gamerWalletAddress, amount);
                 self
                     .emit(
                         Event::RewardTokenAccrualSkipped(
@@ -2848,6 +2925,122 @@ mod HelloStarknet {
             return self.total_reward_token_pending.read();
         }
 
+        // ROZ this wallet earned while the contract could not pay for it.
+        //
+        // NOT withdrawable. Call claim_missed_reward_token to move whatever the
+        // balance can now cover into the pending balance, then
+        // claim_reward_tokens to withdraw it. This is the honest figure for a
+        // "waiting on funding" display - before it existed the only source was
+        // the RewardTokenAccrualSkipped log, which the contract cannot read and
+        // a client has to total up by hand.
+        fn get_reward_token_missed(
+            self: @ContractState, gamerWalletAddress: ContractAddress,
+        ) -> u256 {
+            return self.reward_token_missed.read(gamerWalletAddress);
+        }
+
+        // The sum of every missed balance. Together with
+        // get_total_reward_token_pending this is the full liability: what would
+        // have to be funded for every player to be paid everything they have
+        // earned.
+        fn get_total_reward_token_missed(self: @ContractState) -> u256 {
+            return self.total_reward_token_missed.read();
+        }
+
+        // Turn previously skipped ROZ into a balance that can be withdrawn.
+        //
+        // Moves as much as the contract can currently cover out of
+        // reward_token_missed and into reward_token_pending. Then
+        // claim_reward_tokens pays it out as normal - this deliberately does
+        // NOT transfer, so the two steps stay separate and each does one thing.
+        //
+        // PARTIAL BY DESIGN. It converts min(missed, headroom) rather than
+        // insisting on the whole amount. If it were all-or-nothing, a player
+        // whose backlog exceeded the free balance would convert nothing at all,
+        // forever - the bigger the debt, the less recoverable it would be,
+        // which is exactly backwards. Whatever fits moves now; call again after
+        // the next top-up for the rest.
+        //
+        // IT REIMPLEMENTS THE COVERAGE ARITHMETIC INSTEAD OF CALLING
+        // _accrueRewardToken, and that is not duplication for its own sake.
+        // _accrueRewardToken records to reward_token_missed when it cannot
+        // cover a credit - so routing this through it would, on a shortfall,
+        // add the amount to missed a SECOND time while the original was still
+        // sitting there. The debt would grow every time a player tried to
+        // collect it.
+        //
+        // Safe to call at any time. Nothing missed, or no headroom, returns 0
+        // rather than reverting - "there is nothing to move yet" is a normal
+        // answer, not an error.
+        fn claim_missed_reward_token(ref self: ContractState) -> u256 {
+            let gamerWalletAddress: ContractAddress = get_caller_address();
+
+            let missed: u256 = self.reward_token_missed.read(gamerWalletAddress);
+
+            if (missed == 0) {
+                return 0;
+            }
+
+            let rewardTokenAddress: ContractAddress = self
+                .game_reward_token_contract_address
+                .read();
+
+            // No token to pay from, so nothing can be covered yet. The record
+            // stays exactly as it is.
+            if (rewardTokenAddress.is_zero()) {
+                return 0;
+            }
+
+            // Same live read as the coverage rule in _accrueRewardToken, and for
+            // the same reason - a tracked budget drifts the moment somebody
+            // transfers ROZ in, which is how funding arrives.
+            let reward_token_dispatcher = ERC20ABIDispatcher {
+                contract_address: rewardTokenAddress,
+            };
+            let heldBalance: u256 = reward_token_dispatcher.balance_of(get_contract_address());
+            let alreadyOwed: u256 = self.total_reward_token_pending.read();
+
+            // What the contract could promise without breaking the invariant
+            // that every pending balance stays payable. Guarded rather than
+            // subtracted: a u256 cannot go negative, and being over-committed is
+            // simply "no headroom".
+            if (heldBalance <= alreadyOwed) {
+                return 0;
+            }
+
+            let headroom: u256 = heldBalance - alreadyOwed;
+
+            let converting: u256 = if missed > headroom {
+                headroom
+            } else {
+                missed
+            };
+
+            self.reward_token_missed.write(gamerWalletAddress, missed - converting);
+
+            let totalMissed: u256 = self.total_reward_token_missed.read();
+
+            self.total_reward_token_missed.write(totalMissed - converting);
+
+            let currentlyPending: u256 = self.reward_token_pending.read(gamerWalletAddress);
+
+            self.reward_token_pending.write(gamerWalletAddress, currentlyPending + converting);
+            self.total_reward_token_pending.write(alreadyOwed + converting);
+
+            self
+                .emit(
+                    Event::RewardTokenMissedRecovered(
+                        RewardTokenMissedRecovered {
+                            user: gamerWalletAddress,
+                            amount: converting,
+                            remaining: missed - converting,
+                        },
+                    ),
+                );
+
+            return converting;
+        }
+
         // Whether the ROZ leg of a given week has settled. False after a claim
         // made while the contract was unfunded, which is the signal to call
         // claim_reward_token_for_week.
@@ -3472,10 +3665,21 @@ mod HelloStarknet {
         // owner's to take, so each branch releases only the SURPLUS above what
         // is owed.
         //
-        //   ROZ  - subtract total_reward_token_pending. Without this the owner
-        //          could sweep the backing for every accrued balance and
-        //          claim_reward_tokens would start failing, which is exactly
-        //          the failure the coverage rule in 4c-i exists to prevent.
+        //   ROZ  - subtract total_reward_token_pending AND
+        //          total_reward_token_missed. The first is the backing for every
+        //          accrued balance; without it the owner could sweep it and
+        //          claim_reward_tokens would start failing, which is exactly the
+        //          failure the coverage rule in 4c-i exists to prevent. The
+        //          second is ROZ players earned while the contract was unfunded
+        //          and have not converted yet - equally theirs, just not yet in
+        //          a payable form.
+        //
+        //          NOTE THE COST OF RESERVING MISSED. A wallet that never
+        //          returns to call claim_missed_reward_token holds that much
+        //          back from the owner permanently. That is deliberate: the
+        //          alternative is sweeping money a player could still come back
+        //          and claim, and a reward that can be withdrawn out from under
+        //          the player is not a reward.
         //
         //   USDC - subtract total_usdc_claimable, the running total of hider
         //          stakes not yet claimed or lost to a finder. USDC owed is
@@ -3496,7 +3700,8 @@ mod HelloStarknet {
             let mut owedToPlayers: u256 = 0;
 
             if (tokenAddress == self.game_reward_token_contract_address.read()) {
-                owedToPlayers = self.total_reward_token_pending.read();
+                owedToPlayers = self.total_reward_token_pending.read()
+                    + self.total_reward_token_missed.read();
             } else if (tokenAddress == self.game_token_contract_address.read()) {
                 owedToPlayers = self.total_usdc_claimable.read();
             }
@@ -3519,7 +3724,8 @@ mod HelloStarknet {
             let mut owedToPlayers: u256 = 0;
 
             if (tokenAddress == self.game_reward_token_contract_address.read()) {
-                owedToPlayers = self.total_reward_token_pending.read();
+                owedToPlayers = self.total_reward_token_pending.read()
+                    + self.total_reward_token_missed.read();
             } else if (tokenAddress == self.game_token_contract_address.read()) {
                 owedToPlayers = self.total_usdc_claimable.read();
             }

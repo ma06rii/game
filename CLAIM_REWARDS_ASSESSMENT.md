@@ -1,32 +1,38 @@
 # Claiming USDC rewards: assessment and design
 
 Assessment of a proposed approach for claiming USDC rewards, written against the
-deployed contract at `0x0771fdfb9c6f81b19a08b6f883878f52f6264b00b92d55516dfaa8a913cd834c`
+deployed contract at `0x007030fb8aec5eb20ed893bb2147fefe0dd07b204d55be12fedf9ce4579f7a4f`
 and the contract source at `/home/ii/development/personal/game-worktrees/bug-vrf-game/src/lib.cairo`.
 
 Line references drift — grep the identifier rather than trusting the number.
 
 **Status.** The contract recommendation in this document is **built, tested and
-deployed**. `get_reward_claimed` and `get_claimable_weeks` are in `src/lib.cairo`
-with seven tests, 36/36 green, and both are live and verified on chain.
+deployed**. `get_reward_claimed` and `get_claimable_weeks` are in `src/lib.cairo`,
+covered by seven of the suite's 43 passing tests, and both are live and verified
+on chain.
 
-The game contract has no upgrade path, so this went out as a **redeploy at a new
-address**:
+The game contract has no upgrade path, so every change ships as a **redeploy at a
+new address**. This document's views went out in one; a later redeploy added the
+missed-ROZ ledger:
 
 | | Address |
 |---|---|
-| **Game (current)** | `0x0771fdfb9c6f81b19a08b6f883878f52f6264b00b92d55516dfaa8a913cd834c` |
-| Game (superseded) | `0x0783f2409b051a0ec8db4f93c4ce0cf370617956ff31880d0c35a61bb1d350a9` |
+| **Game (current)** | `0x007030fb8aec5eb20ed893bb2147fefe0dd07b204d55be12fedf9ce4579f7a4f` |
+| Game (superseded, has these views) | `0x0771fdfb9c6f81b19a08b6f883878f52f6264b00b92d55516dfaa8a913cd834c` |
 | ROZ token | `0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b` |
 | USDC | `0x0512feac6339ff7889822cb5aa2a86c848e9d392bb0e3e237c008674feed8343` |
 
-**The frontend still points at the old address and must be repointed** — see
+Two further deployments precede these — see `ROZ_DEPLOYMENT_AND_FUNDING.md` §1.
+
+**The frontend points at `0x0771fdfb…`, not the current contract**, so it has the
+views this document asked for but not the missed-ROZ ledger. See
 `FRONTEND_CLAIM_DEFECTS.md`, step zero. Everything from "Design" onward is still
 a proposal, and no frontend code has changed.
 
-Two carry-overs from the redeploy: the new contract is **empty** (`get_game_week`
-is `0`, no USDC, no ROZ), and the superseded contract still holds **$15.00 owed
-to players** in hider stakes, of which only $0.60 is sweepable.
+Two carry-overs: the current contract is **empty** (`get_game_week` is `0`, no
+USDC, no ROZ), and **state never migrates**. `0x0771fdfb…` is at week 5 holding
+$22.13 USDC, of which **$20.08 is owed to players** and only $2.05 is sweepable —
+claimable only while the frontend still points there.
 
 ## The problem
 
@@ -159,7 +165,7 @@ Two bounds are enforced: `fromWeek <= toWeek` (`'bad week range'`) and a span
 under 256 rounds (`'week range too wide'`, guarding the step limit for a call).
 Both were confirmed firing on the deployed contract with those exact strings.
 
-**Both views are live at `0x0771fdfb…cd834c`**, verified by call:
+**Both views are live at `0x007030fb…9f7a4f`**, verified by call:
 `get_reward_claimed` returns `false` and `get_claimable_weeks` returns
 `array![]` for a wallet that has not played. Neither entrypoint exists on the
 superseded contract, which makes a successful `get_claimable_weeks` call the
@@ -298,7 +304,7 @@ views.
 
 - ~~**`get_reward_claimed` is the highest-value change here, and it is a contract
   change rather than a frontend one.**~~ **Done and deployed** at
-  `0x0771fdfb…cd834c`. What remains is a **frontend repoint** — the app still
+  `0x007030fb…9f7a4f`. What remains is a **frontend repoint** — the app still
   talks to the superseded address — and settling that contract's $15.00 of
   player stakes.
 - The contract holds **0 ROZ**, so the ROZ leg fails for every player until it is

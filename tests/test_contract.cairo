@@ -714,8 +714,21 @@ fn deploy_mock_token(name: ByteArray, symbol: ByteArray) -> ContractAddress {
 
 // Deploys the game contract with both tokens wired up, funds the player, and
 // funds the contract with ROZ. Returns (game, gameToken, rewardToken).
+// The ordinary harness: a game funded with plenty of ROZ, so rewards land.
 fn deploy_wired(
     player: ContractAddress, playerFunds: u256,
+) -> (ContractAddress, ContractAddress, ContractAddress) {
+    deploy_wired_with_roz(player, playerFunds, 1000000000000000000000)
+}
+
+// The same harness with the ROZ funding chosen by the caller.
+//
+// Pass 0 to get a contract that cannot pay any reward - the state every
+// deployment starts in, and the one the missed-ROZ ledger exists for. Pass a
+// deliberately small figure to test a PARTIAL recovery, where the contract can
+// cover some of a player's backlog but not all of it.
+fn deploy_wired_with_roz(
+    player: ContractAddress, playerFunds: u256, rozFunding: u256,
 ) -> (ContractAddress, ContractAddress, ContractAddress) {
     let gameToken = deploy_mock_token("MockUSDC", "mUSDC");
     let rewardToken = deploy_mock_token("MockROZ", "mROZ");
@@ -746,8 +759,9 @@ fn deploy_wired(
     // Fund the game with ROZ. Without this the coverage rule refuses every
     // credit and rewards silently read back as zero - which would make these
     // tests pass for the wrong reason.
-    IMockERC20Dispatcher { contract_address: rewardToken }
-        .mint(game, 1000000000000000000000);
+    if (rozFunding > 0) {
+        IMockERC20Dispatcher { contract_address: rewardToken }.mint(game, rozFunding);
+    }
 
     (game, gameToken, rewardToken)
 }
@@ -1870,4 +1884,254 @@ fn test_claimable_weeks_empty_before_any_round_finishes() {
 
     let weeks = dispatcher.get_claimable_weeks(player, 0, 8);
     assert(weeks.len() == 0, 'nothing finished yet');
+}
+
+// ---------------------------------------------------------------------------
+// MISSED ROZ - rewards earned while the contract could not pay for them
+// ---------------------------------------------------------------------------
+
+// TEST 1 - THE WHOLE POINT: a skipped reward is written down, not forgotten.
+//
+// Before the ledger existed, a skip emitted an event and returned. A contract
+// cannot read its own logs, so the amount was gone - and unlike the claim leg
+// there was nothing left in storage to recalculate it from.
+//
+// The assertion is deliberately made against a FUNDED twin running the exact
+// same action rather than against a hardcoded figure. What the ledger records
+// must be precisely what the player would have been credited, and reward rates
+// are settings that can change; comparing the two contracts checks the property
+// instead of a number that would rot.
+#[test]
+fn test_a_skipped_reward_is_recorded_not_lost() {
+    let player: ContractAddress = contract_address_const::<0x9001>();
+
+    // No ROZ at all - the state every deployment starts in.
+    let (poorGame, _, _) = deploy_wired_with_roz(player, 100000000, 0);
+    let poor = IHelloStarknetDispatcher { contract_address: poorGame };
+
+    start_cheat_caller_address(poorGame, player);
+    poor.hide_treasure();
+    stop_cheat_caller_address(poorGame);
+
+    let missed = poor.get_reward_token_missed(player);
+
+    assert(missed > 0, 'the skip must be recorded');
+    assert(poor.get_reward_token_pending(player) == 0, 'nothing is payable yet');
+    assert(poor.get_total_reward_token_missed() == missed, 'the total must agree');
+
+    // The same hide, on a contract that can pay.
+    let (richGame, _, _) = deploy_wired(player, 100000000);
+    let rich = IHelloStarknetDispatcher { contract_address: richGame };
+
+    start_cheat_caller_address(richGame, player);
+    rich.hide_treasure();
+    stop_cheat_caller_address(richGame);
+
+    assert(rich.get_reward_token_pending(player) == missed, 'must record what it would pay');
+}
+
+// TEST 2 - the round trip: missed -> pending -> wallet.
+#[test]
+fn test_missed_roz_converts_and_pays_out_once_funded() {
+    let player: ContractAddress = contract_address_const::<0x9002>();
+    let (game, _, rewardToken) = deploy_wired_with_roz(player, 100000000, 0);
+    let dispatcher = IHelloStarknetDispatcher { contract_address: game };
+
+    start_cheat_caller_address(game, player);
+    dispatcher.hide_treasure();
+    stop_cheat_caller_address(game);
+
+    let missed = dispatcher.get_reward_token_missed(player);
+    assert(missed > 0, 'should have missed something');
+
+    // The tranche arrives as a plain transfer, exactly as real funding does.
+    IMockERC20Dispatcher { contract_address: rewardToken }.mint(game, missed * 10);
+
+    start_cheat_caller_address(game, player);
+    let converted = dispatcher.claim_missed_reward_token();
+    stop_cheat_caller_address(game);
+
+    assert(converted == missed, 'all of it should convert');
+    assert(dispatcher.get_reward_token_missed(player) == 0, 'missed must be cleared');
+    assert(dispatcher.get_total_reward_token_missed() == 0, 'the total must clear too');
+    assert(dispatcher.get_reward_token_pending(player) == missed, 'it must now be payable');
+
+    // And the existing withdrawal path pays it, unchanged.
+    start_cheat_caller_address(game, player);
+    dispatcher.claim_reward_tokens();
+    stop_cheat_caller_address(game);
+
+    let inWallet = ERC20ABIDispatcher { contract_address: rewardToken }.balance_of(player);
+
+    assert(inWallet == missed, 'the player must be paid');
+    assert(dispatcher.get_reward_token_pending(player) == 0, 'pending must be cleared');
+}
+
+// TEST 3 - PARTIAL CONVERSION, and why it is not all-or-nothing.
+//
+// If the conversion insisted on covering the whole backlog, a player owed more
+// than the contract holds would recover NOTHING - the larger the debt the less
+// collectable it would be, which is exactly backwards. Whatever fits must move.
+#[test]
+fn test_missed_roz_converts_partially_when_funds_are_short() {
+    let player: ContractAddress = contract_address_const::<0x9003>();
+    let (game, _, rewardToken) = deploy_wired_with_roz(player, 100000000, 0);
+    let dispatcher = IHelloStarknetDispatcher { contract_address: game };
+
+    start_cheat_caller_address(game, player);
+    dispatcher.hide_treasure();
+    stop_cheat_caller_address(game);
+
+    let missed = dispatcher.get_reward_token_missed(player);
+    assert(missed > 1, 'need something to split');
+
+    // Deliberately not enough.
+    let partialFunding = missed / 2;
+    IMockERC20Dispatcher { contract_address: rewardToken }.mint(game, partialFunding);
+
+    start_cheat_caller_address(game, player);
+    let converted = dispatcher.claim_missed_reward_token();
+    stop_cheat_caller_address(game);
+
+    assert(converted == partialFunding, 'should take exactly what fits');
+    assert(dispatcher.get_reward_token_missed(player) == missed - partialFunding, 'rest waits');
+    assert(dispatcher.get_reward_token_pending(player) == partialFunding, 'the rest is payable');
+
+    // Top up, and the remainder comes across on a second call.
+    IMockERC20Dispatcher { contract_address: rewardToken }.mint(game, missed);
+
+    start_cheat_caller_address(game, player);
+    let second = dispatcher.claim_missed_reward_token();
+    stop_cheat_caller_address(game);
+
+    assert(second == missed - partialFunding, 'the remainder converts');
+    assert(dispatcher.get_reward_token_missed(player) == 0, 'nothing left waiting');
+}
+
+// TEST 4 - calling again does not mint a second debt.
+//
+// This is the failure that would follow from routing the conversion through
+// _accrueRewardToken: on a shortfall it records to missed, so a failed recovery
+// would ADD to the very balance it was trying to clear.
+#[test]
+fn test_converting_twice_does_not_double_credit() {
+    let player: ContractAddress = contract_address_const::<0x9004>();
+    let (game, _, rewardToken) = deploy_wired_with_roz(player, 100000000, 0);
+    let dispatcher = IHelloStarknetDispatcher { contract_address: game };
+
+    start_cheat_caller_address(game, player);
+    dispatcher.hide_treasure();
+    stop_cheat_caller_address(game);
+
+    let missed = dispatcher.get_reward_token_missed(player);
+    IMockERC20Dispatcher { contract_address: rewardToken }.mint(game, missed * 10);
+
+    start_cheat_caller_address(game, player);
+    let first = dispatcher.claim_missed_reward_token();
+    let second = dispatcher.claim_missed_reward_token();
+    stop_cheat_caller_address(game);
+
+    assert(first == missed, 'first call takes it all');
+    assert(second == 0, 'second call is a no-op');
+    assert(dispatcher.get_reward_token_pending(player) == missed, 'pending must not double');
+    assert(dispatcher.get_reward_token_missed(player) == 0, 'missed must stay clear');
+}
+
+// TEST 5 - the sweep cannot take ROZ that is owed as missed.
+//
+// Money players have earned is not the owner's to withdraw, whether it is
+// already payable (pending) or still waiting on funding (missed).
+#[test]
+fn test_sweep_reserves_missed_roz() {
+    let player: ContractAddress = contract_address_const::<0x9005>();
+    let (game, _, rewardToken) = deploy_wired_with_roz(player, 100000000, 0);
+    let dispatcher = IHelloStarknetDispatcher { contract_address: game };
+
+    start_cheat_caller_address(game, player);
+    dispatcher.hide_treasure();
+    stop_cheat_caller_address(game);
+
+    let missed = dispatcher.get_reward_token_missed(player);
+    assert(missed > 0, 'need a backlog to reserve');
+
+    // Fund with three times the backlog, so exactly twice it is surplus.
+    IMockERC20Dispatcher { contract_address: rewardToken }.mint(game, missed * 3);
+
+    assert(
+        dispatcher.get_sweepable_balance(rewardToken) == missed * 2, 'must hold back the missed',
+    );
+
+    // Convert it, and the reserved amount simply changes category - still
+    // reserved, now as pending.
+    start_cheat_caller_address(game, player);
+    dispatcher.claim_missed_reward_token();
+    stop_cheat_caller_address(game);
+
+    assert(
+        dispatcher.get_sweepable_balance(rewardToken) == missed * 2, 'still held back as pending',
+    );
+}
+
+// TEST 6 - participation is made whole WITHOUT the flag being fixed.
+//
+// _creditParticipationIfDue writes player_paid_participation BEFORE attempting
+// the credit and ignores the result, so on an unfunded contract the day is
+// marked paid when nothing was paid - and it is never retried. The ledger
+// captures the amount anyway, which is why that call site needs no change.
+//
+// Guarding the flag as well would be worse: the day would be reattempted on
+// every later action, recording the same bonus into missed again and again.
+#[test]
+fn test_participation_bonus_survives_an_unfunded_contract() {
+    let player: ContractAddress = contract_address_const::<0x9006>();
+    let (game, _, _) = deploy_wired_with_roz(player, 100000000, 0);
+    let dispatcher = IHelloStarknetDispatcher { contract_address: game };
+
+    start_cheat_caller_address(game, player);
+    dispatcher.finder_player_generate_position();
+
+    let mut hopped: u32 = 0;
+    loop {
+        if (hopped == 28) {
+            break;
+        }
+        hop_safely(game, player);
+        hopped = hopped + 1;
+    }
+
+    let missedBefore = dispatcher.get_reward_token_missed(player);
+
+    // Crossing the gate is what makes the bonus due.
+    dispatcher.hide_treasure();
+    dispatcher.hide_treasure();
+    dispatcher.hide_treasure();
+    hop_safely(game, player);
+    stop_cheat_caller_address(game);
+
+    let (_, _, _, spendAfter, _) = dispatcher.get_player_daily_state(player);
+    let (dailyThreshold, _) = dispatcher.get_gate_thresholds();
+    assert(spendAfter >= dailyThreshold, 'should be past the gate');
+
+    // Same assertion as the funded participation test: the jump has to be
+    // bigger than a hop alone, so it must contain the 9 ROZ bonus.
+    let delta = dispatcher.get_reward_token_missed(player) - missedBefore;
+
+    assert(delta > 9000000000000000000, 'bonus must be recorded');
+    assert(dispatcher.get_reward_token_pending(player) == 0, 'still nothing payable');
+}
+
+// TEST 7 - nothing to recover is a normal answer, not an error.
+#[test]
+fn test_claiming_missed_with_nothing_owed_returns_zero() {
+    let player: ContractAddress = contract_address_const::<0x9007>();
+    let stranger: ContractAddress = contract_address_const::<0x9008>();
+    let (game, _, _) = deploy_wired(player, 100000000);
+    let dispatcher = IHelloStarknetDispatcher { contract_address: game };
+
+    start_cheat_caller_address(game, stranger);
+    let converted = dispatcher.claim_missed_reward_token();
+    stop_cheat_caller_address(game);
+
+    assert(converted == 0, 'nothing to convert');
+    assert(dispatcher.get_reward_token_missed(stranger) == 0, 'and none recorded');
 }

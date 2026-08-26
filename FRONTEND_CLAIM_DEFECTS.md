@@ -19,10 +19,13 @@ be repointed before either fix can work.
 
 | | Address | Verified on chain |
 |---|---|---|
-| **Game (new)** | `0x0771fdfb9c6f81b19a08b6f883878f52f6264b00b92d55516dfaa8a913cd834c` | `get_reward_claimed` → `false`, `get_claimable_weeks` → `array![]` |
-| Game (old, superseded) | `0x0783f2409b051a0ec8db4f93c4ce0cf370617956ff31880d0c35a61bb1d350a9` | neither view exists |
-| ROZ token | `0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b` | unchanged — the new game points at it |
+| **Game (current)** | `0x007030fb8aec5eb20ed893bb2147fefe0dd07b204d55be12fedf9ce4579f7a4f` | `get_claimable_weeks` → `array![]`, `get_total_reward_token_missed` → `0` |
+| Game (what the frontend points at **now**) | `0x0771fdfb9c6f81b19a08b6f883878f52f6264b00b92d55516dfaa8a913cd834c` | has the claim views, **not** the missed-ROZ ledger |
+| ROZ token | `0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b` | unchanged across every redeploy |
 | USDC | `0x0512feac6339ff7889822cb5aa2a86c848e9d392bb0e3e237c008674feed8343` | unchanged |
+
+Two further game contracts precede these (`0x0783f240…`, `0x0407390e…`) and are
+kept only as comments in the frontend.
 
 **Step zero: repoint the game address.** There are exactly **two** live sites,
 and they must stay in step — when they drift, every gameplay call falls outside
@@ -30,23 +33,26 @@ the session policy and the keychain prompts on each one:
 
 | File | Line | Constant |
 |---|---|---|
-| `src/components/utils/controllerPolicies.js` | 14 | `SEPOLIA_GAME_CONTRACT_ADDRESS` |
-| `src/components/Middle.vue` | 41 | `SEPOLIA_GAME_CONTRACT_ADDRESS` |
+| `src/components/utils/controllerPolicies.js` | 18–19 | `SEPOLIA_GAME_CONTRACT_ADDRESS` |
+| `src/components/Middle.vue` | 47 | `SEPOLIA_GAME_CONTRACT_ADDRESS` |
 
-`controllerPolicies.js:5`, `:7` and `:9` hold three **commented-out** historical
-addresses. Leave them alone; they are not live.
+Both files keep the superseded addresses commented out directly above the live
+one — `controllerPolicies.js:4–11` and `Middle.vue:42–44`. Leave those alone.
 
-**Do not touch the ROZ address in `Middle.vue:46`** — it is already correct and
-did not change.
+**Do not touch the ROZ address at `Middle.vue:52`** — it is correct and has never
+changed.
 
-Both bounds guards were confirmed live: a reversed range reverts with
-`bad week range`, and a 256-week span with `week range too wide`.
+Both bounds guards were confirmed live on the current contract: a reversed range
+reverts with `bad week range`, and a 256-week span with `week range too wide`.
 
-**The new contract is empty.** `get_game_week()` is `0`, and it holds no USDC and
-no ROZ. The 3 shares and the $15.60 referenced below are on the **old** contract
-and did not migrate — of that, **$15.00 is still owed to players** and only $0.60
-is sweepable. Nothing on the new contract is claimable until a round is opened
-and played.
+**The current contract is empty.** `get_game_week()` is `0`, and it holds no USDC
+and no ROZ, so nothing is claimable on it until a round is opened and played.
+
+**State does not migrate between deployments.** The contract the frontend still
+points at is at week 5 and holds **$22.13 USDC**, of which `get_sweepable_balance`
+says only $2.05 is free — **$20.08 is owed to players** as hider stakes. Those
+stakes are claimable *while the frontend still points there*, and unreachable
+afterwards. Settle them before repointing.
 
 ---
 
@@ -87,10 +93,12 @@ claimShareCount * (gameHiderFee - gasFee - gameFee - gameLandownerFee)
 | `hiderFee` | 5,000,000 | |
 | **paid per share** | **4,987,167** | |
 
-For the 3 shares currently on chain:
+Worked for a 3-share round, the figure quoted throughout this document:
 
 - frontend shows `3 × 5,000,000` = **$15.00**
 - contract pays `3 × 4,987,167` = **$14.96**
+
+The gap is `shares × 12,833`, whatever the share count.
 
 ### Two things that make it worse than a flat rounding error
 
@@ -246,7 +254,7 @@ The verification below needs a round opened and played.
 
 ## Verification
 
-0. The frontend is talking to `0x0771fdfb…cd834c`. Confirm before anything else:
+0. The frontend is talking to `0x007030fb…9f7a4f`. Confirm before anything else:
    a call to `get_claimable_weeks` succeeding at all proves it, since the old
    contract has no such entrypoint.
 1. Hide 3 treasures, then open two rounds so they become claimable. The panel
