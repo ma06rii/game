@@ -1,4 +1,6 @@
-Game Contract Address: 0x007030fb8aec5eb20ed893bb2147fefe0dd07b204d55be12fedf9ce4579f7a4f
+Game Contract Address: 0x055d1a82da9197de7e032b6eae63e826e3eb158014910ca05e7394f3edb92d9d
+Game Contract Class Hash: 0x02e03f023da03194d60e1d8a38bbd739b29528ee0e7f70d054be35291cad5a47
+Game Contract Deployment Block: 14221646
 
 VRF Contract Address: 0x01baad38bde8d3d60eebab5b96f72a297d52e6d1386bc3d4ec5344d9a30388bd
 
