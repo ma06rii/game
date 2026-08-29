@@ -346,7 +346,6 @@ mod HelloStarknet {
     #[derive(Drop, starknet::Event)]
     enum Event {
         TreasureHidden: TreasureHidden,
-        TreasureHiddenBulk: TreasureHiddenBulk,
         TreasureFound: TreasureFound,
         PlayerPosition: PlayerPosition,
         CheckForTreasure: CheckForTreasure,
@@ -356,21 +355,6 @@ mod HelloStarknet {
         RewardTokenMissedRecovered: RewardTokenMissedRecovered,
         #[flat]
         OwnableEvent: OwnableComponent::Event,
-    }
-
-    // Emitted once per bulk hide rather than once per treasure. Coordinates are
-    // assigned off-chain and the merkle root arrives later through
-    // start_new_game, so the backend that places treasures only needs to know
-    // HOW MANY were bought - emitting one event per treasure would cost gas for
-    // no extra information.
-    #[derive(Drop, starknet::Event)]
-    struct TreasureHiddenBulk {
-        #[key]
-        user: ContractAddress,
-        hiderFee: u256,
-        treasureCount: u256,
-        #[key]
-        gameWeek: u256,
     }
 
     // The feedback signal the off-chain map-scaling controller runs on. Without
@@ -428,11 +412,44 @@ mod HelloStarknet {
         remaining: u256,
     }
 
+    // Emitted ONCE PER CALL - single or bulk - and never once per treasure.
+    // Coordinates are assigned off-chain and the merkle root arrives later
+    // through start_new_game, so the backend that places treasures only needs to
+    // know HOW MANY were bought; an event per treasure would cost gas for no
+    // extra information. treasureCount carries that quantity, and is 1 for a
+    // single hide, so one bulk of ten and ten single hides describe themselves
+    // IDENTICALLY on the log - the same equivalence the fee and reward paths
+    // guarantee in 4m.
+    //
+    // THE TWO MONEY FIELDS ARE DIFFERENT MONEY. Never add them together:
+    //
+    //   hiderStake      stakePerTreasure * treasureCount. REFUNDABLE - it is
+    //                   owed back to the player if the treasure survives, which
+    //                   is why it is credited to total_usdc_claimable and MUST
+    //                   NOT reach the spend counters (2.6 rule 1).
+    //   totalFeeCharged The sum of the per-treasure fees actually taken. KEPT -
+    //                   this is the only part that is revenue, and the only part
+    //                   _recordSpend ever sees.
+    //
+    // The stake dwarfs a single hide fee - it is set by currentHiderFee, which
+    // is a whole refundable deposit rather than a charge - so a consumer that
+    // sums the two fields gets a stake count with noise, not a fee total.
+    //
+    // Both fields are AGGREGATES for the call, but they do not divide alike:
+    //
+    //   hiderStake / treasureCount      IS an exact per-treasure stake. The
+    //                                   stake rate does not tier.
+    //   totalFeeCharged / treasureCount is NOT a per-treasure fee. One call can
+    //                                   straddle hideFeeTierBoundary, so some
+    //                                   treasures pay hideFeeBase and the rest
+    //                                   hideFeeHigh.
     #[derive(Drop, starknet::Event)]
     struct TreasureHidden {
         #[key]
         user: ContractAddress,
-        hiderFee: u256,
+        hiderStake: u256,
+        totalFeeCharged: u256,
+        treasureCount: u256,
         #[key]
         gameWeek: u256,
     }
@@ -1811,30 +1828,27 @@ mod HelloStarknet {
                 .total_reward_shares_for_hiders
                 .write(gameWeek, alreadyHidden + treasureCount);
 
-            // One event for a single hide, so the existing consumer keeps
-            // working unchanged; a separate one for bulk. Emitting one event per
-            // treasure would cost gas for no extra information, since
-            // coordinates are assigned off-chain and arrive later as a root.
-            if (treasureCount == 1_u256) {
-                self
-                    .emit(
+            // ONE event, whether this was a single hide or a bulk of ten. The
+            // count goes in the event rather than into a branch, so single and
+            // bulk cannot drift apart - they used to emit different shapes, and
+            // the field named hiderFee carried the STAKE on one path and the FEE
+            // on the other.
+            //
+            // totalStake and totalFeeCharged are the two different quantities,
+            // both aggregated over the call. See the struct for why they must
+            // never be summed by a consumer.
+            self
+                .emit(
+                    Event::TreasureHidden(
                         TreasureHidden {
-                            user: caller, hiderFee: stakePerTreasure, gameWeek: gameWeek,
+                            user: caller,
+                            hiderStake: totalStake,
+                            totalFeeCharged: totalFeeCharged,
+                            treasureCount: treasureCount,
+                            gameWeek: gameWeek,
                         },
-                    );
-            } else {
-                self
-                    .emit(
-                        Event::TreasureHiddenBulk(
-                            TreasureHiddenBulk {
-                                user: caller,
-                                hiderFee: totalFeeCharged,
-                                treasureCount: treasureCount,
-                                gameWeek: gameWeek,
-                            },
-                        ),
-                    );
-            }
+                    ),
+                );
 
             true
         }

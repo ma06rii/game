@@ -9,8 +9,8 @@ use core::poseidon::PoseidonTrait;
 use openzeppelin::token::erc20::interface::{ERC20ABIDispatcher, ERC20ABIDispatcherTrait};
 use project_name::mock_erc20::{IMockERC20Dispatcher, IMockERC20DispatcherTrait};
 use snforge_std::{
-    ContractClassTrait, DeclareResultTrait, declare, start_cheat_caller_address,
-    stop_cheat_caller_address,
+    ContractClassTrait, DeclareResultTrait, EventSpyTrait, EventsFilterTrait, declare,
+    spy_events, start_cheat_caller_address, stop_cheat_caller_address,
 };
 use starknet::class_hash::class_hash_const;
 use starknet::{ContractAddress, contract_address_const, get_caller_address, get_contract_address};
@@ -900,6 +900,182 @@ fn test_bulk_hide_equals_the_same_number_of_single_hides() {
 
     // And the fee tier really did step up: 3 x $0.20 + 7 x $0.25.
     assert(singleSpend == (FEE_BASE * 3) + (FEE_HIGH * 7), 'fee tier wrong');
+}
+
+// TEST 5e-vi - THE HIDE EVENT REPORTS THE STAKE AND THE FEE SEPARATELY.
+//
+// The event used to carry ONE field called hiderFee, and it held a different
+// quantity on each path - the refundable STAKE on a single hide, the retained
+// FEE on a bulk one. An indexer summing that field added stakes to fees and got
+// a meaningless total. TreasureHidden now carries both, named for what they are,
+// and this test is what stops the two ever being confused again.
+//
+// The event is read RAW rather than through EventSpyAssertionsTrait, because the
+// HelloStarknet module is not pub and its event types cannot be imported here.
+// The wire layout being asserted is:
+//
+//   keys = [selector, user, gameWeek.low, gameWeek.high]
+//   data = [hiderStake.low,      hiderStake.high,
+//           totalFeeCharged.low, totalFeeCharged.high,
+//           treasureCount.low,   treasureCount.high]
+//
+// Every figure here is below 2^128, so each .high limb is zero.
+#[test]
+fn test_hide_event_separates_the_stake_from_the_fee() {
+    let hider: ContractAddress = contract_address_const::<0x6666>();
+    let (game, _, _) = deploy_wired(hider, 200000000);
+    let dispatcher = IHelloStarknetDispatcher { contract_address: game };
+
+    let emptyProof: Array<felt252> = ArrayTrait::new();
+
+    let mut spy = spy_events();
+
+    start_cheat_caller_address(game, hider);
+    dispatcher.hide_treasure_bulk(STAKE * 10, emptyProof, 0);
+    stop_cheat_caller_address(game);
+
+    // A hide also emits reward events, so pick out the hide event by selector.
+    let events = spy.get_events().emitted_by(game);
+
+    let mut found: u32 = 0;
+    let mut hiderStake: u256 = 0;
+    let mut totalFeeCharged: u256 = 0;
+    let mut treasureCount: u256 = 0;
+    let mut emittedGameWeek: u256 = 0;
+
+    let mut i: u32 = 0;
+    loop {
+        if (i == events.events.len()) {
+            break;
+        }
+
+        let (_, event) = events.events.at(i);
+
+        if (*event.keys.at(0) == selector!("TreasureHidden")) {
+            assert(event.keys.len() == 4, 'hide event key layout');
+            assert(event.data.len() == 6, 'hide event data layout');
+            found = found + 1;
+            emittedGameWeek =
+                u256 {
+                    low: (*event.keys.at(2)).try_into().unwrap(),
+                    high: (*event.keys.at(3)).try_into().unwrap(),
+                };
+            hiderStake =
+                u256 {
+                    low: (*event.data.at(0)).try_into().unwrap(),
+                    high: (*event.data.at(1)).try_into().unwrap(),
+                };
+            totalFeeCharged =
+                u256 {
+                    low: (*event.data.at(2)).try_into().unwrap(),
+                    high: (*event.data.at(3)).try_into().unwrap(),
+                };
+            treasureCount =
+                u256 {
+                    low: (*event.data.at(4)).try_into().unwrap(),
+                    high: (*event.data.at(5)).try_into().unwrap(),
+                };
+        }
+
+        i = i + 1;
+    }
+
+    // ONE event for the whole call, not one for each of the ten treasures.
+    assert(found == 1, 'one hide event for a bulk');
+    assert(emittedGameWeek == 1, 'event week wrong');
+
+    // The count travels in the event, so a single hide and a bulk no longer
+    // need two different event shapes to tell them apart.
+    assert(treasureCount == 10, 'event count must be 10');
+
+    // The stake is the aggregate, and it divides exactly - the stake rate does
+    // not tier.
+    assert(hiderStake == STAKE * 10, 'event stake wrong');
+
+    // The fee is the aggregate of the tiers actually charged: 3 x $0.20 then
+    // 7 x $0.25. It does NOT divide by the count.
+    assert(totalFeeCharged == (FEE_BASE * 3) + (FEE_HIGH * 7), 'event fee wrong');
+
+    // The two fields carry different money. This is the defect itself: if one
+    // ever equals the other, the stake has leaked into the fee field again.
+    assert(hiderStake != totalFeeCharged, 'stake must not be the fee');
+
+    // Only the fee reaches the spend counters - never the stake (2.6 rule 1).
+    let (_, _, _, spend, _) = dispatcher.get_player_daily_state(hider);
+    assert(totalFeeCharged == spend, 'event fee must equal spend');
+}
+
+// TEST 5e-vii - A SINGLE HIDE EMITS THE SAME EVENT SHAPE, WITH A COUNT OF ONE.
+//
+// The single and bulk paths used to emit different events. They are one event
+// now, so the equivalence 5e-v proves in STORAGE has to hold on the LOG too.
+#[test]
+fn test_single_hide_emits_the_same_event_with_count_one() {
+    let hider: ContractAddress = contract_address_const::<0x7777>();
+    let (game, _, _) = deploy_wired(hider, 200000000);
+    let dispatcher = IHelloStarknetDispatcher { contract_address: game };
+
+    let mut spy = spy_events();
+
+    start_cheat_caller_address(game, hider);
+    dispatcher.hide_treasure();
+    stop_cheat_caller_address(game);
+
+    let events = spy.get_events().emitted_by(game);
+
+    let mut found: u32 = 0;
+    let mut hiderStake: u256 = 0;
+    let mut totalFeeCharged: u256 = 0;
+    let mut treasureCount: u256 = 0;
+    let mut emittedGameWeek: u256 = 0;
+
+    let mut i: u32 = 0;
+    loop {
+        if (i == events.events.len()) {
+            break;
+        }
+
+        let (_, event) = events.events.at(i);
+
+        if (*event.keys.at(0) == selector!("TreasureHidden")) {
+            assert(event.keys.len() == 4, 'hide event key layout');
+            assert(event.data.len() == 6, 'hide event data layout');
+            found = found + 1;
+            emittedGameWeek =
+                u256 {
+                    low: (*event.keys.at(2)).try_into().unwrap(),
+                    high: (*event.keys.at(3)).try_into().unwrap(),
+                };
+            hiderStake =
+                u256 {
+                    low: (*event.data.at(0)).try_into().unwrap(),
+                    high: (*event.data.at(1)).try_into().unwrap(),
+                };
+            totalFeeCharged =
+                u256 {
+                    low: (*event.data.at(2)).try_into().unwrap(),
+                    high: (*event.data.at(3)).try_into().unwrap(),
+                };
+            treasureCount =
+                u256 {
+                    low: (*event.data.at(4)).try_into().unwrap(),
+                    high: (*event.data.at(5)).try_into().unwrap(),
+                };
+        }
+
+        i = i + 1;
+    }
+
+    assert(found == 1, 'one hide event for a single');
+    assert(emittedGameWeek == 1, 'event week wrong');
+    assert(treasureCount == 1, 'event count must be 1');
+
+    // The first treasure of the day, so the base tier - and the stake is the
+    // single-treasure stake, which is the value the old event carried under the
+    // name hiderFee.
+    assert(hiderStake == STAKE, 'single stake wrong');
+    assert(totalFeeCharged == FEE_BASE, 'single fee wrong');
+    assert(hiderStake != totalFeeCharged, 'stake must not be the fee');
 }
 
 // The Daily Volume Multiplier, measured one treasure at a time.
