@@ -2,7 +2,6 @@
 // Sepolia service is unavailable. It is a separate contract, never called from
 // this file, and never deployed to mainnet. See src/mock_vrf_provider.cairo for
 // the full explanation.
-mod mock_vrf_provider;
 
 // The ROZ reward token - a fixed-supply ERC20 with no mint function, deployed
 // on its own before the game contract. Declaring it here is what puts it in the
@@ -18,7 +17,29 @@ mod game_reward_token;
 //
 // Public only so the test crate can reach its dispatcher to mint.
 pub mod mock_erc20;
+mod mock_vrf_provider;
 use starknet::ContractAddress;
+
+#[derive(Drop, Copy, Clone, Serde)]
+pub struct NextRoundParams {
+    pub merkle_root: u256,
+    pub grid_size_x: u128,
+    pub grid_size_y: u128,
+    pub expected_active_treasure_count: u256,
+    pub expected_total_hidden_value: u256,
+    pub hider_stake: u256,
+    pub hide_fee_base: u256,
+    pub hide_fee_high: u256,
+    pub hop_price_0: u256,
+    pub hop_price_1: u256,
+    pub hop_price_2: u256,
+    pub hop_price_3: u256,
+    pub spawn_fee: u256,
+    pub round_duration: u64,
+    pub min_duration: u64,
+    pub near_end_blackout: u64,
+    pub end_buffer: u64,
+}
 
 // Define the VRF Provider interface (as you provided)
 // Implemented by Cartridge's real provider, and - so the two can be swapped by
@@ -38,31 +59,20 @@ pub enum Source {
 
 #[starknet::interface]
 pub trait IHelloStarknet<TContractState> {
-    fn start_new_game(
-        ref self: TContractState,
-        listOfPreviousWeeksTreasureCordinatesMerkleTreeRoot: u256,
-        finderFee: u256,
-        hiderFee: u256,
-        spawnNewPositionFee: u256,
-        gameGridSizeX: u128,
-        gameGridSizeY: u128,
-        totalNumberOfHidersFromThePreviousWeek: u256,
-        totalHiddenTreasureValueFromPreviousWeek: u256,
-    ) -> bool;
+    fn start_next_round(ref self: TContractState, params: NextRoundParams) -> bool;
+    fn expire_round(ref self: TContractState, expectedRound: u256) -> bool;
     fn hide_treasure(ref self: TContractState) -> bool;
     fn hide_treasure_bulk(
-        ref self: TContractState,
-        bulkAmount: u256,
-        merkleProof: Array<felt252>,
-        leafIndex: u32,
+        ref self: TContractState, bulkAmount: u256, merkleProof: Array<felt252>, leafIndex: u32,
     ) -> bool;
     fn validate_treasure_coordinates(
         ref self: TContractState,
         finderGamerWalletAddress: ContractAddress,
         hiderGamerWalletAddress: ContractAddress,
-        gameWeek: u256,
         leaf: u256,
         proof: Array<u256>,
+        checkHopCount: u256,
+        checkTimestamp: u64,
     ) -> bool;
     fn finder_player_move_position(ref self: TContractState, direction: u128) -> (u128, u128);
     fn get_finder_player_position(
@@ -77,15 +87,11 @@ pub trait IHelloStarknet<TContractState> {
     // The ROZ claim leg (4g, 4h, 4i)
     fn claim_reward_tokens(ref self: TContractState) -> bool;
     fn claim_reward_token_for_week(ref self: TContractState, gameWeek: u256) -> bool;
-    fn get_reward_token_pending(
-        self: @TContractState, gamerWalletAddress: ContractAddress,
-    ) -> u256;
+    fn get_reward_token_pending(self: @TContractState, gamerWalletAddress: ContractAddress) -> u256;
     fn get_total_reward_token_pending(self: @TContractState) -> u256;
     // ROZ earned while the contract could not pay for it, and the call that
     // turns it back into a withdrawable balance once it can.
-    fn get_reward_token_missed(
-        self: @TContractState, gamerWalletAddress: ContractAddress,
-    ) -> u256;
+    fn get_reward_token_missed(self: @TContractState, gamerWalletAddress: ContractAddress) -> u256;
     fn get_total_reward_token_missed(self: @TContractState) -> u256;
     fn claim_missed_reward_token(ref self: TContractState) -> u256;
     fn get_reward_token_claimed(
@@ -191,9 +197,7 @@ pub trait IHelloStarknet<TContractState> {
     fn get_player_lifetime_spend(
         self: @TContractState, gamerWalletAddress: ContractAddress,
     ) -> u256;
-    fn get_free_hops_remaining(
-        self: @TContractState, gamerWalletAddress: ContractAddress,
-    ) -> u256;
+    fn get_free_hops_remaining(self: @TContractState, gamerWalletAddress: ContractAddress) -> u256;
     fn receive_random_words(
         ref self: TContractState,
         requester_address: ContractAddress,
@@ -214,6 +218,11 @@ pub trait IHelloStarknet<TContractState> {
     fn get_gas_fee_reservation(self: @TContractState) -> u256;
     fn get_game_token_reward(self: @TContractState) -> u256;
     fn get_game_week(self: @TContractState) -> u256;
+    fn get_round_status(self: @TContractState) -> (u256, u8, u64, u64, u64, u256, u256, u64);
+    fn get_next_round_totals(self: @TContractState) -> (u256, u256);
+    fn get_min_treasures_to_start(self: @TContractState) -> u256;
+    fn get_round_keeper(self: @TContractState) -> ContractAddress;
+    fn update_round_keeper(ref self: TContractState, keeper: ContractAddress) -> bool;
     fn get_game_week_treasure_total(self: @TContractState, gameWeek: u256) -> u256;
     fn get_game_grid_size(self: @TContractState, gameWeek: u256) -> (u128, u128);
     fn get_total_number_of_finders(self: @TContractState, gameWeek: u256) -> u256;
@@ -243,18 +252,11 @@ trait InternalFunctionsTrait<TContractState> {
     ) -> bool;
     fn _verify(self: @TContractState, _root: u256, _leaf: u256, _proof: Array<u256>) -> bool;
     fn _keccak256(self: @TContractState, a: u256, b: u256) -> u256;
-    fn _createNewGame(
-        ref self: TContractState,
-        listOfPreviousWeeksTreasureCordinatesMerkleTreeRoot: u256,
-        finderFee: u256,
-        hiderFee: u256,
-        spawnNewPositionFee: u256,
-        gameGridSizeX: u128,
-        gameGridSizeY: u128,
-        totalNumberOfHidersFromThePreviousWeek: u256,
-        totalHiddenTreasureValueFromPreviousWeek: u256,
-        gameWeek: u256,
-    ) -> bool;
+    fn _createNewGame(ref self: TContractState, params: NextRoundParams, gameWeek: u256) -> bool;
+    fn _validateNextRoundParams(self: @TContractState, params: NextRoundParams);
+    fn _assertRoundAcceptsActions(self: @TContractState);
+    fn _assertHidingAllowed(self: @TContractState);
+    fn _endRound(ref self: TContractState, reason: u8) -> bool;
     fn _hideTreasure(
         ref self: TContractState,
         caller: ContractAddress,
@@ -316,17 +318,17 @@ trait InternalFunctionsTrait<TContractState> {
 #[starknet::contract]
 mod HelloStarknet {
     use core::array::{ArrayTrait, SpanTrait};
+    use core::hash::{HashStateExTrait, HashStateTrait};
     use core::integer::{BoundedInt, u128_byte_reverse};
     use core::keccak::{cairo_keccak, keccak_u256s_be_inputs, keccak_u256s_le_inputs};
     use core::num::traits::zero::Zero;
     use core::option::OptionTrait;
-    use core::serde::Serde;
-    use core::hash::{HashStateExTrait, HashStateTrait};
     // Poseidon is the hash the off-chain merkle tooling uses for the bulk-hide
     // whitelist. The two MUST agree - a Pedersen tree would produce proofs that
     // never verify here, and the failure is silent (the caller simply falls back
     // to the ordinary daily cap). See _verifyWhitelist.
     use core::poseidon::PoseidonTrait;
+    use core::serde::Serde;
     use core::to_byte_array::FormatAsByteArray;
     use core::traits::{Into, TryInto};
     use openzeppelin::access::ownable::OwnableComponent;
@@ -338,9 +340,21 @@ mod HelloStarknet {
         ContractAddress, SyscallResultTrait, contract_address_const, get_block_number,
         get_block_timestamp, get_caller_address, get_contract_address, syscalls,
     };
-    use super::{IVrfProvider, IVrfProviderDispatcher, IVrfProviderDispatcherTrait, Source};
+    use super::{
+        IVrfProvider, IVrfProviderDispatcher, IVrfProviderDispatcherTrait, NextRoundParams, Source,
+    };
 
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
+
+    const ROUND_OPEN: u8 = 0;
+    const ROUND_ENDING: u8 = 1;
+    const END_REASON_ALL_FOUND: u8 = 0;
+    const END_REASON_TIME_EXPIRED: u8 = 1;
+    const VALIDATION_GRACE_SECONDS: u64 = 60;
+    // Round zero is created directly by the constructor. Every round opened
+    // through start_next_round must contain at least this many real, staged
+    // treasures; equality with a zero on-chain count is not sufficient.
+    const MIN_TREASURES_TO_START: u256 = 2;
 
     #[event]
     #[derive(Drop, starknet::Event)]
@@ -353,6 +367,8 @@ mod HelloStarknet {
         RewardTokenAccrualSkipped: RewardTokenAccrualSkipped,
         RewardTokenClaimed: RewardTokenClaimed,
         RewardTokenMissedRecovered: RewardTokenMissedRecovered,
+        RoundStarted: RoundStarted,
+        RoundEnded: RoundEnded,
         #[flat]
         OwnableEvent: OwnableComponent::Event,
     }
@@ -363,10 +379,47 @@ mod HelloStarknet {
     #[derive(Drop, starknet::Event)]
     struct TreasureFound {
         #[key]
-        user: ContractAddress,
+        finder: ContractAddress,
+        hider: ContractAddress,
         hopsTaken: u256,
         #[key]
-        gameWeek: u256,
+        roundId: u256,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    struct RoundStarted {
+        #[key]
+        roundId: u256,
+        startTs: u64,
+        scheduledEndTs: u64,
+        roundDuration: u64,
+        minDuration: u64,
+        nearEndBlackout: u64,
+        endBuffer: u64,
+        merkleRoot: u256,
+        gridSizeX: u128,
+        gridSizeY: u128,
+        activeTreasureCount: u256,
+        totalHiddenValue: u256,
+        hiderStake: u256,
+        hideFeeBase: u256,
+        hideFeeHigh: u256,
+        hopPrice0: u256,
+        hopPrice1: u256,
+        hopPrice2: u256,
+        hopPrice3: u256,
+        spawnFee: u256,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    struct RoundEnded {
+        #[key]
+        roundId: u256,
+        endedTs: u64,
+        reason: u8,
+        initialTreasureCount: u256,
+        treasuresFound: u256,
+        treasuresSurvived: u256,
     }
 
     // Every successful ROZ credit. Amounts are raw 18-decimal ROZ.
@@ -414,7 +467,7 @@ mod HelloStarknet {
 
     // Emitted ONCE PER CALL - single or bulk - and never once per treasure.
     // Coordinates are assigned off-chain and the merkle root arrives later
-    // through start_new_game, so the backend that places treasures only needs to
+    // through start_next_round, so the backend that places treasures only needs to
     // know HOW MANY were bought; an event per treasure would cost gas for no
     // extra information. treasureCount carries that quantity, and is 1 for a
     // single hide, so one bulk of ten and ten single hides describe themselves
@@ -462,6 +515,7 @@ mod HelloStarknet {
         yCoordinate: u128,
         #[key]
         gameWeek: u256,
+        hopCount: u256,
     }
 
     #[derive(Drop, starknet::Event)]
@@ -509,6 +563,16 @@ mod HelloStarknet {
         gameLandownerFee: u256,
         //Game
         currentGameWeek: u256,
+        round_state: u8,
+        round_start_ts: u64,
+        round_ended_ts: u64,
+        round_duration: u64,
+        min_duration: u64,
+        near_end_blackout: u64,
+        end_buffer: u64,
+        active_treasure_count: u256,
+        round_initial_active_count: u256,
+        round_keeper: ContractAddress,
         currentFinderFee: u256,
         currentHiderFee: u256,
         currentSpawnNewPositionFee: u256,
@@ -531,6 +595,11 @@ mod HelloStarknet {
         main_game_grid_size: LegacyMap<u256, (u128, u128)>,
         //Game_totals: LegacyMap::<gameWeek, totalHiddenTreasureValue>,
         game_totals: LegacyMap<u256, u256>,
+        // The gross stake and net claim value attached to one share in a target
+        // round. They are snapshotted when the funding round opens, so later
+        // configuration changes cannot reprice existing claims.
+        round_hider_stake: LegacyMap<u256, u256>,
+        round_claim_value_per_share: LegacyMap<u256, u256>,
         //Claim_share_amounts: LegacyMap::<(gameWeek, gamerWalletAddress), totalShareCount>,
         claim_share_amounts: LegacyMap<(u256, ContractAddress), u256>,
         //Claimed_rewards: LegacyMap::<(gameWeek, gamerWalletAddress), treasureClaimed>,
@@ -656,6 +725,7 @@ mod HelloStarknet {
         // new-wallet measure.
         //Player_hops: LegacyMap::<(gameWeek, gamerWalletAddress), hopsThisRound>
         player_hops: LegacyMap<(u256, ContractAddress), u256>,
+        player_last_find_hops: LegacyMap<(u256, ContractAddress), u256>,
         //Player_hops_today: LegacyMap::<(dayIndex, gamerWalletAddress), hopsToday>
         //
         //Drives the 2.5 price tiers. It MUST be keyed by day and never by round:
@@ -808,20 +878,8 @@ mod HelloStarknet {
         vrfProviderAddress: ContractAddress,
         gameTokenAddress: ContractAddress,
         rewardTokenAddress: ContractAddress,
+        roundKeeperAddress: ContractAddress,
     ) {
-        self
-            ._createNewGame(
-                0xbc19a39ffdeb3ff487a290fd65626b9592fe3fb625937ab468940c4c58966849,
-                100000, //$ 0.10 finder fee
-                5000000, //$ 5.00 hider fee
-                1000000, //$ 1.00 spawn new position
-                14,
-                14,
-                3,
-                15000000, // 3 hiders x $5 minimum value of hidden treasure = $15.00
-                0,
-            );
-
         let ownerAddress: ContractAddress = contract_address_const::<
             0x052a2b0b20d8796e57f0f00e99adfd61e0b40c4a49553d4197e4da6c1c023833,
         >();
@@ -856,6 +914,33 @@ mod HelloStarknet {
         self.game_reward_token_contract_address.write(rewardTokenAddress);
 
         self._initialiseRewardSettings();
+        self.round_keeper.write(roundKeeperAddress);
+
+        // Round zero is deliberately empty. It stages the first real set of
+        // treasures and never invents hider shares or off-chain coordinates.
+        self
+            ._createNewGame(
+                NextRoundParams {
+                    merkle_root: 0,
+                    grid_size_x: 14,
+                    grid_size_y: 14,
+                    expected_active_treasure_count: 0,
+                    expected_total_hidden_value: 0,
+                    hider_stake: 5000000,
+                    hide_fee_base: 200000,
+                    hide_fee_high: 250000,
+                    hop_price_0: 5000,
+                    hop_price_1: 10000,
+                    hop_price_2: 20000,
+                    hop_price_3: 40000,
+                    spawn_fee: 1000000,
+                    round_duration: 21600,
+                    min_duration: 2700,
+                    near_end_blackout: 720,
+                    end_buffer: 180,
+                },
+                0,
+            );
     }
 
     // Every ROZ reward setting, in one place, called once from the constructor.
@@ -998,10 +1083,7 @@ mod HelloStarknet {
         // caller is not whitelisted, passes an empty proof, and simply falls
         // back to the ordinary daily cap.
         fn _verifyWhitelist(
-            self: @ContractState,
-            caller: ContractAddress,
-            proof: Array<felt252>,
-            leafIndex: u32,
+            self: @ContractState, caller: ContractAddress, proof: Array<felt252>, leafIndex: u32,
         ) -> bool {
             let root: felt252 = self.whitelist_merkle_root.read();
 
@@ -1054,18 +1136,14 @@ mod HelloStarknet {
         // The three limits a whitelisted address answers to, in place of the
         // ordinary daily cap. Checked personal, then group.
         fn _enforceWhitelistLimits(
-            ref self: ContractState,
-            caller: ContractAddress,
-            gameWeek: u256,
-            treasureCount: u256,
+            ref self: ContractState, caller: ContractAddress, gameWeek: u256, treasureCount: u256,
         ) {
             // 1. Per address, per round. Stops one whitelisted address taking
             //    the whole round - 250 is 8.8% of 2,840.
             let roundCount: u256 = self.whitelist_round_count.read((caller, gameWeek));
 
             assert(
-                roundCount + treasureCount <= self.whitelistRoundCap.read(),
-                'whitelist round cap',
+                roundCount + treasureCount <= self.whitelistRoundCap.read(), 'whitelist round cap',
             );
 
             // 2. Per address, per rolling hour. A plain resetting bucket rather
@@ -1164,9 +1242,7 @@ mod HelloStarknet {
         // hop 28 with only $0.145 spent, so a version that credits at hop 28 and
         // never looks again would deny that player the bonus entirely. It pays
         // once per calendar day, so the miss would be silent and permanent.
-        fn _creditParticipationIfDue(
-            ref self: ContractState, gamerWalletAddress: ContractAddress,
-        ) {
+        fn _creditParticipationIfDue(ref self: ContractState, gamerWalletAddress: ContractAddress) {
             let dayIndex: u64 = self._currentDayIndex();
 
             // Once a day, not once a round. At four rounds a day, paying it per
@@ -1334,9 +1410,7 @@ mod HelloStarknet {
             ref self: ContractState, gamerWalletAddress: ContractAddress, amount: u256,
         ) -> u256 {
             let dayIndex: u64 = self._currentDayIndex();
-            let earnedToday: u256 = self
-                .player_hop_roz_today
-                .read((dayIndex, gamerWalletAddress));
+            let earnedToday: u256 = self.player_hop_roz_today.read((dayIndex, gamerWalletAddress));
 
             // New wallets carry a lower cap of their own. Take whichever binds
             // first - the same "lowest applicable value" rule as the rates.
@@ -1571,6 +1645,7 @@ mod HelloStarknet {
                         xCoordinate: xCoordinate,
                         yCoordinate: yCoordinate,
                         gameWeek: gameWeek,
+                        hopCount: self.player_hops.read((gameWeek, gamerWalletAddress)),
                     },
                 );
 
@@ -1584,7 +1659,9 @@ mod HelloStarknet {
             let mut i: u32 = 0;
 
             loop {
-                if i > proofLength - 1 {
+                // A one-leaf Merkle tree has an empty proof. Comparing the
+                // cursor directly also avoids underflowing `proofLength - 1`.
+                if i >= proofLength {
                     break;
                 }
 
@@ -1614,38 +1691,152 @@ mod HelloStarknet {
             return new_value_2;
         }
 
-        fn _createNewGame(
-            ref self: ContractState,
-            listOfPreviousWeeksTreasureCordinatesMerkleTreeRoot: u256,
-            finderFee: u256,
-            hiderFee: u256,
-            spawnNewPositionFee: u256,
-            gameGridSizeX: u128,
-            gameGridSizeY: u128,
-            totalNumberOfHidersFromThePreviousWeek: u256,
-            totalHiddenTreasureValueFromPreviousWeek: u256,
-            gameWeek: u256,
-        ) -> bool {
-            //Increment game week
-            self.currentGameWeek.write(gameWeek);
-            self.currentFinderFee.write(finderFee);
-            self.currentHiderFee.write(hiderFee);
-            self.currentSpawnNewPositionFee.write(spawnNewPositionFee);
+        fn _validateNextRoundParams(self: @ContractState, params: NextRoundParams) {
+            let claimDeductions: u256 = self.gasFeeReservation.read()
+                + self.gameMasterFee.read()
+                + self.gameLandownerFee.read();
+            assert(params.grid_size_x >= 14 && params.grid_size_x <= 600, 'invalid grid x');
+            assert(params.grid_size_y >= 14 && params.grid_size_y <= 600, 'invalid grid y');
+            assert(
+                params.expected_active_treasure_count <= self.maxTreasuresPerRound.read(),
+                'too many active treasures',
+            );
+            assert(
+                params.hider_stake > claimDeductions && params.hider_stake <= 50000000,
+                'invalid stake',
+            );
+            assert(params.hide_fee_base <= 2000000, 'hide base too high');
+            assert(params.hide_fee_high <= 2500000, 'hide high too high');
+            assert(params.hop_price_0 <= 50000, 'hop price 0 too high');
+            assert(params.hop_price_1 <= 100000, 'hop price 1 too high');
+            assert(params.hop_price_2 <= 200000, 'hop price 2 too high');
+            assert(params.hop_price_3 <= 400000, 'hop price 3 too high');
+            assert(params.spawn_fee <= 10000000, 'spawn fee too high');
+            assert(
+                params.round_duration >= 3600 && params.round_duration <= 86400,
+                'invalid round duration',
+            );
+            assert(params.min_duration < params.round_duration, 'invalid min duration');
+            assert(params.near_end_blackout < params.round_duration, 'invalid end blackout');
+            assert(
+                params.min_duration + params.near_end_blackout < params.round_duration,
+                'timing windows overlap',
+            );
+            assert(params.end_buffer <= 3600, 'end buffer too high');
+        }
 
-            //Update main game settings
+        fn _assertRoundAcceptsActions(self: @ContractState) {
+            assert(self.round_state.read() == ROUND_OPEN, 'round not open');
+            assert(get_block_timestamp() >= self.round_start_ts.read(), 'round not started');
+            assert(
+                get_block_timestamp() < self.round_start_ts.read() + self.round_duration.read(),
+                'round action window closed',
+            );
+        }
+
+        // Hides fund currentGameWeek + 1 rather than the round being searched.
+        // Once a round ends below the next-round minimum, searching stays
+        // closed but hiding must remain available or the game can never recover.
+        fn _assertHidingAllowed(self: @ContractState) {
+            let state = self.round_state.read();
+            assert(state == ROUND_OPEN || state == ROUND_ENDING, 'hiding unavailable');
+            assert(get_block_timestamp() >= self.round_start_ts.read(), 'round not started');
+        }
+
+        fn _endRound(ref self: ContractState, reason: u8) -> bool {
+            if (self.round_state.read() != ROUND_OPEN) {
+                return false;
+            }
+
+            let endedTs: u64 = get_block_timestamp();
+            let initial: u256 = self.round_initial_active_count.read();
+            let survived: u256 = self.active_treasure_count.read();
+            self.round_state.write(ROUND_ENDING);
+            self.round_ended_ts.write(endedTs);
             self
-                .main_game
-                .write(
-                    gameWeek,
-                    (listOfPreviousWeeksTreasureCordinatesMerkleTreeRoot, finderFee, hiderFee),
+                .emit(
+                    Event::RoundEnded(
+                        RoundEnded {
+                            roundId: self.currentGameWeek.read(),
+                            endedTs,
+                            reason,
+                            initialTreasureCount: initial,
+                            treasuresFound: initial - survived,
+                            treasuresSurvived: survived,
+                        },
+                    ),
                 );
-            self.main_game_grid_size.write(gameWeek, (gameGridSizeX, gameGridSizeY));
+            true
+        }
 
-            //Update reward total share values
+        fn _createNewGame(
+            ref self: ContractState, params: NextRoundParams, gameWeek: u256,
+        ) -> bool {
+            self._validateNextRoundParams(params);
+
+            let startTs: u64 = get_block_timestamp();
+            let deductions: u256 = self.gasFeeReservation.read()
+                + self.gameMasterFee.read()
+                + self.gameLandownerFee.read();
+
+            self.currentGameWeek.write(gameWeek);
+            self.round_state.write(ROUND_OPEN);
+            self.round_start_ts.write(startTs);
+            self.round_ended_ts.write(0);
+            self.round_duration.write(params.round_duration);
+            self.min_duration.write(params.min_duration);
+            self.near_end_blackout.write(params.near_end_blackout);
+            self.end_buffer.write(params.end_buffer);
+            self.active_treasure_count.write(params.expected_active_treasure_count);
+            self.round_initial_active_count.write(params.expected_active_treasure_count);
+            self.currentFinderFee.write(0);
+            self.currentHiderFee.write(params.hider_stake);
+            self.currentSpawnNewPositionFee.write(params.spawn_fee);
+
+            self.main_game.write(gameWeek, (params.merkle_root, 0, params.hider_stake));
+            self.main_game_grid_size.write(gameWeek, (params.grid_size_x, params.grid_size_y));
+
+            // These maps contain live/staged facts populated by hides. Never
+            // overwrite either slot when its round is opened.
+            self.round_hider_stake.write(gameWeek + 1, params.hider_stake);
+            self.round_claim_value_per_share.write(gameWeek + 1, params.hider_stake - deductions);
+
+            self.hideFeeBase.write(params.hide_fee_base);
+            self.hideFeeHigh.write(params.hide_fee_high);
+            self.hideFeeTierBoundary.write(3);
+            self.dailySpendThreshold.write(params.hide_fee_base * 3);
+            self.hop_price_tier_price.write(0, params.hop_price_0);
+            self.hop_price_tier_price.write(1, params.hop_price_1);
+            self.hop_price_tier_price.write(2, params.hop_price_2);
+            self.hop_price_tier_price.write(3, params.hop_price_3);
+
             self
-                .total_reward_shares_for_hiders
-                .write(gameWeek, totalNumberOfHidersFromThePreviousWeek);
-            self.game_totals.write(gameWeek, totalHiddenTreasureValueFromPreviousWeek);
+                .emit(
+                    Event::RoundStarted(
+                        RoundStarted {
+                            roundId: gameWeek,
+                            startTs,
+                            scheduledEndTs: startTs + params.round_duration,
+                            roundDuration: params.round_duration,
+                            minDuration: params.min_duration,
+                            nearEndBlackout: params.near_end_blackout,
+                            endBuffer: params.end_buffer,
+                            merkleRoot: params.merkle_root,
+                            gridSizeX: params.grid_size_x,
+                            gridSizeY: params.grid_size_y,
+                            activeTreasureCount: params.expected_active_treasure_count,
+                            totalHiddenValue: params.expected_total_hidden_value,
+                            hiderStake: params.hider_stake,
+                            hideFeeBase: params.hide_fee_base,
+                            hideFeeHigh: params.hide_fee_high,
+                            hopPrice0: params.hop_price_0,
+                            hopPrice1: params.hop_price_1,
+                            hopPrice2: params.hop_price_2,
+                            hopPrice3: params.hop_price_3,
+                            spawnFee: params.spawn_fee,
+                        },
+                    ),
+                );
 
             return true;
         }
@@ -1686,6 +1877,7 @@ mod HelloStarknet {
             merkleProof: Array<felt252>,
             leafIndex: u32,
         ) -> bool {
+            self._assertHidingAllowed();
             assert(treasureCount > 0, 'treasure count is zero');
 
             let myContract: ContractAddress = get_contract_address();
@@ -1710,9 +1902,7 @@ mod HelloStarknet {
             } else {
                 // Counts TREASURES, not calls, so a bulk hide is bounded
                 // exactly as the same number of single hides would be.
-                assert(
-                    hidesToday + treasureCount <= self.dailyHideCap.read(), 'daily hide cap',
-                );
+                assert(hidesToday + treasureCount <= self.dailyHideCap.read(), 'daily hide cap');
             }
 
             // The only limit that binds the aggregate across every wallet,
@@ -1738,10 +1928,13 @@ mod HelloStarknet {
 
             assert(stakeTransferResult == true, 'game token not transferred');
 
-            // The stake is owed back to the player, so the sweep in 4j must not
-            // be able to take it.
+            // Only the snapshotted NET payout is owed to players. The per-share
+            // deductions are revenue immediately, so reserving the gross stake
+            // here would permanently make them unsweepable.
+            let claimValuePerShare: u256 = self.round_claim_value_per_share.read(gameWeek);
+            assert(claimValuePerShare > 0, 'claim value not configured');
             let claimableSoFar: u256 = self.total_usdc_claimable.read();
-            self.total_usdc_claimable.write(claimableSoFar + totalStake);
+            self.total_usdc_claimable.write(claimableSoFar + claimValuePerShare * treasureCount);
 
             // --- Per treasure: fee, then reward, in that order ---
             let mut treasuresPlaced: u256 = 0;
@@ -1759,8 +1952,7 @@ mod HelloStarknet {
 
                 // Fee tier: the cheap fee for the first hideFeeTierBoundary
                 // treasures of the day, the higher one after.
-                let feeForThisTreasure: u256 = if (alreadyToday
-                    < self.hideFeeTierBoundary.read()) {
+                let feeForThisTreasure: u256 = if (alreadyToday < self.hideFeeTierBoundary.read()) {
                     self.hideFeeBase.read()
                 } else {
                     self.hideFeeHigh.read()
@@ -1824,9 +2016,8 @@ mod HelloStarknet {
             self.player_hides_today.write((dayIndex, caller), hidesToday + treasureCount);
 
             //update the total number of hiders, which is for the next weeeks game
-            self
-                .total_reward_shares_for_hiders
-                .write(gameWeek, alreadyHidden + treasureCount);
+            self.total_reward_shares_for_hiders.write(gameWeek, alreadyHidden + treasureCount);
+            self.game_totals.write(gameWeek, self.game_totals.read(gameWeek) + totalStake);
 
             // ONE event, whether this was a single hide or a bulk of ten. The
             // count goes in the event rather than into a branch, so single and
@@ -1969,23 +2160,20 @@ mod HelloStarknet {
             gameWeek: u256,
         ) -> bool {
             let hiderShares = self.hider_share_amounts.read((gameWeek, hiderWalletAddress));
+            assert(hiderShares > 0, 'hider has no typed share');
 
-            if (hiderShares > 0) {
-                let survivalOwed = self.hider_survival_roz.read((gameWeek, hiderWalletAddress));
-                let perShare = survivalOwed / hiderShares;
+            let survivalOwed = self.hider_survival_roz.read((gameWeek, hiderWalletAddress));
+            let perShare = survivalOwed / hiderShares;
 
-                self
-                    .hider_share_amounts
-                    .write((gameWeek, hiderWalletAddress), hiderShares - 1_u256);
-                self
-                    .hider_survival_roz
-                    .write((gameWeek, hiderWalletAddress), survivalOwed - perShare);
-            }
+            self
+                .hider_share_amounts
+                .write((gameWeek, hiderWalletAddress), hiderShares - 1_u256);
+            self
+                .hider_survival_roz
+                .write((gameWeek, hiderWalletAddress), survivalOwed - perShare);
 
             let finderShares = self.finder_share_amounts.read((gameWeek, finderWalletAddress));
-            self
-                .finder_share_amounts
-                .write((gameWeek, finderWalletAddress), finderShares + 1_u256);
+            self.finder_share_amounts.write((gameWeek, finderWalletAddress), finderShares + 1_u256);
 
             true
         }
@@ -2123,7 +2311,7 @@ mod HelloStarknet {
             self: @ContractState, gamerWalletAddress: ContractAddress, gameWeek: u256,
         ) -> bool {
             // 1. Only finished rounds. Shares in the round now under way stay
-            //    locked until start_new_game moves past it.
+            //    locked until start_next_round moves past it.
             if (gameWeek >= self.currentGameWeek.read()) {
                 return false;
             }
@@ -2145,22 +2333,7 @@ mod HelloStarknet {
                 return false;
             }
 
-            // _calculateRewardDue's assert, reproduced as a test. Same funding
-            // week (the round BEFORE this one, which is where the hider fee
-            // that pays this claim was set) and the same comparison.
-            let fundingWeek: u256 = if gameWeek == 0 {
-                0
-            } else {
-                gameWeek - 1
-            };
-
-            let (_, _, gameHiderFee) = self.main_game.read(fundingWeek);
-
-            let deductions: u256 = self.gasFeeReservation.read()
-                + self.gameMasterFee.read()
-                + self.gameLandownerFee.read();
-
-            if (gameHiderFee <= deductions) {
+            if (self.round_claim_value_per_share.read(gameWeek) == 0) {
                 return false;
             }
 
@@ -2240,9 +2413,7 @@ mod HelloStarknet {
             }
 
             let survivalRoz: u256 = self.hider_survival_roz.read((gameWeek, gamerWalletAddress));
-            let finderShares: u256 = self
-                .finder_share_amounts
-                .read((gameWeek, gamerWalletAddress));
+            let finderShares: u256 = self.finder_share_amounts.read((gameWeek, gamerWalletAddress));
             let findRoz: u256 = finderShares * self.rewardFind.read();
 
             let totalRoz: u256 = survivalRoz + findRoz;
@@ -2254,8 +2425,7 @@ mod HelloStarknet {
                 return true;
             }
 
-            let credited: bool = self
-                ._accrueRewardToken(gamerWalletAddress, totalRoz, 'claim');
+            let credited: bool = self._accrueRewardToken(gamerWalletAddress, totalRoz, 'claim');
 
             // ONLY set the flag if the credit actually landed. If the contract
             // could not cover it the credit was skipped, and leaving the flag
@@ -2288,51 +2458,16 @@ mod HelloStarknet {
         // validate_treasure_coordinates does not create a share, it moves the
         // hider's existing one, so every share at week K is one hide from week K-1.
         //
-        // This previously read the live currentHiderFee. Because start_new_game
+        // This previously read the live currentHiderFee. Because start_next_round
         // rewrites that on every rollover, any fee change silently repriced every
         // reward players had not yet claimed - paying them a rate they never
         // agreed to, in either direction.
         fn _calculateRewardDue(
             self: @ContractState, claimShareCount: u256, gameWeek: u256,
         ) -> u256 {
-            // Guard against u256 underflow rather than a real case: shares at week
-            // 0 cannot exist, because hide_treasure always credits week 1 or later
-            // and _removeGamerReward requires the hider to already hold one.
-            // main_game[0] is seeded by the constructor, so the fallback is safe.
-            let fundingWeek: u256 = if gameWeek == 0 {
-                0
-            } else {
-                gameWeek - 1
-            };
-
-            let (_, _, gameHiderFee) = self.main_game.read(fundingWeek);
-
-            let gasFee = self.gasFeeReservation.read();
-            let gameFee = self.gameMasterFee.read();
-            let gameLandownerFee = self.gameLandownerFee.read();
-
-            assert(gameHiderFee > (gasFee + gameFee + gameLandownerFee), 'Reward is less than fees');
-
-            // THE DEDUCTION IS PER TREASURE, NOT PER CLAIM (4m-ii).
-            //
-            // This previously read
-            //
-            //     eligibleReward = claimShareCount * gameHiderFee
-            //     rewardDue      = eligibleReward - gasFee - gameFee - landowner
-            //
-            // which subtracted the three fees ONCE however many shares were
-            // being claimed. A ten-share claim therefore paid the same 12,833
-            // units as a single hide - ten times less than claiming ten times
-            // separately. The three fees represent per-treasure costs, so
-            // charging them per claim submitted is simply wrong.
-            //
-            // For a single share the arithmetic is IDENTICAL to before -
-            // 5,000,000 - 12,833 = 4,987,167 - so this changes nothing for the
-            // existing single-hide path. It only corrects multi-share claims.
-            let rewardDue = claimShareCount
-                * (gameHiderFee - gasFee - gameFee - gameLandownerFee);
-
-            return rewardDue;
+            let claimValuePerShare: u256 = self.round_claim_value_per_share.read(gameWeek);
+            assert(claimValuePerShare > 0, 'claim value not configured');
+            return claimShareCount * claimValuePerShare;
         }
 
         fn _getSeed(self: @ContractState, finderGamerAddress: ContractAddress) -> u64 {
@@ -2537,6 +2672,43 @@ mod HelloStarknet {
             return self.currentGameWeek.read();
         }
 
+        fn get_round_status(self: @ContractState) -> (u256, u8, u64, u64, u64, u256, u256, u64) {
+            let startTs: u64 = self.round_start_ts.read();
+            return (
+                self.currentGameWeek.read(),
+                self.round_state.read(),
+                startTs,
+                startTs + self.round_duration.read(),
+                self.round_ended_ts.read(),
+                self.active_treasure_count.read(),
+                self.round_initial_active_count.read(),
+                self.end_buffer.read(),
+            );
+        }
+
+        fn get_next_round_totals(self: @ContractState) -> (u256, u256) {
+            let nextRound: u256 = self.currentGameWeek.read() + 1;
+            return (
+                self.total_reward_shares_for_hiders.read(nextRound),
+                self.game_totals.read(nextRound),
+            );
+        }
+
+        fn get_min_treasures_to_start(self: @ContractState) -> u256 {
+            MIN_TREASURES_TO_START
+        }
+
+        fn get_round_keeper(self: @ContractState) -> ContractAddress {
+            self.round_keeper.read()
+        }
+
+        fn update_round_keeper(ref self: ContractState, keeper: ContractAddress) -> bool {
+            self.ownable.assert_only_owner();
+            assert(!keeper.is_zero(), 'keeper is zero');
+            self.round_keeper.write(keeper);
+            true
+        }
+
         fn get_game_token_reward(self: @ContractState) -> u256 {
             return self.currentGameTokenReward.read();
         }
@@ -2565,34 +2737,60 @@ mod HelloStarknet {
             return self._playerRewardDue(gamerWalletAddress, gameWeek);
         }
 
-        fn start_new_game(
-            ref self: ContractState,
-            listOfPreviousWeeksTreasureCordinatesMerkleTreeRoot: u256,
-            finderFee: u256,
-            hiderFee: u256,
-            spawnNewPositionFee: u256,
-            gameGridSizeX: u128,
-            gameGridSizeY: u128,
-            totalNumberOfHidersFromThePreviousWeek: u256,
-            totalHiddenTreasureValueFromPreviousWeek: u256,
-        ) -> bool {
-            self.ownable.assert_only_owner();
+        fn start_next_round(ref self: ContractState, params: NextRoundParams) -> bool {
+            assert(get_caller_address() == self.round_keeper.read(), 'caller is not keeper');
+            assert(self.round_state.read() == ROUND_ENDING, 'round not ending');
+            assert(
+                get_block_timestamp() >= self.round_ended_ts.read() + self.end_buffer.read(),
+                'end buffer active',
+            );
 
-            //Increment game week
-            let gameWeek = self.currentGameWeek.read() + 1_u256;
+            let nextRound: u256 = self.currentGameWeek.read() + 1;
+            let stagedCount: u256 = self.total_reward_shares_for_hiders.read(nextRound);
+            assert(stagedCount >= MIN_TREASURES_TO_START, 'not enough staged treasures');
+            assert(
+                params
+                    .expected_active_treasure_count == stagedCount,
+                'active count mismatch',
+            );
+            assert(
+                params.expected_total_hidden_value == self.game_totals.read(nextRound),
+                'hidden value mismatch',
+            );
 
-            return self
-                ._createNewGame(
-                    listOfPreviousWeeksTreasureCordinatesMerkleTreeRoot,
-                    finderFee,
-                    hiderFee,
-                    spawnNewPositionFee,
-                    gameGridSizeX,
-                    gameGridSizeY,
-                    totalNumberOfHidersFromThePreviousWeek,
-                    totalHiddenTreasureValueFromPreviousWeek,
-                    gameWeek,
-                );
+            self._createNewGame(params, nextRound)
+        }
+
+        fn expire_round(ref self: ContractState, expectedRound: u256) -> bool {
+            assert(get_caller_address() == self.round_keeper.read(), 'caller is not keeper');
+
+            // A stale one-time schedule is harmless and must not end whatever
+            // round happens to be current when it eventually runs.
+            if (expectedRound != self.currentGameWeek.read()
+                || self.round_state.read() != ROUND_OPEN) {
+                return false;
+            }
+
+            let now: u64 = get_block_timestamp();
+            let startTs: u64 = self.round_start_ts.read();
+            let scheduledEndTs: u64 = startTs + self.round_duration.read();
+            let initial: u256 = self.round_initial_active_count.read();
+
+            // Empty bootstrap rounds never end immediately. The active-count
+            // path is only valid for a round which actually opened with finds.
+            if (initial > 0 && self.active_treasure_count.read() == 0 && now >= startTs
+                + self.min_duration.read() && now < scheduledEndTs
+                - self.near_end_blackout.read()) {
+                return self._endRound(END_REASON_ALL_FOUND);
+            }
+
+            // Keep the round OPEN for a short processing grace so a check event
+            // emitted before the deadline can still be validated by the keeper.
+            if (now >= scheduledEndTs + VALIDATION_GRACE_SECONDS) {
+                return self._endRound(END_REASON_TIME_EXPIRED);
+            }
+
+            false
         }
 
         // Hide a single treasure. Costs the $5 stake plus the tiered fee, and is
@@ -2619,10 +2817,7 @@ mod HelloStarknet {
         // bulkAmount is the total STAKE, and must be an exact multiple of the
         // hider fee. The per-treasure fees are charged on top.
         fn hide_treasure_bulk(
-            ref self: ContractState,
-            bulkAmount: u256,
-            merkleProof: Array<felt252>,
-            leafIndex: u32,
+            ref self: ContractState, bulkAmount: u256, merkleProof: Array<felt252>, leafIndex: u32,
         ) -> bool {
             let caller = get_caller_address();
             let stakePerTreasure: u256 = self.currentHiderFee.read();
@@ -2649,6 +2844,7 @@ mod HelloStarknet {
         fn finder_player_move_position( // ref self: ContractState, xDirection: u128, yDirection: u128
             ref self: ContractState, direction: u128,
         ) -> (u128, u128) {
+            self._assertRoundAcceptsActions();
             let gamerWalletAddress = get_caller_address();
             let gameWeek = self.currentGameWeek.read();
             let dayIndex: u64 = self._currentDayIndex();
@@ -2687,9 +2883,9 @@ mod HelloStarknet {
                     .player_free_hops_used
                     .write((dayIndex, gamerWalletAddress), freeHopsUsed + 1_u256);
                 // No transfer, and NOTHING is added to the spend counters. A
-                // free hop costs the player nothing, so it is not spend - which
-                // is why free play alone can never clear the 2.6 gate however
-                // many hops are taken.
+            // free hop costs the player nothing, so it is not spend - which
+            // is why free play alone can never clear the 2.6 gate however
+            // many hops are taken.
             } else {
                 let hopCost: u256 = self._hopPriceForHopNumber(hopsToday);
 
@@ -2716,8 +2912,7 @@ mod HelloStarknet {
                     );
 
                 // The soft cap is the single multiplier a hop may receive.
-                let payableHopReward: u256 = self
-                    ._applyHopSoftCap(gamerWalletAddress, hopRate);
+                let payableHopReward: u256 = self._applyHopSoftCap(gamerWalletAddress, hopRate);
 
                 self._accrueRewardToken(gamerWalletAddress, payableHopReward, 'hop');
             }
@@ -2741,11 +2936,29 @@ mod HelloStarknet {
             ref self: ContractState,
             finderGamerWalletAddress: ContractAddress,
             hiderGamerWalletAddress: ContractAddress,
-            gameWeek: u256,
             leaf: u256,
             proof: Array<u256>,
+            checkHopCount: u256,
+            checkTimestamp: u64,
         ) -> bool {
-            self.ownable.assert_only_owner();
+            assert(get_caller_address() == self.round_keeper.read(), 'caller is not keeper');
+            // A find reward is deliberately ungated because it is meant to
+            // require somebody else's stake. Letting the same wallet occupy
+            // both sides turns the highest reward into a closed farming loop.
+            assert(finderGamerWalletAddress != hiderGamerWalletAddress, 'cannot find own treasure');
+
+            let gameWeek: u256 = self.currentGameWeek.read();
+            let scheduledEndTs: u64 = self.round_start_ts.read() + self.round_duration.read();
+            let now: u64 = get_block_timestamp();
+            assert(self.round_state.read() == ROUND_OPEN, 'round not open');
+            assert(checkTimestamp <= scheduledEndTs, 'check after round deadline');
+            assert(now < scheduledEndTs + VALIDATION_GRACE_SECONDS, 'validation grace elapsed');
+            let totalPlayerHops: u256 = self.player_hops.read((gameWeek, finderGamerWalletAddress));
+            let previousFindHops: u256 = self
+                .player_last_find_hops
+                .read((gameWeek, finderGamerWalletAddress));
+            assert(checkHopCount <= totalPlayerHops, 'invalid check hop count');
+            assert(checkHopCount >= previousFindHops, 'stale check hop count');
 
             let (root, _, _) = self.main_game.read(self.currentGameWeek.read());
 
@@ -2774,15 +2987,52 @@ mod HelloStarknet {
                 //remove gamer reward
                 self._removeGamerReward(hiderGamerWalletAddress, gameWeek);
 
+                // The aggregate calls above move the USDC-backed share. Keep
+                // the parallel typed ledgers in step so the hider loses the
+                // pro-rata survival ROZ and the finder receives rewardFind at
+                // claim time.
+                self
+                    ._moveShareToFinder(
+                        hiderGamerWalletAddress, finderGamerWalletAddress, gameWeek,
+                    );
+
                 assert(
                     self.total_reward_shares_for_hiders.read(gameWeek) > 0,
                     'no hiders in current game week',
                 );
+                assert(self.active_treasure_count.read() > 0, 'no active treasures');
 
                 //update the total number of hiders, for the current week
                 self
                     .total_reward_shares_for_hiders
                     .write(gameWeek, (self.total_reward_shares_for_hiders.read(gameWeek) - 1_u256));
+
+                let activeAfterFind: u256 = self.active_treasure_count.read() - 1;
+                self.active_treasure_count.write(activeAfterFind);
+                self
+                    .player_last_find_hops
+                    .write((gameWeek, finderGamerWalletAddress), checkHopCount);
+
+                self
+                    .emit(
+                        Event::TreasureFound(
+                            TreasureFound {
+                                finder: finderGamerWalletAddress,
+                                hider: hiderGamerWalletAddress,
+                                hopsTaken: checkHopCount - previousFindHops,
+                                roundId: gameWeek,
+                            },
+                        ),
+                    );
+
+                let startTs: u64 = self.round_start_ts.read();
+                if (activeAfterFind == 0
+                    && self.round_initial_active_count.read() > 0
+                    && now >= startTs
+                    + self.min_duration.read() && now < scheduledEndTs
+                    - self.near_end_blackout.read()) {
+                    self._endRound(END_REASON_ALL_FOUND);
+                }
 
                 return true;
             } else {
@@ -2791,6 +3041,7 @@ mod HelloStarknet {
         }
 
         fn finder_player_generate_position(ref self: ContractState) -> bool {
+            self._assertRoundAcceptsActions();
             let gamerWalletAddress = get_caller_address();
             let gameWeek = self.currentGameWeek.read();
 
@@ -2835,6 +3086,12 @@ mod HelloStarknet {
                 self._recordSpend(gamerWalletAddress, spawnNewPositionCost);
             }
 
+            self
+                .player_last_find_hops
+                .write(
+                    (gameWeek, gamerWalletAddress),
+                    self.player_hops.read((gameWeek, gamerWalletAddress)),
+                );
             self._spawnNewPosition(gamerWalletAddress, gameWeek);
 
             return true;
@@ -2886,8 +3143,7 @@ mod HelloStarknet {
                 contract_address: rewardTokenAddress,
             };
 
-            let transferResult: bool = reward_token_dispatcher
-                .transfer(gamerWalletAddress, owed);
+            let transferResult: bool = reward_token_dispatcher.transfer(gamerWalletAddress, owed);
 
             assert(transferResult == true, 'reward token not transferred');
 
@@ -3098,10 +3354,7 @@ mod HelloStarknet {
         //
         // Both bounds are INCLUSIVE.
         fn get_claimable_weeks(
-            self: @ContractState,
-            gamerWalletAddress: ContractAddress,
-            fromWeek: u256,
-            toWeek: u256,
+            self: @ContractState, gamerWalletAddress: ContractAddress, fromWeek: u256, toWeek: u256,
         ) -> Array<u256> {
             assert(fromWeek <= toWeek, 'bad week range');
 
@@ -3508,9 +3761,7 @@ mod HelloStarknet {
             ref self: ContractState, roundCap: u256, collectiveCap: u256, hourlyCap: u256,
         ) -> bool {
             self.ownable.assert_only_owner();
-            assert(
-                collectiveCap <= self.maxTreasuresPerRound.read(), 'group cap above round cap',
-            );
+            assert(collectiveCap <= self.maxTreasuresPerRound.read(), 'group cap above round cap');
             self.whitelistRoundCap.write(roundCap);
             self.whitelistCollectiveCap.write(collectiveCap);
             self.whitelistHourlyCap.write(hourlyCap);

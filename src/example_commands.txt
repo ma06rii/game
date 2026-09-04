@@ -13,3 +13,5 @@ sncast --account account_braavos deploy --class-hash 0x7a4c04589409fd53e43f233e7
 
 
 sncast --account account_braavos deploy --class-hash 0x2e03f023da03194d60e1d8a38bbd739b29528ee0e7f70d054be35291cad5a47 --arguments '0x01baad38bde8d3d60eebab5b96f72a297d52e6d1386bc3d4ec5344d9a30388bd, 0x0512feAc6339Ff7889822cb5aA2a86C848e9D392bB0E3E237C008674feeD8343, 0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b' --network sepolia
+
+sncast --account account_braavos deploy --class-hash 0x051de976192a752b2938d5efa71cace4cf97df4045baa9ad51dd3939d4e0aafb --arguments '<vrfProviderAddress: ContractAddress>, <gameTokenAddress: ContractAddress>, <rewardTokenAddress: ContractAddress>, <roundKeeperAddress: ContractAddress>' --network sepolia

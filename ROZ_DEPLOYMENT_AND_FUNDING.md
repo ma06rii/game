@@ -12,7 +12,7 @@ and how to run the tests, see `ROZ_IMPLEMENTATION_NOTES.md`.
 
 | Contract | Address |
 |---|---|
-| **Game** | `0x007030fb8aec5eb20ed893bb2147fefe0dd07b204d55be12fedf9ce4579f7a4f` |
+| **Game** | `0x01aff92bfd50b4953f8b53a95dee15065e89c44e1d98ab4f27d57b6587f1472b` |
 | **ROZ reward token** | `0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b` |
 | **USDC (game token)** | `0x0512feAc6339Ff7889822cb5aA2a86C848e9D392bB0E3E237C008674feeD8343` |
 | **VRF provider (mock)** | `0x01baad38bde8d3d60eebab5b96f72a297d52e6d1386bc3d4ec5344d9a30388bd` |
@@ -22,21 +22,24 @@ and how to run the tests, see `ROZ_IMPLEMENTATION_NOTES.md`.
 
 | Check | Result |
 |---|---|
-| Game contract runs the claim-view build | `get_claimable_weeks` answers `array![]` — the entrypoint exists on no earlier deployment |
+| Deployment identity | class `0x051de976…e0aafb`, block `14484189` |
+| Minimum rollover readiness | `get_min_treasures_to_start()` = `2` |
 | Game is wired to the token | `get_game_reward_token()` → `0x03a5c876…5d445b` |
 | Game is wired to USDC | `get_game_token()` → `0x0512feac…eed8343` |
 | Token identity | `symbol()` = `"ROZ"`, `decimals()` = 18 |
 | Total supply | 5,000,000,000 ROZ |
 | Owner balance | 5,000,000,000 ROZ — the whole supply |
-| **Game contract balance** | **0 ROZ, 0 USDC** — freshly deployed, `get_game_week()` is `0` |
+| **Game contract balance** | **0 ROZ, 0 USDC** — verified on 2026-09-03 |
+| Lifecycle after bootstrap expiry | round `0`, `ENDING`; round `1` did not open with zero staged treasures |
 
-### Three superseded game contracts
+### Superseded game contracts
 
 Newest first. **State never migrates between deployments** — each redeploy leaves
 its player money behind.
 
 | Address | Why it was replaced | Two-token sweep? |
 |---|---|---|
+| `0x00430dcb…fa83a` | no minimum-treasure rollover gate | **yes** |
 | `0x0771fdfb…cd834c` | no missed-ROZ ledger | **yes** |
 | `0x0783f240…d350a9` | no `get_reward_claimed` / `get_claimable_weeks` | **yes** |
 | `0x0407390e…c1e2e0` | predates the ROZ work entirely | **no** |
@@ -47,10 +50,9 @@ stakes are claimable only while the frontend still points there — settle or
 write them off before repointing. `0x0783f240…d350a9` holds $15.60 on the same
 footing, $15.00 of it owed.
 
-**The frontend still points at `0x0771fdfb…cd834c`**, the previous deployment —
-`controllerPolicies.js:18-19` and `Middle.vue:47`, which must stay in step with
-each other. Every earlier address sits commented out directly above the live one
-and is not a live reference.
+The frontend now uses one shared address source and points at the live deployment
+above. Superseded balances and claims do not migrate automatically; accessing a
+legacy claim still requires deliberately reconnecting to that old contract.
 
 ---
 
@@ -86,7 +88,7 @@ Year 1 is 17.1% of supply.
 sncast --account=account_braavos invoke \
   --contract-address 0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b \
   --function transfer \
-  --arguments '0x007030fb8aec5eb20ed893bb2147fefe0dd07b204d55be12fedf9ce4579f7a4f, 855000000000000000000000000' \
+  --arguments '0x01aff92bfd50b4953f8b53a95dee15065e89c44e1d98ab4f27d57b6587f1472b, 855000000000000000000000000' \
   --network sepolia \
   --dry-run
 
@@ -94,7 +96,7 @@ sncast --account=account_braavos invoke \
 sncast --account=account_braavos invoke \
   --contract-address 0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b \
   --function transfer \
-  --arguments '0x007030fb8aec5eb20ed893bb2147fefe0dd07b204d55be12fedf9ce4579f7a4f, 855000000000000000000000000' \
+  --arguments '0x01aff92bfd50b4953f8b53a95dee15065e89c44e1d98ab4f27d57b6587f1472b, 855000000000000000000000000' \
   --network sepolia
 ```
 
@@ -103,7 +105,7 @@ below 2¹²⁸ and so fits in one felt. `--arguments` takes it as a single value
 With `--calldata` you must pass both limbs yourself:
 
 ```bash
-  --calldata 0x007030fb8aec5eb20ed893bb2147fefe0dd07b204d55be12fedf9ce4579f7a4f \
+  --calldata 0x01aff92bfd50b4953f8b53a95dee15065e89c44e1d98ab4f27d57b6587f1472b \
              855000000000000000000000000 0
 ```
 
@@ -119,7 +121,7 @@ contracts worked over `--network sepolia`. If it does fail, substitute
 
 ```bash
 ROZ=0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b
-GAME=0x007030fb8aec5eb20ed893bb2147fefe0dd07b204d55be12fedf9ce4579f7a4f
+GAME=0x01aff92bfd50b4953f8b53a95dee15065e89c44e1d98ab4f27d57b6587f1472b
 OWNER=0x052a2b0b20d8796e57f0f00e99adfd61e0b40c4a49553d4197e4da6c1c023833
 
 # Game contract holds the tranche
@@ -218,16 +220,18 @@ sncast --account=account_braavos declare \
   --contract-name=HelloStarknet \
   --network=sepolia
 
-# 3. Deploy. Constructor order is (vrfProvider, gameToken, rewardToken).
+# 3. Deploy. Constructor order is (vrfProvider, gameToken, rewardToken,
+#    roundKeeper). The keeper is the only account allowed to validate finds,
+#    expire rounds and open the next round.
 CLASS_HASH=<paste from step 2>
 
 sncast --account=account_braavos deploy \
   --class-hash "$CLASS_HASH" \
-  --arguments '0x01baad38bde8d3d60eebab5b96f72a297d52e6d1386bc3d4ec5344d9a30388bd, 0x0512feac6339ff7889822cb5aa2a86c848e9d392bb0e3e237c008674feed8343, 0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b' \
+  --arguments '0x01baad38bde8d3d60eebab5b96f72a297d52e6d1386bc3d4ec5344d9a30388bd, 0x0512feac6339ff7889822cb5aa2a86c848e9d392bb0e3e237c008674feed8343, 0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b, <round-keeper-address>' \
   --network sepolia
 ```
 
-All three constructor arguments are plain `ContractAddress`, one felt each, so
+All four constructor arguments are plain `ContractAddress`, one felt each, so
 `--arguments` and `--constructor-calldata` are equivalent here. **The ROZ token
 does not change** — the same address is reused every time.
 
@@ -280,11 +284,11 @@ sncast call --contract-address $GAME --function owner                 --network 
    afterwards. Check with `get_sweepable_balance`; only the surplus above
    `total_usdc_claimable` is the owner's.
 2. Sweep whatever is left with `withdraw_token_balance(tokenAddress, receiver)`.
-3. **Repoint both frontend sites**, which must stay in step or every call falls
-   outside the session policy and the keychain prompts each time:
-   `controllerPolicies.js:18-19` and `Middle.vue:47`. **Leave the ROZ address at
-   `Middle.vue:52` alone** — it is correct and has never changed.
-4. `start_new_game` to open round 1 (§9 below).
+3. Repoint the shared frontend address source and `VITE_GAME_CONTRACT_ADDRESS`;
+   gameplay and Cartridge session policies both consume that source. Leave the
+   ROZ token address unchanged.
+4. Follow the coordinated round bootstrap in §9 to open round 1. The contract
+   starts with an empty round 0; do not call live actions with a round id.
 5. Update the address in the docs that carry it —
    `ROZ_DEPLOYMENT_AND_FUNDING.md`, `ROZ_IMPLEMENTATION_NOTES.md`,
    `FRONTEND_ROZ_CHANGES.md`, `FRONTEND_CLAIM_DEFECTS.md` and
@@ -299,53 +303,26 @@ separate decision, using §3 pointed at the new address.
 
 ## 9. Opening a round
 
-`start_new_game` is the only thing that advances the game week, and it takes **no
-week argument** — it reads the current week and adds one. Owner only.
+`start_next_round` is the only normal round-advancing call. It is keeper-only,
+takes one `NextRoundParams` struct, derives `currentGameWeek + 1` inside the
+contract, and can run only after the current round emitted `RoundEnded` and its
+end buffer elapsed. The expected treasure count and hidden value are assertions
+against the contract's staged facts; they are never writes.
 
-**The seventh argument is a trap.** `totalNumberOfHidersFromThePreviousWeek` is
-misnamed: `_createNewGame` writes it straight into
-`total_reward_shares_for_hiders[newWeek]`, the live counter every hide
-increments. Because hides credit `currentGameWeek + 1`, the round being opened
-may **already hold real shares**.
+The AWS `StartNextRound` Lambda reads `CONFIG#FEES` and `CONFIG#ROUND`, queries
+the staged `Game#Room0#Week<N>` rows, computes the Merkle root/grid/coordinates,
+checks `get_next_round_totals()`, and submits the struct. There is no public API
+for this call and no repeating six-hour cron. The constructor's empty round 0
+is allowed to run its timer once. After that expiry, round 0 remains `ENDING`
+until at least two treasures are staged for round 1. Every later rollover has
+the same minimum; `start_next_round` enforces it on-chain, and the Lambda avoids
+loading the signer or submitting a transaction while the DynamoDB count is
+below it. Hides remain available during `ENDING`, and each accepted hide event
+retries the normal start flow so the round opens automatically once the minimum
+and buffer are both satisfied.
 
-**Read the counter first and pass what it already says**, so the write is a
-no-op:
-
-```bash
-sncast call --contract-address $GAME --function get_total_number_of_hiders \
-  --calldata <currentWeek + 1> 0 --network sepolia
-```
-
-Passing a smaller number destroys the count of treasures that exist, and
-`_removeGamerReward` asserts the counter is `> 0` before decrementing — so a
-finder taking one of those treasures would revert.
-
-```bash
-# 14 felts. Replays the deploy values; the 3 marked ** is the counter read above.
-sncast --account=account_braavos invoke \
-  --contract-address $GAME \
-  --function start_new_game \
-  --calldata \
-    0x92fe3fb625937ab468940c4c58966849 0xbc19a39ffdeb3ff487a290fd65626b95 \
-    100000 0 \
-    5000000 0 \
-    1000000 0 \
-    14 \
-    14 \
-    0 0 \
-    0 0 \
-  --network sepolia
-```
-
-**Use `--calldata`, not `--arguments`.** The merkle root is larger than the
-felt252 field, so it exists only as a u256 low/high pair — unlike the funding
-amount in §3, which fits in one felt.
-
-Order of the 14 felts: root (2, **low first**), finder (2), hider (2), spawn (2),
-gridX (**1**), gridY (**1**), hiders (2), value (2). **`gameGridSizeX` and
-`gameGridSizeY` are `u128`** — one felt each while everything around them takes
-two, which is the mistake `FIX_CLAIM_REWARDS.md` already records.
-
-**Two calls are needed before a hide is claimable.** A hide made during week `K`
-credits week `K+1`, and `_claimReward` requires `week < currentGameWeek`. The
-eighth argument feeds `game_totals`, which nothing but its own getter reads.
+The serialized struct contains (in declaration order): Merkle root, grid X/Y,
+expected active count/value, hider stake, hide fee base/high, four hop prices,
+spawn fee, round duration, minimum duration, blackout and end buffer. Use the
+ABI-generated struct serializer; do not hand-copy the retired positional
+`start_new_game` calldata.

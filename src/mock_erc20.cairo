@@ -17,7 +17,6 @@
 pub trait IMockERC20<TContractState> {
     fn mint(ref self: TContractState, recipient: ContractAddress, amount: u256);
 }
-
 use starknet::ContractAddress;
 
 #[starknet::contract]

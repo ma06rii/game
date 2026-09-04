@@ -1,25 +1,24 @@
-use project_name::{
-    IHelloStarknetDispatcher, IHelloStarknetDispatcherTrait, IHelloStarknetSafeDispatcher,
-    IHelloStarknetSafeDispatcherTrait,
-};
 // DeclareResultTrait is what exposes contract_class() on the DeclareResult that
 // declare() returns from snforge_std v0.62 onward.
 use core::hash::{HashStateExTrait, HashStateTrait};
 use core::poseidon::PoseidonTrait;
 use openzeppelin::token::erc20::interface::{ERC20ABIDispatcher, ERC20ABIDispatcherTrait};
 use project_name::mock_erc20::{IMockERC20Dispatcher, IMockERC20DispatcherTrait};
+use project_name::{
+    IHelloStarknetDispatcher, IHelloStarknetDispatcherTrait, IHelloStarknetSafeDispatcher,
+    IHelloStarknetSafeDispatcherTrait, NextRoundParams,
+};
 use snforge_std::{
-    ContractClassTrait, DeclareResultTrait, EventSpyTrait, EventsFilterTrait, declare,
-    spy_events, start_cheat_caller_address, stop_cheat_caller_address,
+    ContractClassTrait, DeclareResultTrait, EventSpyTrait, EventsFilterTrait, declare, spy_events,
+    start_cheat_block_timestamp, start_cheat_caller_address, stop_cheat_caller_address,
 };
 use starknet::class_hash::class_hash_const;
 use starknet::{ContractAddress, contract_address_const, get_caller_address, get_contract_address};
 
-// The game contract's constructor takes the VRF provider address, the game token
-// address and the ROZ reward token address, so all three have to be serialised
-// into the deploy calldata here, IN THAT ORDER. Tests exercise neither
-// randomness nor token transfers, so any non-zero addresses would do; the real
-// ones are used because they are the meaningful defaults.
+// The game contract's constructor takes the VRF provider, game token, ROZ
+// reward token and round-keeper addresses. Tests exercise neither randomness
+// nor token transfers, so any non-zero addresses would do; the real ones are
+// used because they are the meaningful defaults.
 fn deploy_contract(name: ByteArray) -> ContractAddress {
     // declare() returns a DeclareResult from snforge_std v0.62 onward, so the
     // ContractClass has to be taken out of it before deploy() can be called.
@@ -52,6 +51,13 @@ fn deploy_contract(name: ByteArray) -> ContractAddress {
     constructorCalldata.append(vrfProviderAddress.into());
     constructorCalldata.append(gameTokenAddress.into());
     constructorCalldata.append(rewardTokenAddress.into());
+    constructorCalldata
+        .append(
+            contract_address_const::<
+                0x052a2b0b20d8796e57f0f00e99adfd61e0b40c4a49553d4197e4da6c1c023833,
+            >()
+                .into(),
+        );
 
     let (contract_address, _) = contract.deploy(@constructorCalldata).unwrap();
     contract_address
@@ -746,6 +752,13 @@ fn deploy_wired_with_roz(
     constructorCalldata.append(vrfProviderAddress.into());
     constructorCalldata.append(gameToken.into());
     constructorCalldata.append(rewardToken.into());
+    constructorCalldata
+        .append(
+            contract_address_const::<
+                0x052a2b0b20d8796e57f0f00e99adfd61e0b40c4a49553d4197e4da6c1c023833,
+            >()
+                .into(),
+        );
 
     let (game, _) = contract.deploy(@constructorCalldata).unwrap();
 
@@ -1817,18 +1830,21 @@ fn test_sweep_leaves_what_players_are_owed() {
     // Everything above the accrued balance, and not a unit more.
     assert(dispatcher.get_sweepable_balance(rewardToken) == heldRoz - owedRoz, 'roz surplus wrong');
 
-    // The $5 stake is still claimable by the hider, so it is not sweepable.
-    // Only the $0.20 fee is the house's.
+    // The net claim is reserved. The $0.20 protocol fee plus the snapshotted
+    // per-treasure deductions are immediately surplus.
     let heldUsdc = ERC20ABIDispatcher { contract_address: gameToken }.balance_of(game);
     assert(heldUsdc == STAKE + FEE_BASE, 'contract should hold 5.20');
-    assert(dispatcher.get_sweepable_balance(gameToken) == FEE_BASE, 'only the fee is sweepable');
+    assert(
+        dispatcher.get_sweepable_balance(gameToken) == FEE_BASE + 12833,
+        'fee and deductions sweepable',
+    );
 }
 
 // ---------------------------------------------------------------------------
 // CLAIM DISCOVERY - get_reward_claimed and get_claimable_weeks
 // ---------------------------------------------------------------------------
 
-// Open the next round as the owner.
+// Open the next round as the keeper.
 //
 // THE WEEK ARITHMETIC IS THE TRAP IN EVERY TEST BELOW. _hideTreasure credits
 // currentGameWeek + 1 ("hide treasure for the week upcoming"), while
@@ -1840,35 +1856,205 @@ fn test_sweep_leaves_what_players_are_owed() {
 // what a claim is later paid from. The merkle root is a placeholder: nothing on
 // the claim path reads it.
 //
-// totalNumberOfHidersFromThePreviousWeek is passed as 0 rather than the
-// constructor's 3 deliberately. That argument overwrites
-// total_reward_shares_for_hiders for the round being opened - a slot hides have
-// ALREADY written to, because they credit a week ahead. Zero keeps these tests
-// measuring claim discovery rather than that interaction.
+// Count and value are read back from the contract and passed as assertions.
+// start_next_round must never use those inputs to rewrite the live staged slots.
+fn round_params(activeCount: u256, hiddenValue: u256, hiderStake: u256) -> NextRoundParams {
+    round_params_with_root(activeCount, hiddenValue, hiderStake, 0x1234)
+}
+
+fn round_params_with_root(
+    activeCount: u256, hiddenValue: u256, hiderStake: u256, merkleRoot: u256,
+) -> NextRoundParams {
+    NextRoundParams {
+        merkle_root: merkleRoot,
+        grid_size_x: 14,
+        grid_size_y: 14,
+        expected_active_treasure_count: activeCount,
+        expected_total_hidden_value: hiddenValue,
+        hider_stake: hiderStake,
+        hide_fee_base: FEE_BASE,
+        hide_fee_high: FEE_HIGH,
+        hop_price_0: 5000,
+        hop_price_1: 10000,
+        hop_price_2: 20000,
+        hop_price_3: 40000,
+        spawn_fee: 1000000,
+        round_duration: 21600,
+        min_duration: 2700,
+        near_end_blackout: 720,
+        end_buffer: 180,
+    }
+}
+
+// Older claim/find fixtures deliberately opened empty or one-treasure rounds.
+// Keep their subject player at one share, but stage any missing capacity with a
+// separate wallet so every rollover exercises the production minimum.
+fn ensure_minimum_staged(game: ContractAddress) {
+    let dispatcher = IHelloStarknetDispatcher { contract_address: game };
+    let (stagedCount, _) = dispatcher.get_next_round_totals();
+    if (stagedCount >= dispatcher.get_min_treasures_to_start()) {
+        return;
+    }
+
+    let filler: ContractAddress = contract_address_const::<0xf111e>();
+    let missing = dispatcher.get_min_treasures_to_start() - stagedCount;
+    let gameToken = dispatcher.get_game_token();
+    fund_player(gameToken, game, filler, missing * (STAKE + FEE_HIGH));
+
+    start_cheat_caller_address(game, filler);
+    if (missing == 1) {
+        dispatcher.hide_treasure();
+    } else {
+        dispatcher.hide_treasure_bulk(STAKE * missing, array![], 0);
+    }
+    stop_cheat_caller_address(game);
+}
+
+fn advance_round_with_root(game: ContractAddress, merkleRoot: u256) {
+    let dispatcher = IHelloStarknetDispatcher { contract_address: game };
+    let keeper = dispatcher.get_round_keeper();
+    ensure_minimum_staged(game);
+    let (_, _, _, scheduledEndTs, _, _, _, _) = dispatcher.get_round_status();
+
+    start_cheat_block_timestamp(game, scheduledEndTs + 60);
+    start_cheat_caller_address(game, keeper);
+    dispatcher.expire_round(dispatcher.get_game_week());
+    stop_cheat_caller_address(game);
+
+    let (_, _, _, _, endedTs, _, _, endBuffer) = dispatcher.get_round_status();
+    let (activeCount, hiddenValue) = dispatcher.get_next_round_totals();
+    start_cheat_block_timestamp(game, endedTs + endBuffer);
+    start_cheat_caller_address(game, keeper);
+    dispatcher
+        .start_next_round(
+            round_params_with_root(activeCount, hiddenValue, STAKE, merkleRoot),
+        );
+    stop_cheat_caller_address(game);
+}
+
 fn advance_round_with_hider_fee(game: ContractAddress, hiderFee: u256) {
     let owner: ContractAddress = contract_address_const::<
         0x052a2b0b20d8796e57f0f00e99adfd61e0b40c4a49553d4197e4da6c1c023833,
     >();
 
     let dispatcher = IHelloStarknetDispatcher { contract_address: game };
+    ensure_minimum_staged(game);
+    let (_, _, _, scheduledEndTs, _, _, _, _) = dispatcher.get_round_status();
+
+    // Expiry runs after the 60-second validation grace. The next round may
+    // only open after the on-chain buffer has elapsed.
+    start_cheat_block_timestamp(game, scheduledEndTs + 60);
+    start_cheat_caller_address(game, owner);
+    dispatcher.expire_round(dispatcher.get_game_week());
+    stop_cheat_caller_address(game);
+
+    let (_, _, _, _, endedTs, _, _, _) = dispatcher.get_round_status();
+    let (activeCount, hiddenValue) = dispatcher.get_next_round_totals();
+    start_cheat_block_timestamp(game, endedTs + 180);
 
     start_cheat_caller_address(game, owner);
-    dispatcher
-        .start_new_game(
-            0x1234, // root - unread by anything on the claim path
-            100000, // $0.10 finder fee, as deployed
-            hiderFee,
-            1000000, // $1.00 spawn fee, as deployed
-            14,
-            14,
-            0, // see the note above
-            0,
-        );
+    dispatcher.start_next_round(round_params(activeCount, hiddenValue, hiderFee));
     stop_cheat_caller_address(game);
 }
 
 fn advance_round(game: ContractAddress) {
     advance_round_with_hider_fee(game, STAKE);
+}
+
+// A successful find moves both representations of the treasure share. The
+// aggregate count pays the same net USDC stake as before; the typed count is
+// what turns the claim-time ROZ leg into the full finder reward.
+#[test]
+fn test_find_moves_usdc_and_typed_reward_share() {
+    let hider: ContractAddress = contract_address_const::<0xa11ce>();
+    let finder: ContractAddress = contract_address_const::<0xb0b>();
+    let leaf: u256 = 0xfeed;
+    let (game, _, _) = deploy_wired(hider, 100000000);
+    let dispatcher = IHelloStarknetDispatcher { contract_address: game };
+
+    start_cheat_caller_address(game, hider);
+    dispatcher.hide_treasure();
+    stop_cheat_caller_address(game);
+
+    advance_round_with_root(game, leaf);
+    let round = dispatcher.get_game_week();
+    let (_, _, startTs, _, _, activeBefore, _, _) = dispatcher.get_round_status();
+    assert(round == 1, 'find round should be 1');
+    assert(activeBefore == 2, 'expected two treasures');
+    assert(dispatcher.get_claim_share_amounts(round, hider) == 1, 'hider aggregate missing');
+
+    let (hiderSharesBefore, finderSharesBefore, survivalBefore) = dispatcher
+        .get_reward_token_due(hider, round);
+    assert(hiderSharesBefore == 1, 'hider typed share missing');
+    assert(finderSharesBefore == 0, 'unexpected finder share');
+    assert(survivalBefore > 0, 'survival ROZ missing');
+
+    let keeper = dispatcher.get_round_keeper();
+    start_cheat_caller_address(game, keeper);
+    let found = dispatcher
+        .validate_treasure_coordinates(finder, hider, leaf, array![], 0, startTs);
+    stop_cheat_caller_address(game);
+    assert(found, 'treasure should validate');
+
+    assert(dispatcher.get_claim_share_amounts(round, hider) == 0, 'hider aggregate not removed');
+    assert(dispatcher.get_claim_share_amounts(round, finder) == 1, 'finder aggregate not credited');
+
+    let (hiderSharesAfter, _, survivalAfter) = dispatcher.get_reward_token_due(hider, round);
+    let (_, finderSharesAfter, _) = dispatcher.get_reward_token_due(finder, round);
+    assert(hiderSharesAfter == 0, 'hider typed share not removed');
+    assert(survivalAfter == 0, 'survival ROZ retained');
+    assert(finderSharesAfter == 1, 'finder typed share not credited');
+
+    let (_, _, _, _, _, activeAfter, _, _) = dispatcher.get_round_status();
+    assert(activeAfter == 1, 'active count not reduced');
+
+    // Finish round 1 and open round 2 so its reward can be collected.
+    advance_round(game);
+    start_cheat_caller_address(game, finder);
+    dispatcher.claim_reward(round);
+    stop_cheat_caller_address(game);
+    assert(
+        dispatcher.get_reward_token_pending(finder) == 110000000000000000000,
+        'finder should receive 110 ROZ',
+    );
+}
+
+// The deployed class allowed the supplied test wallet to find its own staged
+// treasure. That contradicts the reward economics and must fail before any
+// coordinate, share or active-count mutation occurs.
+#[test]
+#[feature("safe_dispatcher")]
+fn test_finder_cannot_find_own_treasure() {
+    let player: ContractAddress = contract_address_const::<0xcafe>();
+    let leaf: u256 = 0xbeef;
+    let (game, _, _) = deploy_wired(player, 100000000);
+    let dispatcher = IHelloStarknetDispatcher { contract_address: game };
+    let safe = IHelloStarknetSafeDispatcher { contract_address: game };
+
+    start_cheat_caller_address(game, player);
+    dispatcher.hide_treasure();
+    dispatcher.hide_treasure();
+    stop_cheat_caller_address(game);
+    advance_round_with_root(game, leaf);
+
+    let round = dispatcher.get_game_week();
+    let (_, _, startTs, _, _, activeBefore, _, _) = dispatcher.get_round_status();
+    let aggregateBefore = dispatcher.get_claim_share_amounts(round, player);
+    let typedBefore = dispatcher.get_reward_token_due(player, round);
+
+    start_cheat_caller_address(game, dispatcher.get_round_keeper());
+    let attempt = safe
+        .validate_treasure_coordinates(player, player, leaf, array![], 0, startTs);
+    stop_cheat_caller_address(game);
+
+    assert(attempt.is_err(), 'self-find must revert');
+    assert(
+        dispatcher.get_claim_share_amounts(round, player) == aggregateBefore,
+        'aggregate changed',
+    );
+    assert(dispatcher.get_reward_token_due(player, round) == typedBefore, 'typed shares changed');
+    let (_, _, _, _, _, activeAfter, _, _) = dispatcher.get_round_status();
+    assert(activeAfter == activeBefore, 'active count changed');
 }
 
 // TEST 1 - the flag flips, and it is visible.
@@ -1977,49 +2163,172 @@ fn test_claimable_weeks_empty_for_a_wallet_with_no_shares() {
     assert(dispatcher.get_claimable_weeks(stranger, 0, 8).len() == 0, 'stranger has none');
 }
 
-// TEST 5 - THE REGRESSION _isRewardClaimable EXISTS TO PREVENT.
-//
-// _calculateRewardDue ASSERTS the hider fee exceeds the three deductions. Reach
-// it through _playerRewardDue on a round funded below that line and the call
-// reverts - which in a scan would destroy the answer for every other week in
-// the range, not just the bad one.
-//
-// Here week 2 is funded by week 1's hider fee of $0.001, far under the $0.012833
-// of deductions. get_player_reward_due(2) therefore reverts, and the scan across
-// it must still come back with week 1.
+// A round can no longer be opened with a stake below its deductions. Rejection
+// happens before any staged count/value is touched.
 #[test]
 #[feature("safe_dispatcher")]
-fn test_claimable_weeks_survives_a_round_funded_below_its_fees() {
+fn test_round_rejects_stake_below_deductions_without_losing_staged_totals() {
     let player: ContractAddress = contract_address_const::<0xf00d>();
     let (game, _, _) = deploy_wired(player, 100000000);
     let dispatcher = IHelloStarknetDispatcher { contract_address: game };
     let safe = IHelloStarknetSafeDispatcher { contract_address: game };
+    let keeper = dispatcher.get_round_keeper();
 
-    // Week 1 gets a normal share, funded by the constructor's $5.00.
     start_cheat_caller_address(game, player);
+    dispatcher.hide_treasure();
     dispatcher.hide_treasure();
     stop_cheat_caller_address(game);
 
-    // Open week 1 with a hider fee UNDER the deductions.
-    advance_round_with_hider_fee(game, 1000);
-
-    // This hide credits week 2, whose funding week is now that $0.001 round.
-    start_cheat_caller_address(game, player);
-    dispatcher.hide_treasure();
+    let (_, _, _, scheduledEndTs, _, _, _, _) = dispatcher.get_round_status();
+    start_cheat_block_timestamp(game, scheduledEndTs + 60);
+    start_cheat_caller_address(game, keeper);
+    dispatcher.expire_round(0);
     stop_cheat_caller_address(game);
 
-    // Carry on so both week 1 and week 2 are finished.
-    advance_round(game);
-    advance_round(game);
+    let (_, _, _, _, endedTs, _, _, _) = dispatcher.get_round_status();
+    start_cheat_block_timestamp(game, endedTs + 180);
+    start_cheat_caller_address(game, keeper);
+    let attempt = safe.start_next_round(round_params(2, STAKE * 2, 1000));
+    stop_cheat_caller_address(game);
 
-    // The single-week getter reverts on week 2, exactly as documented.
-    let probe = safe.get_player_reward_due(2, player);
-    assert(probe.is_err(), 'week 2 must revert');
+    assert(attempt.is_err(), 'unsafe stake must fail');
+    assert(dispatcher.get_game_week() == 0, 'round must not advance');
+    assert(dispatcher.get_next_round_totals() == (2, STAKE * 2), 'staged totals preserved');
+}
 
-    // The scan spans it anyway, and still reports the round that is good.
-    let weeks = dispatcher.get_claimable_weeks(player, 0, 8);
-    assert(weeks.len() == 1, 'bad round must not kill scan');
-    assert(*weeks.at(0) == 1_u256, 'week 1 survives');
+// Regression for the original rollover defect: the count that gates finds was
+// already populated by hides and the retired round-opening call used to overwrite it from an
+// argument. The replacement treats count/value inputs as assertions only.
+#[test]
+fn test_start_next_round_preserves_the_live_staged_count() {
+    let player: ContractAddress = contract_address_const::<0xf11d>();
+    let (game, _, _) = deploy_wired(player, 100000000);
+    let dispatcher = IHelloStarknetDispatcher { contract_address: game };
+    let keeper = dispatcher.get_round_keeper();
+
+    start_cheat_caller_address(game, player);
+    dispatcher.hide_treasure();
+    dispatcher.hide_treasure();
+    stop_cheat_caller_address(game);
+    assert(dispatcher.get_next_round_totals() == (2, STAKE * 2), 'hides must stage two');
+
+    let (_, _, _, scheduledEndTs, _, _, _, _) = dispatcher.get_round_status();
+    start_cheat_block_timestamp(game, scheduledEndTs + 60);
+    start_cheat_caller_address(game, keeper);
+    dispatcher.expire_round(0);
+    stop_cheat_caller_address(game);
+
+    let (_, stateBefore, _, _, endedTs, _, _, endBuffer) = dispatcher.get_round_status();
+    assert(stateBefore == 1_u8, 'round must be ending');
+    start_cheat_block_timestamp(game, endedTs + endBuffer);
+    start_cheat_caller_address(game, keeper);
+    dispatcher.start_next_round(round_params(2, STAKE * 2, STAKE));
+    stop_cheat_caller_address(game);
+
+    let (roundId, stateAfter, _, _, _, active, initial, _) = dispatcher.get_round_status();
+    assert(roundId == 1_u256, 'round increments');
+    assert(stateAfter == 0_u8, 'new round must be open');
+    assert(active == 2_u256 && initial == 2_u256, 'active count survives');
+    assert(dispatcher.get_total_number_of_hiders(1) == 2, 'find gate count must survive');
+}
+
+// Round zero is the only deliberately empty round. Every keeper-opened round
+// must contain at least two staged treasures, even when the supplied count and
+// value correctly match the contract's zero/one totals.
+#[test]
+#[feature("safe_dispatcher")]
+fn test_start_next_round_rejects_zero_and_one_staged_treasure() {
+    let player: ContractAddress = contract_address_const::<0xf12d>();
+    let (emptyGame, _, _) = deploy_wired(player, 100000000);
+    let empty = IHelloStarknetDispatcher { contract_address: emptyGame };
+    let emptySafe = IHelloStarknetSafeDispatcher { contract_address: emptyGame };
+    let emptyKeeper = empty.get_round_keeper();
+    let (_, _, _, emptyScheduledEnd, _, _, _, _) = empty.get_round_status();
+
+    start_cheat_block_timestamp(emptyGame, emptyScheduledEnd + 60);
+    start_cheat_caller_address(emptyGame, emptyKeeper);
+    empty.expire_round(0);
+    stop_cheat_caller_address(emptyGame);
+    let (_, _, _, _, emptyEndedTs, _, _, emptyBuffer) = empty.get_round_status();
+    start_cheat_block_timestamp(emptyGame, emptyEndedTs + emptyBuffer);
+    start_cheat_caller_address(emptyGame, emptyKeeper);
+    let emptyAttempt = emptySafe.start_next_round(round_params(0, 0, STAKE));
+    stop_cheat_caller_address(emptyGame);
+    assert(emptyAttempt.is_err(), 'zero staged treasures must fail');
+    let (emptyRound, emptyState, _, _, _, _, _, _) = empty.get_round_status();
+    assert(emptyRound == 0 && emptyState == 1_u8, 'empty game must keep waiting');
+
+    let (oneGame, _, _) = deploy_wired(player, 100000000);
+    let one = IHelloStarknetDispatcher { contract_address: oneGame };
+    let oneSafe = IHelloStarknetSafeDispatcher { contract_address: oneGame };
+    start_cheat_caller_address(oneGame, player);
+    one.hide_treasure();
+    stop_cheat_caller_address(oneGame);
+    let (_, _, _, oneScheduledEnd, _, _, _, _) = one.get_round_status();
+    start_cheat_block_timestamp(oneGame, oneScheduledEnd + 60);
+    start_cheat_caller_address(oneGame, one.get_round_keeper());
+    one.expire_round(0);
+    stop_cheat_caller_address(oneGame);
+    let (_, _, _, _, oneEndedTs, _, _, oneBuffer) = one.get_round_status();
+    start_cheat_block_timestamp(oneGame, oneEndedTs + oneBuffer);
+    start_cheat_caller_address(oneGame, one.get_round_keeper());
+    let oneAttempt = oneSafe.start_next_round(round_params(1, STAKE, STAKE));
+    stop_cheat_caller_address(oneGame);
+    assert(oneAttempt.is_err(), 'one staged treasure must fail');
+    assert(one.get_next_round_totals() == (1, STAKE), 'one staged treasure was changed');
+}
+
+#[test]
+#[feature("safe_dispatcher")]
+fn test_ending_round_accepts_hides_and_opens_at_exact_minimum() {
+    let player: ContractAddress = contract_address_const::<0xf13d>();
+    let (game, _, _) = deploy_wired(player, 100000000);
+    let dispatcher = IHelloStarknetDispatcher { contract_address: game };
+    let safe = IHelloStarknetSafeDispatcher { contract_address: game };
+    let (_, _, _, scheduledEnd, _, _, _, _) = dispatcher.get_round_status();
+
+    start_cheat_block_timestamp(game, scheduledEnd + 60);
+    start_cheat_caller_address(game, dispatcher.get_round_keeper());
+    dispatcher.expire_round(0);
+    stop_cheat_caller_address(game);
+
+    start_cheat_caller_address(game, player);
+    dispatcher.hide_treasure();
+    dispatcher.hide_treasure();
+    let movementAttempt = safe.finder_player_move_position(0);
+    stop_cheat_caller_address(game);
+
+    assert(movementAttempt.is_err(), 'search open while ending');
+    assert(dispatcher.get_min_treasures_to_start() == 2, 'minimum must be two');
+    assert(dispatcher.get_next_round_totals() == (2, STAKE * 2), 'ending hides not staged');
+
+    let (_, _, _, _, endedTs, _, _, endBuffer) = dispatcher.get_round_status();
+    start_cheat_block_timestamp(game, endedTs + endBuffer);
+    start_cheat_caller_address(game, dispatcher.get_round_keeper());
+    dispatcher.start_next_round(round_params(2, STAKE * 2, STAKE));
+    stop_cheat_caller_address(game);
+
+    let (roundId, state, _, _, _, active, initial, _) = dispatcher.get_round_status();
+    assert(roundId == 1 && state == 0_u8, 'round one did not open');
+    assert(active == 2 && initial == 2, 'wrong round one count');
+}
+
+#[test]
+fn test_stale_expiry_cannot_end_the_current_round() {
+    let player: ContractAddress = contract_address_const::<0xf22d>();
+    let (game, _, _) = deploy_wired(player, 100000000);
+    let dispatcher = IHelloStarknetDispatcher { contract_address: game };
+    let keeper = dispatcher.get_round_keeper();
+    let (_, _, _, scheduledEndTs, _, _, _, _) = dispatcher.get_round_status();
+
+    start_cheat_block_timestamp(game, scheduledEndTs + 600);
+    start_cheat_caller_address(game, keeper);
+    let ended = dispatcher.expire_round(99);
+    stop_cheat_caller_address(game);
+
+    let (roundId, state, _, _, endedTs, _, _, _) = dispatcher.get_round_status();
+    assert(ended == false, 'stale expiry must be a no-op');
+    assert(roundId == 0 && state == 0_u8 && endedTs == 0, 'current round must stay open');
 }
 
 // TEST 6 - bounds.

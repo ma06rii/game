@@ -87,14 +87,20 @@ use openzeppelin::upgrades::interface::IUpgradeable;
 
 Two signatures changed. Any existing script calling them will fail.
 
-**The constructor takes a third argument.**
+**The constructor takes a fourth argument.**
 
 ```cairo
-constructor(vrfProviderAddress, gameTokenAddress, rewardTokenAddress)
+constructor(vrfProviderAddress, gameTokenAddress, rewardTokenAddress, roundKeeperAddress)
 ```
 
-§5 phase 2 already documents three, so the plan and the code agree — but a
-two-argument deploy script does not.
+The fourth address is the dedicated keeper used by expiry, validation and
+round-opening calls. The owner can rotate it with `update_round_keeper`; it is
+not the deployer by default.
+
+**`start_next_round` replaces `start_new_game`.** It accepts one serialized
+`NextRoundParams` value, derives the next round id in the contract and validates
+the staged count/value rather than overwriting those live counters. Live play
+entrypoints do not accept a round id.
 
 **`withdraw_token_balance` takes the token first.**
 
