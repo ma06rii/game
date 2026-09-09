@@ -1,73 +1,253 @@
-# Realm of Zee treasure game contract
+# Realm of Zee game contracts
 
-Cairo/Starknet contract for the Realm of Zee treasure hunt. Treasures hidden
-during round `N` are staged for round `N + 1`; the contract is the source of
-truth for that staged count and value.
+Cairo contracts for the Realm of Zee Starknet treasure hunt. This repository
+defines the authoritative round state, player actions, USDC accounting, ROZ
+rewards, priority-hider Merkle root, and lifecycle events consumed by the
+off-chain services.
 
-## Round lifecycle
+```text
+Player transaction -> game contract -> Starknet event -> Apibara indexer
+                                            |                 |
+                                            |                 v
+                                    contract state      AWS ingestion API
+                                                              |
+                                                              v
+                                                   DynamoDB + Pusher + keeper
+```
 
-The contract starts with an empty round 0. Live play functions derive the
-current round internally and accept no round id. Movement, spawning, and finds
-are available only while the round is `OPEN` and before its scheduled end.
-Hides stage the next round, so they remain available while the current round is
-`ENDING`.
+The other application repositories are:
 
-Round 0 is a deployment bootstrap: it is allowed to remain open while Week 1
-hides are staged. The keeper's normal one-time expiry moves it to `ENDING`
-after its timer. Round 1 opens after the buffer only when at least two treasures
-have been staged; otherwise the contract waits in `ENDING` and accepts more
-hides. No later round can open empty or with only one treasure.
+- `game_frontend`: Vue player interface and wallet sessions.
+- `new_apibara_indexers`: Starknet event delivery and block checkpoints.
+- `new_roz_aws`: APIs, DynamoDB, leaderboards, notifications, and round keeper.
 
-- `hide_treasure` / `hide_treasure_bulk` stage next-round treasures.
-- `finder_player_generate_position` and `finder_player_move_position` operate
-  only on the current open round.
-- A successful keeper validation emits `TreasureFound` with the hop delta and
-  can end a non-empty round after its minimum duration when active count reaches
-  zero.
-- `expire_round(expectedRound)` is keeper-only. A stale expected round is a
-  harmless no-op; time expiry is accepted after the 60-second validation grace.
-- `start_next_round(params)` is keeper-only, requires `ENDING` plus the stored
-  end buffer and at least two staged treasures, checks the supplied expected
-  count/value against staged contract facts, and increments the round
-  internally.
+## Current shared-dev deployment
 
-`start_next_round` writes only the new round configuration. It never overwrites
-`total_reward_shares_for_hiders` or `game_totals`; those slots were already
-populated by real hides. This is the regression protected by
-`test_start_next_round_preserves_the_live_staged_count`.
+This is the canonical public snapshot for the current Sepolia deployment. Keep
+[`new_addresses.txt`](new_addresses.txt) and this table synchronized whenever
+the contract is replaced; other repositories should obtain their live values
+from Doppler or deployment outputs instead of copying a second snapshot.
 
-## Configuration and accounting
+| Item | Value |
+| --- | --- |
+| Game contract | `0x01aff92bfd50b4953f8b53a95dee15065e89c44e1d98ab4f27d57b6587f1472b` |
+| Game class hash | `0x051de976192a752b2938d5efa71cace4cf97df4045baa9ad51dd3939d4e0aafb` |
+| Deployment block | `14484189` |
+| Sepolia USDC | `0x0512feac6339ff7889822cb5aa2a86c848e9d392bb0e3e237c008674feed8343` |
+| ROZ reward token | `0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b` |
+| Test VRF provider | `0x01baad38bde8d3d60eebab5b96f72a297d52e6d1386bc3d4ec5344d9a30388bd` |
+| Owner | `0x052a2b0b20d8796e57f0f00e99adfd61e0b40c4a49553d4197e4da6c1c023833` |
 
-Each new round snapshots its stake, hide fees, tiered hop prices, spawn fee,
-grid, Merkle root and timing. Fee ceilings and timing relationships are checked
-on-chain. The hider's eventual net USDC claim value is snapshotted when the
-stake is charged, so later fee changes cannot reprice an old claim.
+The test VRF provider is Sepolia-only. Do not deploy or configure it on
+mainnet. Operational balances and historical deployments are documented in
+[`ROZ_DEPLOYMENT_AND_FUNDING.md`](ROZ_DEPLOYMENT_AND_FUNDING.md).
 
-The fourth constructor argument is the dedicated round keeper address. The
-owner can rotate it with `update_round_keeper`; lifecycle calls are not exposed
-to ordinary players.
+## Prerequisites
 
-## Events used off-chain
+The currently tested toolchain is:
 
-- `TreasureHidden` feeds coordinate staging.
-- `CheckForTreasure` feeds keeper validation and includes the player's current
-  round hop count.
-- `TreasureFound` records successful-find hop deltas for density control.
-- `RoundStarted` records official round fees, timing, grid and active count.
-- `RoundEnded` records the end reason and found/surviving counts.
+- Scarb and Cairo `2.20.0`.
+- Starknet Foundry (`snforge` and `sncast`) `0.62.1`.
+- A funded Starknet account configured in `sncast` for network deployment.
 
-After every deployment, derive the event selectors from the built ABI and
-update the dev indexer configuration together with the contract address and
-deployment block.
+The manifest pins the matching Cairo, OpenZeppelin, and `snforge_std`
+dependencies. Confirm your installation before working on the contract:
 
-## Development
+```bash
+scarb --version
+snforge --version
+sncast --version
+sncast account list
+```
+
+No environment file is required for local compilation or tests. RPC URLs and
+account credentials used for deployment must stay in the `sncast` account
+configuration or the operator's environment; never commit private keys or RPC
+API keys.
+
+## Build and test
+
+From this repository:
 
 ```bash
 scarb build
-scarb test
+snforge test
 ```
 
-The contract uses USDC-style 6-decimal gameplay amounts and a separate
-18-decimal ROZ reward token. Current deployed addresses in `new_addresses.txt`
-describe the previous deployment until a new coordinated deployment replaces
-them.
+Both commands must pass before declaring a class. The principal sources are:
+
+```text
+src/lib.cairo                  game contract
+src/game_reward_token.cairo    ROZ ERC-20 contract
+src/mock_erc20.cairo           test-only token
+src/mock_vrf_provider.cairo    Sepolia/test-only VRF provider
+tests/test_contract.cairo       contract and regression tests
+```
+
+`mock_erc20` and `mock_vrf_provider` are testing components; they are not
+production dependencies.
+
+## Round and treasure model
+
+- Round `0` is the one intentionally empty bootstrap round.
+- Hides made during round `N` are staged for round `N + 1`.
+- `hide_treasure` and `hide_treasure_bulk` are available while the current
+  round is `OPEN` or `ENDING`.
+- Movement, spawning, and finding are available only while a round is `OPEN`
+  and before its scheduled end.
+- Live player functions derive the current round internally and do not accept a
+  caller-supplied round ID.
+- `expire_round(expectedRound)` and `start_next_round(params)` are keeper-only.
+  Stale expiry jobs safely do nothing.
+- Every round after bootstrap requires at least two staged treasures. If the
+  threshold is not met, the current round remains `ENDING` and hides remain
+  open until normal automation can start the next round.
+- `start_next_round` validates the supplied staged count and value against
+  contract state, increments the round internally, and never overwrites live
+  hider-share totals.
+- Early ending is allowed only for a non-empty round whose active treasures are
+  all found and whose timing rules allow it. A newly opened empty round is not
+  auto-ended.
+
+Each opened round snapshots its stake, hide fees, tiered hop fees, spawn fee,
+grid, coordinate root, duration, minimum duration, blackout, and end buffer.
+The AWS keeper supplies the next configuration, but the contract enforces the
+fee ceilings, timing relationships, staged facts, and minimum count.
+
+USDC gameplay amounts use 6 decimals. ROZ rewards use 18 decimals. Hider claim
+values are snapshotted when charged, so later fee changes cannot reprice an old
+claim.
+
+## Events and indexer selectors
+
+Five events form the off-chain interface:
+
+| Event | Consumer |
+| --- | --- |
+| `TreasureHidden` | Stages coordinates and updates hider leaderboards. Single and bulk calls emit this unified event. |
+| `CheckForTreasure` | Lets the keeper validate the player's current position and hop count. |
+| `TreasureFound` | Records canonical finds and hop deltas used for map-density control. |
+| `RoundStarted` | Records official fees, timing, grid, active count, and schedules expiry. |
+| `RoundEnded` | Records the reason and found/surviving counts, cancels expiry, and schedules buffered rollover. |
+
+Derive selectors from event names after every ABI change; do not copy old keys:
+
+```bash
+sncast utils selector TreasureHidden
+sncast utils selector CheckForTreasure
+sncast utils selector TreasureFound
+sncast utils selector RoundStarted
+sncast utils selector RoundEnded
+```
+
+The resulting values belong in the `roz-apibara` Doppler project alongside the
+new contract address and deployment block. All four indexer trackers must be
+coordinated with that same deployment before the services restart.
+
+## Safe Sepolia deployment
+
+The game contract is not upgradeable. A new class means a new address and no
+state migration. Before replacing a live address, inspect outstanding claims
+and balances on the old contract and follow
+[`ROZ_DEPLOYMENT_AND_FUNDING.md`](ROZ_DEPLOYMENT_AND_FUNDING.md); never sweep
+USDC that is still owed to players.
+
+Set public addresses and the keeper address in your shell. The keeper must be
+the account used by the deployed AWS lifecycle functions:
+
+```bash
+export VRF_PROVIDER_ADDRESS=0x...
+export GAME_TOKEN_ADDRESS=0x...
+export REWARD_TOKEN_ADDRESS=0x...
+export ROUND_KEEPER_ADDRESS=0x...
+export STARKNET_RPC_URL=https://...
+```
+
+Build, test, declare, and deploy:
+
+```bash
+scarb build
+snforge test
+
+sncast --account account_braavos --wait declare \
+  --contract-name HelloStarknet \
+  --url "$STARKNET_RPC_URL"
+
+export CLASS_HASH=0x... # class hash printed by declare
+
+sncast --account account_braavos --wait deploy \
+  --class-hash "$CLASS_HASH" \
+  --arguments "$VRF_PROVIDER_ADDRESS,$GAME_TOKEN_ADDRESS,$REWARD_TOKEN_ADDRESS,$ROUND_KEEPER_ADDRESS" \
+  --url "$STARKNET_RPC_URL"
+```
+
+Constructor order is exactly `(vrfProvider, gameToken, rewardToken,
+roundKeeper)`. The owner is currently fixed in the contract source; deploying
+from a different account does not change it.
+
+Record the returned contract address, transaction hash, accepted deployment
+block, and class hash. Verify the deployment before repointing anything:
+
+```bash
+export GAME_CONTRACT_ADDRESS=0x...
+
+sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function owner --url "$STARKNET_RPC_URL"
+sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function get_game_token --url "$STARKNET_RPC_URL"
+sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function get_game_reward_token --url "$STARKNET_RPC_URL"
+sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function get_vrf_provider --url "$STARKNET_RPC_URL"
+sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function get_round_keeper --url "$STARKNET_RPC_URL"
+sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function get_game_week --url "$STARKNET_RPC_URL"
+sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function get_min_treasures_to_start --url "$STARKNET_RPC_URL"
+```
+
+Expected initial state is round `0`, minimum staged treasures `2`, and the four
+configured addresses returned unchanged.
+
+## Coordinated deployment checklist
+
+Complete this sequence for every replacement contract:
+
+1. Settle or deliberately preserve old-contract player claims and record its
+   balances.
+2. Deploy and verify the new contract; record address, class hash, transaction,
+   and deployment block.
+3. Update this README and `new_addresses.txt`, then derive all five selectors.
+4. In Doppler project `roz-game`, update `CONTRACT_ADDRESS` and
+   `CONTRACT_DEPLOYMENT_BLOCK`; deploy the AWS stack and record its public and
+   protected ingestion outputs.
+5. In Doppler project `roz-apibara`, update the contract, selectors, four
+   protected webhook URLs, and the same AWS/indexer bearer token. Stop the
+   indexers before resetting all four environment-specific trackers to the new
+   deployment block, then restart them.
+6. Update the frontend's game address, public API URL, Pusher browser key and
+   cluster, and Cartridge policies. Never expose an ingestion URL or bearer
+   token to the browser.
+7. Confirm `RoundStarted(0)` reached `GameRounds`, hide at least two treasures,
+   and let the normal expiry/buffer workflow open round `1`. Do not call
+   `start_next_round` manually.
+8. Fund the new game contract with ROZ only after the intended tranche and
+   recipient have been reviewed. A zero ROZ balance skips/accrues reward credit
+   without blocking USDC gameplay.
+
+## Priority bulk hiding
+
+The contract stores a single ordered Poseidon Merkle root. The leaf is the raw
+caller address, so another wallet cannot reuse a member's proof. The AWS
+operator workflow rebuilds the complete tree, stores root-bound proofs, and
+calls the owner-only `set_whitelist_merkle_root` entrypoint. A root of `0x0`
+means there are no priority hiders.
+
+Use the AWS repository's `manage-bulk-hide-whitelist.sh`; do not hand-build
+proofs or update the root independently, because doing so would leave the
+frontend proof service without the matching membership records.
+
+## Operational cautions
+
+- Never put private keys, bearer tokens, MFA codes, or provider API keys in this
+  repository.
+- Do not treat `new_addresses.txt` as permission to redeploy or repoint other
+  services; it is a record of the last coordinated deployment.
+- Do not reset indexer trackers during an ordinary restart.
+- Do not pass round IDs into live player calls or bypass keeper automation.
+- Do not assume balances, claims, whitelist membership, or round state migrate
+  to a replacement contract.
