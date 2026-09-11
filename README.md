@@ -83,10 +83,12 @@ Both commands must pass before declaring a class. The principal sources are:
 
 ```text
 src/lib.cairo                  game contract
+src/starterpack.cairo          Cartridge Arcade starter-pack implementation
 src/game_reward_token.cairo    ROZ ERC-20 contract
 src/mock_erc20.cairo           test-only token
 src/mock_vrf_provider.cairo    Sepolia/test-only VRF provider
 tests/test_contract.cairo       contract and regression tests
+tests/test_starterpack.cairo    starter-pack regression tests
 ```
 
 `mock_erc20` and `mock_vrf_provider` are testing components; they are not
@@ -95,6 +97,25 @@ production dependencies.
 Upgrade, role, pause, migration, and emergency procedures are documented in
 [`docs/UPGRADES_AND_PAUSE.md`](docs/UPGRADES_AND_PAUSE.md). Read that runbook
 before deploying or declaring a replacement class.
+
+## Cartridge Arcade starter packs
+
+`TreasureGameStarterpack` is a separate, inventory-backed Arcade
+implementation. Arcade collects the $9.99 Welcome or $29.99 Week purchase
+price, then the configured Arcade registry calls `on_issue`; the pack contract
+does not charge the buyer. Welcome is one per recipient, while Week is
+reissuable and quantity-aware. Both send stored, owner-updatable amounts of
+USDC, STRK, and 18-decimal ROZ.
+
+The constructor is `(owner, arcadeRegistry, usdcToken, strkToken, rozToken)`.
+Pack IDs are assigned by Arcade and must be written afterward with
+`set_pack_ids`. Fund all three token inventories before enabling sales. The
+pack-only minimum hide stake defaults to 5 USDC and must be updated together
+with the game contract's live hide stake. There is no hop paymaster in v1, so
+players continue to pay Starknet gas in STRK.
+
+See [`docs/PACKS.md`](docs/PACKS.md) for exact default units, registration,
+funding, administration, safety checks, events, and the deployment runbook.
 
 The build's `target/dev/project_name_HelloStarknet.contract_class.json` contains
 the current source ABI in its `abi` field. Static ABI copies are no longer

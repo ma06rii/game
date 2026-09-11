@@ -22,5 +22,29 @@ snforge_std = { git = "https://github.com/foundry-rs/starknet-foundry", tag = "v
 allowed-libfuncs-list.name = "audited"
 casm = true
 
+# Keep the mature game suite and the standalone starter-pack suite in separate
+# Cairo compilation units. The game contract is already large, and combining
+# both suites needlessly exhausts compiler memory on development machines.
+[[test]]
+name = "game_integrationtest"
+kind = "test"
+source-path = "tests/test_contract.cairo"
+test-type = "integration"
+build-external-contracts = [
+    "project_name::HelloStarknet",
+    "project_name::mock_erc20::MockERC20",
+    "project_name::mock_vrf_provider::MockVrfProvider",
+]
+
+[[test]]
+name = "starterpack_integrationtest"
+kind = "test"
+source-path = "tests/test_starterpack.cairo"
+test-type = "integration"
+build-external-contracts = [
+    "project_name::mock_erc20::MockERC20",
+    "project_name::starterpack::TreasureGameStarterpack",
+]
+
 [scripts]
 test = "snforge test"

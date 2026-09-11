@@ -18,6 +18,11 @@ mod game_reward_token;
 // Public only so the test crate can reach its dispatcher to mint.
 pub mod mock_erc20;
 mod mock_vrf_provider;
+
+// Cartridge Arcade calls this separate implementation contract after it has
+// collected payment for a registered starter pack. The contract distributes
+// pre-funded USDC, STRK and ROZ; it never charges the buyer itself.
+pub mod starterpack;
 use starknet::{ClassHash, ContractAddress};
 
 #[derive(Drop, Copy, Clone, Serde)]
