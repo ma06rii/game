@@ -1,23 +1,38 @@
 // DeclareResultTrait is what exposes contract_class() on the DeclareResult that
 // declare() returns from snforge_std v0.62 onward.
 use core::hash::HashStateTrait;
+use core::num::traits::zero::Zero;
 use core::poseidon::PoseidonTrait;
+use openzeppelin::access::accesscontrol::interface::{
+    IAccessControlDispatcher, IAccessControlDispatcherTrait,
+};
 use openzeppelin::token::erc20::interface::{ERC20ABIDispatcher, ERC20ABIDispatcherTrait};
 use project_name::mock_erc20::{IMockERC20Dispatcher, IMockERC20DispatcherTrait};
 use project_name::{
+    IGameAdministrationDispatcher, IGameAdministrationDispatcherTrait,
+    IGameAdministrationSafeDispatcher, IGameAdministrationSafeDispatcherTrait,
     IHelloStarknetDispatcher, IHelloStarknetDispatcherTrait, IHelloStarknetSafeDispatcher,
     IHelloStarknetSafeDispatcherTrait, NextRoundParams,
 };
 use snforge_std::{
-    ContractClassTrait, DeclareResultTrait, EventSpyTrait, EventsFilterTrait, declare, spy_events,
-    start_cheat_block_timestamp, start_cheat_caller_address, stop_cheat_caller_address,
+    ContractClassTrait, DeclareResultTrait, EventSpyTrait, EventsFilterTrait, declare,
+    get_class_hash, spy_events, start_cheat_block_timestamp, start_cheat_caller_address,
+    stop_cheat_caller_address, store,
 };
 use starknet::{ContractAddress, contract_address_const};
 
+fn admin_address() -> ContractAddress {
+    contract_address_const::<0x052a2b0b20d8796e57f0f00e99adfd61e0b40c4a49553d4197e4da6c1c023833>()
+}
+
+fn pauser_address() -> ContractAddress {
+    contract_address_const::<0x515e>()
+}
+
 // The game contract's constructor takes the VRF provider, game token, ROZ
-// reward token and round-keeper addresses. Tests exercise neither randomness
-// nor token transfers, so any non-zero addresses would do; the real ones are
-// used because they are the meaningful defaults.
+// reward token, round keeper, admin, pauser, and upgrade delay. This minimal
+// harness uses production-shaped addresses plus distinct admin/pauser wallets;
+// token-moving tests use deploy_wired below instead.
 fn deploy_contract(name: ByteArray) -> ContractAddress {
     // declare() returns a DeclareResult from snforge_std v0.62 onward, so the
     // ContractClass has to be taken out of it before deploy() can be called.
@@ -57,6 +72,15 @@ fn deploy_contract(name: ByteArray) -> ContractAddress {
             >()
                 .into(),
         );
+    constructorCalldata
+        .append(
+            contract_address_const::<
+                0x052a2b0b20d8796e57f0f00e99adfd61e0b40c4a49553d4197e4da6c1c023833,
+            >()
+                .into(),
+        );
+    constructorCalldata.append(contract_address_const::<0x515e>().into());
+    constructorCalldata.append(100);
 
     let (contract_address, _) = contract.deploy(@constructorCalldata).unwrap();
     contract_address
@@ -219,7 +243,7 @@ fn test_whitelist_caps_leave_a_floor() {
     assert(perRound - collectiveCap == 1640, 'floor != 1640');
     assert(collectiveCap <= perRound, 'group cap above round cap');
 
-    // No root until the owner publishes one, so nobody is whitelisted yet.
+    // No root until the admin publishes one, so nobody is whitelisted yet.
     assert(dispatcher.get_whitelist_merkle_root() == 0, 'root should start unset');
 }
 
@@ -364,6 +388,15 @@ fn deploy_wired_with_roz(
             >()
                 .into(),
         );
+    constructorCalldata
+        .append(
+            contract_address_const::<
+                0x052a2b0b20d8796e57f0f00e99adfd61e0b40c4a49553d4197e4da6c1c023833,
+            >()
+                .into(),
+        );
+    constructorCalldata.append(contract_address_const::<0x515e>().into());
+    constructorCalldata.append(100);
 
     let (game, _) = contract.deploy(@constructorCalldata).unwrap();
 
@@ -1179,7 +1212,7 @@ fn test_whitelisted_address_exceeds_the_daily_cap() {
 
     let root = build_tree(alice.into(), bob.into(), carol.into(), dave.into());
 
-    // Only the owner may publish a root.
+    // Only the admin may publish a root.
     let owner: ContractAddress = contract_address_const::<
         0x052a2b0b20d8796e57f0f00e99adfd61e0b40c4a49553d4197e4da6c1c023833,
     >();
@@ -1401,11 +1434,11 @@ fn test_whitelist_per_address_round_cap() {
     assert(hidesToday == 12, 'should have placed exactly 12');
 }
 
-// Only the owner may publish a root. If anyone could, the whitelist would be
+// Only the admin may publish a root. If anyone could, the whitelist would be
 // worthless.
 #[test]
 #[feature("safe_dispatcher")]
-fn test_only_owner_publishes_the_root() {
+fn test_only_admin_publishes_the_root() {
     let alice: ContractAddress = contract_address_const::<0xa11ce>();
     let (game, _, _) = deploy_wired(alice, 100000000);
     let safe = IHelloStarknetSafeDispatcher { contract_address: game };
@@ -1414,7 +1447,7 @@ fn test_only_owner_publishes_the_root() {
     let attempt = safe.set_whitelist_merkle_root(0x1234);
     stop_cheat_caller_address(game);
 
-    assert(attempt.is_err(), 'non-owner must not set root');
+    assert(attempt.is_err(), 'non-admin must not set root');
 }
 
 // The sweep must not be able to take ROZ that players have accrued, nor USDC
@@ -1531,9 +1564,7 @@ fn advance_round_with_root(game: ContractAddress, merkleRoot: u256) {
     start_cheat_block_timestamp(game, endedTs + endBuffer);
     start_cheat_caller_address(game, keeper);
     dispatcher
-        .start_next_round(
-            round_params_with_root(activeCount, hiddenValue, STAKE, merkleRoot),
-        );
+        .start_next_round(round_params_with_root(activeCount, hiddenValue, STAKE, merkleRoot));
     stop_cheat_caller_address(game);
 }
 
@@ -1596,8 +1627,7 @@ fn test_find_moves_usdc_and_typed_reward_share() {
 
     let keeper = dispatcher.get_round_keeper();
     start_cheat_caller_address(game, keeper);
-    let found = dispatcher
-        .validate_treasure_coordinates(finder, hider, leaf, array![], 0, startTs);
+    let found = dispatcher.validate_treasure_coordinates(finder, hider, leaf, array![], 0, startTs);
     stop_cheat_caller_address(game);
     assert(found, 'treasure should validate');
 
@@ -1648,14 +1678,12 @@ fn test_finder_cannot_find_own_treasure() {
     let typedBefore = dispatcher.get_reward_token_due(player, round);
 
     start_cheat_caller_address(game, dispatcher.get_round_keeper());
-    let attempt = safe
-        .validate_treasure_coordinates(player, player, leaf, array![], 0, startTs);
+    let attempt = safe.validate_treasure_coordinates(player, player, leaf, array![], 0, startTs);
     stop_cheat_caller_address(game);
 
     assert(attempt.is_err(), 'self-find must revert');
     assert(
-        dispatcher.get_claim_share_amounts(round, player) == aggregateBefore,
-        'aggregate changed',
+        dispatcher.get_claim_share_amounts(round, player) == aggregateBefore, 'aggregate changed',
     );
     assert(dispatcher.get_reward_token_due(player, round) == typedBefore, 'typed shares changed');
     let (_, _, _, _, _, activeAfter, _, _) = dispatcher.get_round_status();
@@ -2224,4 +2252,342 @@ fn test_claiming_missed_with_nothing_owed_returns_zero() {
 
     assert(converted == 0, 'nothing to convert');
     assert(dispatcher.get_reward_token_missed(stranger) == 0, 'and none recorded');
+}
+
+// ---------------------------------------------------------------------------
+// Pause, roles, delayed administration and upgrades
+// ---------------------------------------------------------------------------
+
+#[test]
+#[feature("safe_dispatcher")]
+fn test_pauser_is_separate_from_admin_and_can_be_replaced_by_role_grant() {
+    let game = deploy_contract("HelloStarknet");
+    let admin = IGameAdministrationDispatcher { contract_address: game };
+    let admin_safe = IGameAdministrationSafeDispatcher { contract_address: game };
+    let access = IAccessControlDispatcher { contract_address: game };
+
+    start_cheat_caller_address(game, admin_address());
+    let refused = admin_safe.pause();
+    stop_cheat_caller_address(game);
+    assert(refused.is_err(), 'admin must not begin as pauser');
+
+    start_cheat_caller_address(game, pauser_address());
+    admin.pause();
+    assert(admin.is_paused(), 'pauser should pause');
+    admin.unpause();
+    stop_cheat_caller_address(game);
+
+    start_cheat_caller_address(game, admin_address());
+    access.grant_role(selector!("PAUSE_ROLE"), admin_address());
+    admin.pause();
+    assert(admin.is_paused(), 'granted admin should pause');
+    admin.unpause();
+    stop_cheat_caller_address(game);
+}
+
+#[test]
+#[feature("safe_dispatcher")]
+fn test_pause_freezes_play_but_pending_roz_can_still_be_claimed() {
+    let player: ContractAddress = contract_address_const::<0x701>();
+    let stranger: ContractAddress = contract_address_const::<0x702>();
+    let (game, _, _) = deploy_wired(player, 100000000);
+    let gameplay = IHelloStarknetDispatcher { contract_address: game };
+    let gameplay_safe = IHelloStarknetSafeDispatcher { contract_address: game };
+    let administration = IGameAdministrationDispatcher { contract_address: game };
+
+    start_cheat_caller_address(game, player);
+    gameplay.finder_player_generate_position();
+    gameplay.hide_treasure();
+    stop_cheat_caller_address(game);
+    assert(gameplay.get_reward_token_pending(player) > 0, 'test needs pending ROZ');
+
+    start_cheat_caller_address(game, pauser_address());
+    administration.pause();
+    stop_cheat_caller_address(game);
+
+    start_cheat_caller_address(game, player);
+    assert(gameplay_safe.hide_treasure().is_err(), 'single hide must pause');
+    assert(gameplay_safe.hide_treasure_bulk(STAKE, array![], 0).is_err(), 'bulk hide must pause');
+    assert(gameplay_safe.finder_player_move_position(3).is_err(), 'hop must pause');
+    gameplay.claim_reward_tokens();
+    stop_cheat_caller_address(game);
+    assert(gameplay.get_reward_token_pending(player) == 0, 'claim must remain live');
+
+    start_cheat_caller_address(game, stranger);
+    assert(gameplay_safe.finder_player_generate_position().is_err(), 'spawn must pause');
+    stop_cheat_caller_address(game);
+
+    start_cheat_caller_address(game, pauser_address());
+    administration.unpause();
+    stop_cheat_caller_address(game);
+
+    start_cheat_caller_address(game, player);
+    assert(gameplay.hide_treasure(), 'unpause should restore play');
+    stop_cheat_caller_address(game);
+}
+
+#[test]
+fn test_usdc_round_claim_remains_callable_while_paused() {
+    let player: ContractAddress = contract_address_const::<0x70a>();
+    let (game, _, _) = deploy_wired(player, 100000000);
+    let gameplay = IHelloStarknetDispatcher { contract_address: game };
+    let administration = IGameAdministrationDispatcher { contract_address: game };
+
+    start_cheat_caller_address(game, player);
+    gameplay.hide_treasure();
+    stop_cheat_caller_address(game);
+    advance_round(game);
+    advance_round(game);
+
+    start_cheat_caller_address(game, pauser_address());
+    administration.pause();
+    stop_cheat_caller_address(game);
+    start_cheat_caller_address(game, player);
+    assert(gameplay.claim_reward(1), 'paused USDC claim failed');
+    stop_cheat_caller_address(game);
+    assert(gameplay.get_reward_claimed(player, 1), 'claim flag not written');
+}
+
+#[test]
+#[feature("safe_dispatcher")]
+fn test_expiry_stays_live_while_paused_but_next_round_waits_for_unpause() {
+    let player: ContractAddress = contract_address_const::<0x703>();
+    let (game, _, _) = deploy_wired(player, 100000000);
+    let gameplay = IHelloStarknetDispatcher { contract_address: game };
+    let gameplay_safe = IHelloStarknetSafeDispatcher { contract_address: game };
+    let administration = IGameAdministrationDispatcher { contract_address: game };
+
+    start_cheat_caller_address(game, player);
+    gameplay.hide_treasure();
+    gameplay.hide_treasure();
+    stop_cheat_caller_address(game);
+
+    start_cheat_caller_address(game, pauser_address());
+    administration.pause();
+    stop_cheat_caller_address(game);
+
+    let keeper = gameplay.get_round_keeper();
+    let (_, _, _, scheduled_end, _, _, _, _) = gameplay.get_round_status();
+    start_cheat_block_timestamp(game, scheduled_end + 60);
+    start_cheat_caller_address(game, keeper);
+    assert(gameplay.expire_round(0), 'expiry must remain live');
+    let (active_count, hidden_value) = gameplay.get_next_round_totals();
+    let blocked = gameplay_safe.start_next_round(round_params(active_count, hidden_value, STAKE));
+    stop_cheat_caller_address(game);
+    assert(blocked.is_err(), 'round start must pause');
+
+    let (_, _, _, _, ended_at, _, _, end_buffer) = gameplay.get_round_status();
+    start_cheat_block_timestamp(game, ended_at + end_buffer);
+    start_cheat_caller_address(game, pauser_address());
+    administration.unpause();
+    stop_cheat_caller_address(game);
+    start_cheat_caller_address(game, keeper);
+    assert(
+        gameplay.start_next_round(round_params(active_count, hidden_value, STAKE)),
+        'round start not restored',
+    );
+    stop_cheat_caller_address(game);
+}
+
+#[test]
+#[feature("safe_dispatcher")]
+fn test_upgrade_delay_cancel_and_execution() {
+    let game = deploy_contract("HelloStarknet");
+    let administration = IGameAdministrationDispatcher { contract_address: game };
+    let administration_safe = IGameAdministrationSafeDispatcher { contract_address: game };
+    let replacement = declare("MockVrfProvider").unwrap().contract_class();
+    let replacement_hash = *replacement.class_hash;
+
+    start_cheat_caller_address(game, admin_address());
+    administration.propose_upgrade(replacement_hash);
+    let (pending, _) = administration.get_pending_upgrade();
+    assert(pending == replacement_hash, 'wrong pending class');
+    assert(administration_safe.execute_upgrade().is_err(), 'upgrade must wait');
+    administration.cancel_upgrade();
+    let (cancelled, cancelled_eta) = administration.get_pending_upgrade();
+    assert(cancelled.is_zero(), 'cancel must clear class');
+    assert(cancelled_eta == 0, 'cancel must clear eta');
+
+    administration.propose_upgrade(replacement_hash);
+    let (_, second_eta) = administration.get_pending_upgrade();
+    start_cheat_block_timestamp(game, second_eta);
+    administration.execute_upgrade();
+    stop_cheat_caller_address(game);
+    assert(get_class_hash(game) == replacement_hash, 'class hash was not replaced');
+}
+
+#[test]
+#[feature("safe_dispatcher")]
+fn test_decreasing_delay_cannot_enable_an_immediate_upgrade() {
+    let game = deploy_contract("HelloStarknet");
+    let administration = IGameAdministrationDispatcher { contract_address: game };
+    let administration_safe = IGameAdministrationSafeDispatcher { contract_address: game };
+    let replacement = declare("MockVrfProvider").unwrap().contract_class();
+    let replacement_hash = *replacement.class_hash;
+
+    start_cheat_caller_address(game, admin_address());
+    administration.propose_upgrade_delay(0);
+    assert(administration_safe.set_upgrade_delay(0).is_err(), 'delay decrease must itself wait');
+    administration.propose_upgrade(replacement_hash);
+    assert(administration_safe.execute_upgrade().is_err(), 'pending keeps original eta');
+    let (_, _, delay_eta) = administration.get_pending_upgrade_delay();
+    start_cheat_block_timestamp(game, delay_eta);
+    administration.set_upgrade_delay(0);
+    assert(administration.get_upgrade_delay() == 0, 'delay should decrease after eta');
+    stop_cheat_caller_address(game);
+}
+
+#[test]
+fn test_migration_is_idempotent_and_preserves_live_reward_state() {
+    let player: ContractAddress = contract_address_const::<0x704>();
+    let (game, _, _) = deploy_wired(player, 100000000);
+    let gameplay = IHelloStarknetDispatcher { contract_address: game };
+    let administration = IGameAdministrationDispatcher { contract_address: game };
+
+    start_cheat_caller_address(game, player);
+    gameplay.hide_treasure();
+    stop_cheat_caller_address(game);
+    let pending_before = gameplay.get_reward_token_pending(player);
+    let total_pending_before = gameplay.get_total_reward_token_pending();
+    let (_, _, _, daily_cap_before, _) = gameplay.get_hide_settings();
+
+    // Emulate the pre-migration value an upgraded address would contain.
+    store(game, selector!("upgrade_initialized_version"), array![0, 0].span());
+    assert(administration.get_upgrade_initialized_version() == 0, 'version cheat failed');
+
+    start_cheat_caller_address(game, admin_address());
+    assert(administration.migrate_v2(), 'first migration should apply');
+    assert(!administration.migrate_v2(), 'migration already applied');
+    stop_cheat_caller_address(game);
+
+    let (_, _, _, daily_cap_after, _) = gameplay.get_hide_settings();
+    assert(daily_cap_after == daily_cap_before, 'migration changed cap');
+    assert(
+        gameplay.get_reward_token_pending(player) == pending_before, 'migration changed pending',
+    );
+    assert(
+        gameplay.get_total_reward_token_pending() == total_pending_before,
+        'migration changed pending total',
+    );
+}
+
+#[test]
+#[feature("safe_dispatcher")]
+fn test_unauthorized_account_cannot_pause_upgrade_sweep_or_change_tokens() {
+    let player: ContractAddress = contract_address_const::<0x705>();
+    let attacker: ContractAddress = contract_address_const::<0x706>();
+    let (game, game_token, reward_token) = deploy_wired(player, 100000000);
+    let gameplay_safe = IHelloStarknetSafeDispatcher { contract_address: game };
+    let administration_safe = IGameAdministrationSafeDispatcher { contract_address: game };
+    let replacement = declare("MockVrfProvider").unwrap().contract_class();
+    let replacement_hash = *replacement.class_hash;
+
+    start_cheat_caller_address(game, attacker);
+    assert(administration_safe.pause().is_err(), 'attacker paused');
+    assert(
+        administration_safe.propose_upgrade(replacement_hash).is_err(), 'attacker proposed upgrade',
+    );
+    assert(
+        administration_safe.propose_game_token_update(reward_token).is_err(),
+        'attacker proposed token change',
+    );
+    assert(gameplay_safe.update_game_token(reward_token).is_err(), 'attacker changed token');
+    assert(
+        administration_safe.propose_token_withdrawal(game_token, attacker).is_err(),
+        'attacker proposed sweep',
+    );
+    assert(
+        gameplay_safe.withdraw_token_balance(game_token, attacker).is_err(), 'attacker swept token',
+    );
+    stop_cheat_caller_address(game);
+}
+
+#[test]
+#[feature("safe_dispatcher")]
+fn test_full_sweep_requires_pause_for_proposal_and_execution() {
+    let player: ContractAddress = contract_address_const::<0x707>();
+    let receiver: ContractAddress = contract_address_const::<0x708>();
+    let (game, _, reward_token) = deploy_wired(player, 100000000);
+    let gameplay = IHelloStarknetDispatcher { contract_address: game };
+    let gameplay_safe = IHelloStarknetSafeDispatcher { contract_address: game };
+    let administration = IGameAdministrationDispatcher { contract_address: game };
+    let administration_safe = IGameAdministrationSafeDispatcher { contract_address: game };
+
+    start_cheat_caller_address(game, player);
+    gameplay.hide_treasure();
+    stop_cheat_caller_address(game);
+    assert(gameplay.get_reward_token_pending(player) > 0, 'test needs player liability');
+
+    start_cheat_caller_address(game, admin_address());
+    assert(
+        administration_safe.propose_full_token_withdrawal(reward_token, receiver).is_err(),
+        'full proposal needs pause',
+    );
+    stop_cheat_caller_address(game);
+
+    start_cheat_caller_address(game, pauser_address());
+    administration.pause();
+    stop_cheat_caller_address(game);
+    start_cheat_caller_address(game, admin_address());
+    administration.propose_full_token_withdrawal(reward_token, receiver);
+    let (_, _, eta) = administration.get_pending_admin_action();
+    stop_cheat_caller_address(game);
+
+    start_cheat_caller_address(game, pauser_address());
+    administration.unpause();
+    stop_cheat_caller_address(game);
+    start_cheat_block_timestamp(game, eta);
+    start_cheat_caller_address(game, pauser_address());
+    administration.pause();
+    stop_cheat_caller_address(game);
+    start_cheat_caller_address(game, admin_address());
+    assert(
+        gameplay_safe.withdraw_token_balance(reward_token, receiver).is_err(),
+        'unpause must cancel full sweep',
+    );
+    stop_cheat_caller_address(game);
+
+    start_cheat_caller_address(game, admin_address());
+    administration.propose_full_token_withdrawal(reward_token, receiver);
+    let (_, _, second_eta) = administration.get_pending_admin_action();
+    start_cheat_block_timestamp(game, second_eta);
+    gameplay.withdraw_token_balance(reward_token, receiver);
+    stop_cheat_caller_address(game);
+
+    assert(
+        ERC20ABIDispatcher { contract_address: reward_token }.balance_of(game) == 0,
+        'full sweep did not drain',
+    );
+}
+
+#[test]
+#[feature("safe_dispatcher")]
+fn test_admin_handoff_is_delayed_and_revokes_the_previous_admin() {
+    let game = deploy_contract("HelloStarknet");
+    let new_admin: ContractAddress = contract_address_const::<0x709>();
+    let gameplay = IHelloStarknetDispatcher { contract_address: game };
+    let gameplay_safe = IHelloStarknetSafeDispatcher { contract_address: game };
+    let administration = IGameAdministrationDispatcher { contract_address: game };
+    let administration_safe = IGameAdministrationSafeDispatcher { contract_address: game };
+    let access = IAccessControlDispatcher { contract_address: game };
+
+    start_cheat_caller_address(game, admin_address());
+    administration.propose_admin_update(new_admin);
+    assert(administration_safe.set_admin(new_admin).is_err(), 'admin handoff must wait');
+    let (_, _, eta) = administration.get_pending_admin_action();
+    start_cheat_block_timestamp(game, eta);
+    administration.set_admin(new_admin);
+    stop_cheat_caller_address(game);
+
+    assert(administration.get_admin() == new_admin, 'admin was not changed');
+    assert(access.has_role(selector!("ADMIN_ROLE"), new_admin), 'new admin role missing');
+    assert(access.has_role(selector!("UPGRADE_ROLE"), new_admin), 'new upgrade role missing');
+    assert(!access.has_role(selector!("ADMIN_ROLE"), admin_address()), 'old admin role remained');
+
+    start_cheat_caller_address(game, admin_address());
+    assert(gameplay_safe.update_gas_fee_reservation(99).is_err(), 'old admin still authorized');
+    stop_cheat_caller_address(game);
+    start_cheat_caller_address(game, new_admin);
+    assert(gameplay.update_gas_fee_reservation(99), 'new admin not authorized');
+    stop_cheat_caller_address(game);
 }

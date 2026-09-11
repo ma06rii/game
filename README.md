@@ -36,7 +36,7 @@ from Doppler or deployment outputs instead of copying a second snapshot.
 | Sepolia USDC | `0x0512feac6339ff7889822cb5aa2a86c848e9d392bb0e3e237c008674feed8343` |
 | ROZ reward token | `0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b` |
 | Test VRF provider | `0x01baad38bde8d3d60eebab5b96f72a297d52e6d1386bc3d4ec5344d9a30388bd` |
-| Owner | `0x052a2b0b20d8796e57f0f00e99adfd61e0b40c4a49553d4197e4da6c1c023833` |
+| Legacy owner | `0x052a2b0b20d8796e57f0f00e99adfd61e0b40c4a49553d4197e4da6c1c023833` |
 
 The test VRF provider is Sepolia-only. Do not deploy or configure it on
 mainnet. Operational balances and historical deployments are documented in
@@ -86,6 +86,10 @@ tests/test_contract.cairo       contract and regression tests
 
 `mock_erc20` and `mock_vrf_provider` are testing components; they are not
 production dependencies.
+
+Upgrade, role, pause, migration, and emergency procedures are documented in
+[`docs/UPGRADES_AND_PAUSE.md`](docs/UPGRADES_AND_PAUSE.md). Read that runbook
+before deploying or declaring a replacement class.
 
 The build's `target/dev/project_name_HelloStarknet.contract_class.json` contains
 the current source ABI in its `abi` field. Static ABI copies are no longer
@@ -137,7 +141,7 @@ claim.
 
 ## Events and indexer selectors
 
-Five events form the off-chain interface:
+Five gameplay events form the off-chain interface:
 
 | Event | Consumer |
 | --- | --- |
@@ -161,13 +165,19 @@ The resulting values belong in the `roz-apibara` Doppler project alongside the
 new contract address and deployment block. All four indexer trackers must be
 coordinated with that same deployment before the services restart.
 
+Governance additionally emits OpenZeppelin `Paused`, `Unpaused`, `Upgraded`,
+`RoleGranted`, and `RoleRevoked` events plus local proposal, cancellation,
+execution, delay, admin-handoff, and migration events. Operational monitoring
+should alert on every one of them.
+
 ## Safe Sepolia deployment
 
-The game contract is not upgradeable. A new class means a new address and no
-state migration. Before replacing a live address, inspect outstanding claims
-and balances on the old contract and follow
-[`ROZ_DEPLOYMENT_AND_FUNDING.md`](ROZ_DEPLOYMENT_AND_FUNDING.md); never sweep
-USDC that is still owed to players.
+The current shared-dev address predates upgradeability. Moving to this class
+requires one final coordinated deployment and consumer repoint. Once deployed,
+future classes can use delayed Starknet `replace_class_syscall` upgrades while
+keeping the same address and storage. This is not an Ethereum proxy. Follow the
+complete [upgrade and pause runbook](docs/UPGRADES_AND_PAUSE.md), and inspect
+outstanding claims on any address being retired.
 
 Set public addresses and the keeper address in your shell. The keeper must be
 the account used by the deployed AWS lifecycle functions:
@@ -177,6 +187,9 @@ export VRF_PROVIDER_ADDRESS=0x...
 export GAME_TOKEN_ADDRESS=0x...
 export REWARD_TOKEN_ADDRESS=0x...
 export ROUND_KEEPER_ADDRESS=0x...
+export ADMIN_ADDRESS=0x...
+export PAUSER_ADDRESS=0x...
+export UPGRADE_DELAY=100 # Sepolia rehearsal; mainnet must be >= 259200
 export STARKNET_RPC_URL=https://...
 ```
 
@@ -194,13 +207,16 @@ export CLASS_HASH=0x... # class hash printed by declare
 
 sncast --account account_braavos --wait deploy \
   --class-hash "$CLASS_HASH" \
-  --arguments "$VRF_PROVIDER_ADDRESS,$GAME_TOKEN_ADDRESS,$REWARD_TOKEN_ADDRESS,$ROUND_KEEPER_ADDRESS" \
+  --arguments "$VRF_PROVIDER_ADDRESS,$GAME_TOKEN_ADDRESS,$REWARD_TOKEN_ADDRESS,$ROUND_KEEPER_ADDRESS,$ADMIN_ADDRESS,$PAUSER_ADDRESS,$UPGRADE_DELAY" \
   --url "$STARKNET_RPC_URL"
 ```
 
 Constructor order is exactly `(vrfProvider, gameToken, rewardToken,
-roundKeeper)`. The owner is currently fixed in the contract source; deploying
-from a different account does not change it.
+roundKeeper, admin, pauser, upgradeDelay)`. The historical hardcoded owner is
+used only for Ownable bootstrap, then ownership is transferred to `admin` in
+the constructor. The admin and pauser must be nonzero and distinct. Mainnet
+rejects an upgrade delay below 259200 seconds (three days); testnets may use
+zero explicitly.
 
 Record the returned contract address, transaction hash, accepted deployment
 block, and class hash. Verify the deployment before repointing anything:
@@ -209,6 +225,9 @@ block, and class hash. Verify the deployment before repointing anything:
 export GAME_CONTRACT_ADDRESS=0x...
 
 sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function owner --url "$STARKNET_RPC_URL"
+sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function get_admin --url "$STARKNET_RPC_URL"
+sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function get_upgrade_delay --url "$STARKNET_RPC_URL"
+sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function is_paused --url "$STARKNET_RPC_URL"
 sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function get_game_token --url "$STARKNET_RPC_URL"
 sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function get_game_reward_token --url "$STARKNET_RPC_URL"
 sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function get_vrf_provider --url "$STARKNET_RPC_URL"
@@ -217,12 +236,15 @@ sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function get_game_week
 sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function get_min_treasures_to_start --url "$STARKNET_RPC_URL"
 ```
 
-Expected initial state is round `0`, minimum staged treasures `2`, and the four
-configured addresses returned unchanged.
+Expected initial state is round `0`, minimum staged treasures `2`, not paused,
+and all configured addresses returned unchanged. Verify role membership with
+`has_role`: admin has the default-admin, admin, and upgrade selectors; pauser
+has only the pause selector.
 
 ## Coordinated deployment checklist
 
-Complete this sequence for every replacement contract:
+Complete this sequence for the final coordinated deployment, or for any later
+decision to replace the address instead of upgrading it in place:
 
 1. Settle or deliberately preserve old-contract player claims and record its
    balances.
@@ -251,7 +273,7 @@ Complete this sequence for every replacement contract:
 The contract stores a single ordered Poseidon Merkle root. The leaf is the raw
 caller address, so another wallet cannot reuse a member's proof. The AWS
 operator workflow rebuilds the complete tree, stores root-bound proofs, and
-calls the owner-only `set_whitelist_merkle_root` entrypoint. A root of `0x0`
+calls the admin-only `set_whitelist_merkle_root` entrypoint. A root of `0x0`
 means there are no priority hiders.
 
 Use the AWS repository's `manage-bulk-hide-whitelist.sh`; do not hand-build
@@ -266,5 +288,5 @@ frontend proof service without the matching membership records.
   services; it is a record of the last coordinated deployment.
 - Do not reset indexer trackers during an ordinary restart.
 - Do not pass round IDs into live player calls or bypass keeper automation.
-- Do not assume balances, claims, whitelist membership, or round state migrate
-  to a replacement contract.
+- In-place class upgrades preserve storage; replacement-address deployments do
+  not migrate balances, claims, whitelist membership, or round state.

@@ -18,7 +18,7 @@ mod game_reward_token;
 // Public only so the test crate can reach its dispatcher to mint.
 pub mod mock_erc20;
 mod mock_vrf_provider;
-use starknet::ContractAddress;
+use starknet::{ClassHash, ContractAddress};
 
 #[derive(Drop, Copy, Clone, Serde)]
 pub struct NextRoundParams {
@@ -177,7 +177,7 @@ pub trait IHelloStarknet<TContractState> {
         ref self: TContractState, roundCap: u256, collectiveCap: u256, hourlyCap: u256,
     ) -> bool;
     fn get_whitelist_caps(self: @TContractState) -> (u256, u256, u256);
-    // Owner-settable schedules, one band at a time (2.3, 2.5)
+    // Admin-settable schedules, one band at a time (2.3, 2.5)
     fn update_hop_price_band(
         ref self: TContractState, bandIndex: u8, upToHop: u256, price: u256,
     ) -> bool;
@@ -223,6 +223,45 @@ pub trait IHelloStarknet<TContractState> {
     fn get_player_reward_due(
         self: @TContractState, gameWeek: u256, gamerWalletAddress: ContractAddress,
     ) -> u256;
+}
+
+// Upgrade, pause and delayed administration live in a separate interface so
+// the already-large game interface keeps every existing selector unchanged.
+#[starknet::interface]
+pub trait IGameAdministration<TContractState> {
+    fn pause(ref self: TContractState);
+    fn unpause(ref self: TContractState);
+    fn is_paused(self: @TContractState) -> bool;
+    fn propose_upgrade(ref self: TContractState, new_class_hash: ClassHash);
+    fn execute_upgrade(ref self: TContractState);
+    fn execute_upgrade_and_migrate(
+        ref self: TContractState, selector: felt252, calldata: Span<felt252>,
+    ) -> Span<felt252>;
+    fn cancel_upgrade(ref self: TContractState);
+    fn get_pending_upgrade(self: @TContractState) -> (ClassHash, u64);
+    fn get_upgrade_delay(self: @TContractState) -> u64;
+    fn propose_upgrade_delay(ref self: TContractState, new_delay: u64);
+    fn set_upgrade_delay(ref self: TContractState, new_delay: u64);
+    fn cancel_upgrade_delay_change(ref self: TContractState);
+    fn get_pending_upgrade_delay(self: @TContractState) -> (bool, u64, u64);
+    fn propose_vrf_provider_update(ref self: TContractState, vrf_provider_address: ContractAddress);
+    fn propose_game_token_update(ref self: TContractState, game_token_address: ContractAddress);
+    fn propose_game_reward_token_update(
+        ref self: TContractState, reward_token_address: ContractAddress,
+    );
+    fn propose_admin_update(ref self: TContractState, new_admin: ContractAddress);
+    fn propose_token_withdrawal(
+        ref self: TContractState, token_address: ContractAddress, receiver: ContractAddress,
+    );
+    fn propose_full_token_withdrawal(
+        ref self: TContractState, token_address: ContractAddress, receiver: ContractAddress,
+    );
+    fn cancel_admin_action(ref self: TContractState);
+    fn get_pending_admin_action(self: @TContractState) -> (felt252, felt252, u64);
+    fn set_admin(ref self: TContractState, new_admin: ContractAddress);
+    fn get_admin(self: @TContractState) -> ContractAddress;
+    fn migrate_v2(ref self: TContractState) -> bool;
+    fn get_upgrade_initialized_version(self: @TContractState) -> u256;
 }
 
 trait InternalFunctionsTrait<TContractState> {
@@ -292,6 +331,20 @@ trait InternalFunctionsTrait<TContractState> {
     fn _request_randomness_from_vrf_provider(
         ref self: TContractState, caller: ContractAddress,
     ) -> bool;
+    fn _assert_admin(self: @TContractState);
+    fn _assert_admin_or_default(self: @TContractState);
+    fn _assert_admin_or_upgrader(self: @TContractState);
+    fn _assert_valid_upgrade_delay(self: @TContractState, delay: u64);
+    fn _admin_action_hash(
+        self: @TContractState, action: felt252, first: felt252, second: felt252,
+    ) -> felt252;
+    fn _schedule_admin_action(
+        ref self: TContractState, action: felt252, action_hash: felt252, require_paused: bool,
+    );
+    fn _consume_admin_action(
+        ref self: TContractState, action: felt252, action_hash: felt252, require_paused: bool,
+    );
+    fn _clear_admin_action(ref self: TContractState);
 }
 
 #[starknet::contract]
@@ -305,20 +358,42 @@ mod HelloStarknet {
     // whitelist. The two MUST agree - a Pedersen tree would produce proofs that
     // never verify here, and the failure is silent (the caller simply falls back
     // to the ordinary daily cap). See _verifyWhitelist.
-    use core::poseidon::PoseidonTrait;
+    use core::poseidon::{PoseidonTrait, poseidon_hash_span};
     use core::serde::Serde;
     use core::traits::{Into, TryInto};
+    use openzeppelin::access::accesscontrol::interface::IAccessControl;
+    use openzeppelin::access::accesscontrol::{AccessControlComponent, DEFAULT_ADMIN_ROLE};
     use openzeppelin::access::ownable::OwnableComponent;
+    use openzeppelin::introspection::src5::SRC5Component;
+    use openzeppelin::security::pausable::PausableComponent;
     use openzeppelin::token::erc20::interface::{ERC20ABIDispatcher, ERC20ABIDispatcherTrait};
+    use openzeppelin::upgrades::upgradeable::UpgradeableComponent;
     use starknet::{
-        ContractAddress, SyscallResultTrait, contract_address_const,
-        get_block_timestamp, get_caller_address, get_contract_address, syscalls,
+        ClassHash, ContractAddress, SyscallResultTrait, contract_address_const, get_block_timestamp,
+        get_caller_address, get_contract_address, get_tx_info, syscalls,
     };
     use super::{
-        IVrfProviderDispatcher, IVrfProviderDispatcherTrait, NextRoundParams, Source,
+        IGameAdministration, IVrfProviderDispatcher, IVrfProviderDispatcherTrait, NextRoundParams,
+        Source,
     };
 
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
+    component!(path: PausableComponent, storage: pausable, event: PausableEvent);
+    component!(path: UpgradeableComponent, storage: upgradeable, event: UpgradeableEvent);
+    component!(path: AccessControlComponent, storage: access_control, event: AccessControlEvent);
+    component!(path: SRC5Component, storage: src5, event: SRC5Event);
+
+    const PAUSE_ROLE: felt252 = selector!("PAUSE_ROLE");
+    const ADMIN_ROLE: felt252 = selector!("ADMIN_ROLE");
+    const UPGRADE_ROLE: felt252 = selector!("UPGRADE_ROLE");
+    const MAINNET_MIN_UPGRADE_DELAY: u64 = 259200;
+    const MIGRATION_VERSION: u256 = 2;
+    const ACTION_VRF_PROVIDER: felt252 = selector!("ACTION_VRF_PROVIDER");
+    const ACTION_GAME_TOKEN: felt252 = selector!("ACTION_GAME_TOKEN");
+    const ACTION_REWARD_TOKEN: felt252 = selector!("ACTION_REWARD_TOKEN");
+    const ACTION_SET_ADMIN: felt252 = selector!("ACTION_SET_ADMIN");
+    const ACTION_SAFE_SWEEP: felt252 = selector!("ACTION_SAFE_SWEEP");
+    const ACTION_FULL_SWEEP: felt252 = selector!("ACTION_FULL_SWEEP");
 
     const ROUND_OPEN: u8 = 0;
     const ROUND_ENDING: u8 = 1;
@@ -343,8 +418,90 @@ mod HelloStarknet {
         RewardTokenMissedRecovered: RewardTokenMissedRecovered,
         RoundStarted: RoundStarted,
         RoundEnded: RoundEnded,
+        UpgradeProposed: UpgradeProposed,
+        UpgradeCancelled: UpgradeCancelled,
+        UpgradeExecuted: UpgradeExecuted,
+        UpgradeDelayChangeProposed: UpgradeDelayChangeProposed,
+        UpgradeDelayChanged: UpgradeDelayChanged,
+        UpgradeDelayChangeCancelled: UpgradeDelayChangeCancelled,
+        AdminActionProposed: AdminActionProposed,
+        AdminActionCancelled: AdminActionCancelled,
+        AdminActionExecuted: AdminActionExecuted,
+        AdminChanged: AdminChanged,
+        MigrationApplied: MigrationApplied,
         #[flat]
         OwnableEvent: OwnableComponent::Event,
+        #[flat]
+        PausableEvent: PausableComponent::Event,
+        #[flat]
+        UpgradeableEvent: UpgradeableComponent::Event,
+        #[flat]
+        AccessControlEvent: AccessControlComponent::Event,
+        #[flat]
+        SRC5Event: SRC5Component::Event,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    struct UpgradeProposed {
+        class_hash: ClassHash,
+        eta: u64,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    struct UpgradeCancelled {
+        class_hash: ClassHash,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    struct UpgradeExecuted {
+        class_hash: ClassHash,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    struct UpgradeDelayChangeProposed {
+        new_delay: u64,
+        eta: u64,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    struct UpgradeDelayChanged {
+        old_delay: u64,
+        new_delay: u64,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    struct UpgradeDelayChangeCancelled {
+        proposed_delay: u64,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    struct AdminActionProposed {
+        action: felt252,
+        action_hash: felt252,
+        eta: u64,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    struct AdminActionCancelled {
+        action: felt252,
+        action_hash: felt252,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    struct AdminActionExecuted {
+        action: felt252,
+        action_hash: felt252,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    struct AdminChanged {
+        previous_admin: ContractAddress,
+        new_admin: ContractAddress,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    struct MigrationApplied {
+        version: u256,
     }
 
     // The feedback signal the off-chain map-scaling controller runs on. Without
@@ -504,20 +661,64 @@ mod HelloStarknet {
 
     #[abi(embed_v0)]
     impl OwnableImpl = OwnableComponent::OwnableImpl<ContractState>;
-    impl InternalImpl = OwnableComponent::InternalImpl<ContractState>;
+    impl OwnableInternalImpl = OwnableComponent::InternalImpl<ContractState>;
+    #[abi(embed_v0)]
+    impl SRC5Impl = SRC5Component::SRC5Impl<ContractState>;
+    impl SRC5InternalImpl = SRC5Component::InternalImpl<ContractState>;
+    impl AccessControlInternalImpl = AccessControlComponent::InternalImpl<ContractState>;
+    impl PausableViewImpl = PausableComponent::PausableImpl<ContractState>;
+    impl PausableInternalImpl = PausableComponent::InternalImpl<ContractState>;
+    impl UpgradeableInternalImpl = UpgradeableComponent::InternalImpl<ContractState>;
+
+    // Core authority moves only through delayed set_admin. The standard role
+    // selectors stay ABI-compatible, but direct mutations are intentionally
+    // limited to PAUSE_ROLE so they cannot bypass that handoff delay.
+    #[abi(embed_v0)]
+    impl RestrictedAccessControlImpl of IAccessControl<ContractState> {
+        fn has_role(self: @ContractState, role: felt252, account: ContractAddress) -> bool {
+            self.access_control.is_role_effective(role, account)
+        }
+
+        fn get_role_admin(self: @ContractState, role: felt252) -> felt252 {
+            if role == PAUSE_ROLE {
+                ADMIN_ROLE
+            } else {
+                DEFAULT_ADMIN_ROLE
+            }
+        }
+
+        fn grant_role(ref self: ContractState, role: felt252, account: ContractAddress) {
+            assert(role == PAUSE_ROLE, 'Core roles use set_admin');
+            self._assert_admin_or_default();
+            assert(account.is_non_zero(), 'Role account is zero');
+            self.access_control._grant_role(role, account);
+        }
+
+        fn revoke_role(ref self: ContractState, role: felt252, account: ContractAddress) {
+            assert(role == PAUSE_ROLE, 'Core roles use set_admin');
+            self._assert_admin_or_default();
+            self.access_control._revoke_role(role, account);
+        }
+
+        fn renounce_role(ref self: ContractState, role: felt252, account: ContractAddress) {
+            assert(role == PAUSE_ROLE, 'Core roles use set_admin');
+            assert(get_caller_address() == account, 'Can only renounce self');
+            self.access_control._revoke_role(role, account);
+        }
+    }
 
     #[storage]
     struct Storage {
         //Randomness Request
         //Address of the VRF provider this game asks for random numbers. Set from
-        //a constructor argument and changeable afterwards by the owner through
+        //a constructor argument and changeable afterwards by the admin through
         //update_vrf_provider, so the game can be pointed at Cartridge's real
         //provider or at a testnet mock without redeploying.
         vrf_provider_contract_address: ContractAddress,
         //Game token
         //The ERC-20 that every fee, reward and treasure value in this contract is
         //denominated in. Set from a constructor argument and changeable afterwards
-        //by the owner through update_game_token.
+        //by the admin through update_game_token.
         //
         //CRITICAL: every amount below is a RAW token amount, so it is tied to this
         //token's decimals. The contract is currently configured for USDC, which has
@@ -666,7 +867,7 @@ mod HelloStarknet {
         whitelistRoundCap: u256, // 250  - one whitelisted address, per round
         whitelistCollectiveCap: u256, // 1200 - ALL of them together, per round
         whitelistHourlyCap: u256, // 80   - one address, per rolling hour
-        // Only the owner writes this. Publishing a new root replaces the whole
+        // Only ADMIN_ROLE writes this. Publishing a new root replaces the whole
         // list; there is no incremental add or remove, so the list is always
         // exactly what the published tree says. A leaf is the address as
         // felt252, hashed with Poseidon.
@@ -775,7 +976,7 @@ mod HelloStarknet {
         reward_token_missed: LegacyMap<ContractAddress, u256>,
         //The sum of every reward_token_missed balance, for the same reason
         //total_reward_token_pending exists - the sweep in 4j subtracts it, so
-        //the owner cannot withdraw the backing for rewards players are still
+        //the admin cannot withdraw the backing for rewards players are still
         //owed but have not converted yet.
         total_reward_token_missed: u256,
         //The sum of every USDC a player can still claim. USDC owed is computed
@@ -783,7 +984,7 @@ mod HelloStarknet {
         //has nothing to subtract and would strand outstanding claims.
         total_usdc_claimable: u256,
         // ------------------------------------------------------------------
-        // Owner-settable schedules, indexed by band (2.3, 2.5)
+        // Admin-settable schedules, indexed by band (2.3, 2.5)
         // ------------------------------------------------------------------
         //Hop_price_tier_limit: LegacyMap::<bandIndex, upToThisManyHopsToday>
         //Hop_price_tier_price: LegacyMap::<bandIndex, priceInGameTokenUnits>
@@ -802,6 +1003,27 @@ mod HelloStarknet {
         volume_band_den: LegacyMap<u8, u256>,
         #[substorage(v0)]
         ownable: OwnableComponent::Storage,
+        // APPEND ONLY. These fields were added in the first upgradeable class;
+        // existing game state above must never be reordered or renamed.
+        #[substorage(v0)]
+        pausable: PausableComponent::Storage,
+        #[substorage(v0)]
+        upgradeable: UpgradeableComponent::Storage,
+        #[substorage(v0)]
+        access_control: AccessControlComponent::Storage,
+        #[substorage(v0)]
+        src5: SRC5Component::Storage,
+        upgrade_delay: u64,
+        pending_class_hash: ClassHash,
+        pending_upgrade_eta: u64,
+        upgrade_initialized_version: u256,
+        admin_address: ContractAddress,
+        pending_delay_exists: bool,
+        pending_delay_value: u64,
+        pending_delay_eta: u64,
+        pending_admin_action: felt252,
+        pending_admin_action_hash: felt252,
+        pending_admin_action_eta: u64,
     }
 
     // vrfProviderAddress is the contract this game will ask for random numbers
@@ -846,12 +1068,34 @@ mod HelloStarknet {
         gameTokenAddress: ContractAddress,
         rewardTokenAddress: ContractAddress,
         roundKeeperAddress: ContractAddress,
+        adminAddress: ContractAddress,
+        pauserAddress: ContractAddress,
+        upgradeDelay: u64,
     ) {
         let ownerAddress: ContractAddress = contract_address_const::<
             0x052a2b0b20d8796e57f0f00e99adfd61e0b40c4a49553d4197e4da6c1c023833,
         >();
 
+        assert(adminAddress.is_non_zero(), 'Admin address is zero');
+        assert(pauserAddress.is_non_zero(), 'Pauser address is zero');
+        assert(adminAddress != pauserAddress, 'Admin must differ from pauser');
+        self._assert_valid_upgrade_delay(upgradeDelay);
+
+        // Preserve the historical Ownable storage position, but make the
+        // explicit admin the owner too so legacy ownership tooling agrees with
+        // AccessControl from the first transaction.
         self.ownable.initializer(ownerAddress);
+        self.ownable._transfer_ownership(adminAddress);
+        self.access_control.initializer();
+        self.access_control.set_role_admin(PAUSE_ROLE, ADMIN_ROLE);
+        self.access_control._grant_role(DEFAULT_ADMIN_ROLE, adminAddress);
+        self.access_control._grant_role(ADMIN_ROLE, adminAddress);
+        self.access_control._grant_role(UPGRADE_ROLE, adminAddress);
+        self.access_control._grant_role(PAUSE_ROLE, pauserAddress);
+        self.admin_address.write(adminAddress);
+        self.upgrade_delay.write(upgradeDelay);
+        self.upgrade_initialized_version.write(MIGRATION_VERSION);
+
         self.gasFeeReservation.write(3333); //$ 0.0033 held back to cover gas
         self.gameMasterFee.write(8333); //$ 0.0083 to the game master
         self.gameLandownerFee.write(1167); //$ 0.0012 to the landowner
@@ -905,11 +1149,11 @@ mod HelloStarknet {
     // Every ROZ reward setting, in one place, called once from the constructor.
     //
     // It is a separate function rather than inline constructor code for a
-    // practical reason: if this contract is ever made upgradeable, an upgrade
-    // does NOT re-run the constructor, so any setting added in a later version
-    // would read back as zero - and a zero dailyHideCap or maxTreasuresPerRound
-    // silently stops all hiding. Keeping the defaults in one owner-callable
-    // shape means a future version can re-apply them deliberately.
+    // practical reason: an upgrade does NOT re-run the constructor, so any
+    // setting added in a later version would read back as zero - and a zero
+    // dailyHideCap or maxTreasuresPerRound silently stops all hiding. A future
+    // migration may reuse the exact initialization for a NEW field, but must
+    // never replay this whole function over live settings and player state.
     #[generate_trait]
     impl RewardSettingsInit of RewardSettingsInitTrait {
         fn _initialiseRewardSettings(ref self: ContractState) {
@@ -959,7 +1203,7 @@ mod HelloStarknet {
             self.whitelistRoundCap.write(250);
             self.whitelistCollectiveCap.write(1200); // leaves 1,640 for others
             self.whitelistHourlyCap.write(80);
-            // No root until the owner publishes one. Until then every proof
+            // No root until the admin publishes one. Until then every proof
             // fails, which simply means nobody is whitelisted - the correct
             // starting state, not an error.
             self.whitelist_merkle_root.write(0);
@@ -1012,6 +1256,79 @@ mod HelloStarknet {
 
     #[generate_trait]
     impl InternalFunctions of InternalFunctionsTrait {
+        fn _assert_admin(self: @ContractState) {
+            self.access_control.assert_only_role(ADMIN_ROLE);
+        }
+
+        fn _assert_admin_or_default(self: @ContractState) {
+            let caller = get_caller_address();
+            let is_admin = self.access_control.is_role_effective(ADMIN_ROLE, caller);
+            let is_default = self.access_control.is_role_effective(DEFAULT_ADMIN_ROLE, caller);
+            assert(is_admin || is_default, 'Caller is not admin');
+        }
+
+        fn _assert_admin_or_upgrader(self: @ContractState) {
+            let caller = get_caller_address();
+            let is_admin = self.access_control.is_role_effective(ADMIN_ROLE, caller);
+            let is_upgrader = self.access_control.is_role_effective(UPGRADE_ROLE, caller);
+            assert(is_admin || is_upgrader, 'Caller lacks admin role');
+        }
+
+        // Testnets may deliberately use zero delay. A class that can run on
+        // mainnet must always retain at least a three-day public review window.
+        fn _assert_valid_upgrade_delay(self: @ContractState, delay: u64) {
+            if get_tx_info().unbox().chain_id == 'SN_MAIN' {
+                assert(delay >= MAINNET_MIN_UPGRADE_DELAY, 'Mainnet delay below 3 days');
+            }
+        }
+
+        fn _admin_action_hash(
+            self: @ContractState, action: felt252, first: felt252, second: felt252,
+        ) -> felt252 {
+            poseidon_hash_span(array![action, first, second].span())
+        }
+
+        fn _schedule_admin_action(
+            ref self: ContractState, action: felt252, action_hash: felt252, require_paused: bool,
+        ) {
+            self._assert_admin();
+            if require_paused {
+                self.pausable.assert_paused();
+            }
+            assert(self.pending_admin_action.read() == 0, 'Admin action already pending');
+            let eta = get_block_timestamp() + self.upgrade_delay.read();
+            self.pending_admin_action.write(action);
+            self.pending_admin_action_hash.write(action_hash);
+            self.pending_admin_action_eta.write(eta);
+            self.emit(AdminActionProposed { action, action_hash, eta });
+        }
+
+        fn _consume_admin_action(
+            ref self: ContractState, action: felt252, action_hash: felt252, require_paused: bool,
+        ) {
+            self._assert_admin();
+            if require_paused {
+                self.pausable.assert_paused();
+            }
+            assert(self.pending_admin_action.read() == action, 'Wrong admin action');
+            assert(
+                self.pending_admin_action_hash.read() == action_hash,
+                'Admin action arguments changed',
+            );
+            assert(
+                get_block_timestamp() >= self.pending_admin_action_eta.read(),
+                'Admin action delay not elapsed',
+            );
+            self._clear_admin_action();
+            self.emit(AdminActionExecuted { action, action_hash });
+        }
+
+        fn _clear_admin_action(ref self: ContractState) {
+            self.pending_admin_action.write(0);
+            self.pending_admin_action_hash.write(0);
+            self.pending_admin_action_eta.write(0);
+        }
+
         // The calendar day, as whole days since the Unix epoch.
         //
         // Every daily counter in this contract is keyed by this value, which is
@@ -1670,6 +1987,7 @@ mod HelloStarknet {
         }
 
         fn _assertRoundAcceptsActions(self: @ContractState) {
+            self.pausable.assert_not_paused();
             assert(self.round_state.read() == ROUND_OPEN, 'round not open');
             assert(get_block_timestamp() >= self.round_start_ts.read(), 'round not started');
             assert(
@@ -1682,6 +2000,7 @@ mod HelloStarknet {
         // Once a round ends below the next-round minimum, searching stays
         // closed but hiding must remain available or the game can never recover.
         fn _assertHidingAllowed(self: @ContractState) {
+            self.pausable.assert_not_paused();
             let state = self.round_state.read();
             assert(state == ROUND_OPEN || state == ROUND_ENDING, 'hiding unavailable');
             assert(get_block_timestamp() >= self.round_start_ts.read(), 'round not started');
@@ -2087,12 +2406,8 @@ mod HelloStarknet {
             let survivalOwed = self.hider_survival_roz.read((gameWeek, hiderWalletAddress));
             let perShare = survivalOwed / hiderShares;
 
-            self
-                .hider_share_amounts
-                .write((gameWeek, hiderWalletAddress), hiderShares - 1_u256);
-            self
-                .hider_survival_roz
-                .write((gameWeek, hiderWalletAddress), survivalOwed - perShare);
+            self.hider_share_amounts.write((gameWeek, hiderWalletAddress), hiderShares - 1_u256);
+            self.hider_survival_roz.write((gameWeek, hiderWalletAddress), survivalOwed - perShare);
 
             let finderShares = self.finder_share_amounts.read((gameWeek, finderWalletAddress));
             self.finder_share_amounts.write((gameWeek, finderWalletAddress), finderShares + 1_u256);
@@ -2396,7 +2711,7 @@ mod HelloStarknet {
         // straight into the player's starting grid position.
         //
         // Which provider answers is decided entirely by the address in storage,
-        // set at deploy time and changeable by the owner through
+        // set at deploy time and changeable by the admin through
         // update_vrf_provider. Nothing below this line differs between
         // Cartridge's real provider and the testnet MockVrfProvider - they
         // implement the same IVrfProvider trait, so the call is identical and
@@ -2427,9 +2742,264 @@ mod HelloStarknet {
     }
 
     #[abi(embed_v0)]
+    impl GameAdministrationImpl of IGameAdministration<ContractState> {
+        // Emergency play freeze. Claims, settlement, expiry and administration
+        // deliberately do not depend on this flag.
+        fn pause(ref self: ContractState) {
+            self.access_control.assert_only_role(PAUSE_ROLE);
+            self.pausable.pause();
+        }
+
+        fn unpause(ref self: ContractState) {
+            self.access_control.assert_only_role(PAUSE_ROLE);
+            // A full sweep is authorized only for one uninterrupted paused
+            // window. Unpausing cancels it, so pause -> propose -> unpause ->
+            // pause cannot reuse the old ETA.
+            if self.pending_admin_action.read() == ACTION_FULL_SWEEP {
+                let action_hash = self.pending_admin_action_hash.read();
+                self._clear_admin_action();
+                self.emit(AdminActionCancelled { action: ACTION_FULL_SWEEP, action_hash });
+            }
+            self.pausable.unpause();
+        }
+
+        fn is_paused(self: @ContractState) -> bool {
+            self.pausable.is_paused()
+        }
+
+        // Publishing a class hash starts the mandatory review window. It never
+        // changes the class by itself, even when a testnet delay is zero.
+        fn propose_upgrade(ref self: ContractState, new_class_hash: ClassHash) {
+            self.access_control.assert_only_role(UPGRADE_ROLE);
+            assert(new_class_hash.is_non_zero(), 'Class hash is zero');
+            assert(self.pending_class_hash.read().is_zero(), 'Upgrade already pending');
+            let eta = get_block_timestamp() + self.upgrade_delay.read();
+            self.pending_class_hash.write(new_class_hash);
+            self.pending_upgrade_eta.write(eta);
+            self.emit(UpgradeProposed { class_hash: new_class_hash, eta });
+        }
+
+        fn execute_upgrade(ref self: ContractState) {
+            self.access_control.assert_only_role(UPGRADE_ROLE);
+            let class_hash = self.pending_class_hash.read();
+            assert(class_hash.is_non_zero(), 'No pending upgrade');
+            assert(
+                get_block_timestamp() >= self.pending_upgrade_eta.read(),
+                'Upgrade delay not elapsed',
+            );
+            self.pending_class_hash.write(Zero::zero());
+            self.pending_upgrade_eta.write(0);
+            self.emit(UpgradeExecuted { class_hash });
+            self.upgradeable.upgrade(class_hash);
+        }
+
+        // The replacement happens first, then Starknet calls this contract with
+        // the supplied selector using the new class in the same transaction.
+        fn execute_upgrade_and_migrate(
+            ref self: ContractState, selector: felt252, calldata: Span<felt252>,
+        ) -> Span<felt252> {
+            self.access_control.assert_only_role(UPGRADE_ROLE);
+            let class_hash = self.pending_class_hash.read();
+            assert(class_hash.is_non_zero(), 'No pending upgrade');
+            assert(
+                get_block_timestamp() >= self.pending_upgrade_eta.read(),
+                'Upgrade delay not elapsed',
+            );
+            self.pending_class_hash.write(Zero::zero());
+            self.pending_upgrade_eta.write(0);
+            self.emit(UpgradeExecuted { class_hash });
+            self.upgradeable.upgrade_and_call(class_hash, selector, calldata)
+        }
+
+        fn cancel_upgrade(ref self: ContractState) {
+            self.access_control.assert_only_role(UPGRADE_ROLE);
+            let class_hash = self.pending_class_hash.read();
+            assert(class_hash.is_non_zero(), 'No pending upgrade');
+            self.pending_class_hash.write(Zero::zero());
+            self.pending_upgrade_eta.write(0);
+            self.emit(UpgradeCancelled { class_hash });
+        }
+
+        fn get_pending_upgrade(self: @ContractState) -> (ClassHash, u64) {
+            (self.pending_class_hash.read(), self.pending_upgrade_eta.read())
+        }
+
+        fn get_upgrade_delay(self: @ContractState) -> u64 {
+            self.upgrade_delay.read()
+        }
+
+        // A decrease is scheduled against the OLD delay. It cannot be followed
+        // by an immediate zero-delay upgrade from the same compromised key.
+        fn propose_upgrade_delay(ref self: ContractState, new_delay: u64) {
+            self._assert_admin_or_upgrader();
+            self._assert_valid_upgrade_delay(new_delay);
+            let old_delay = self.upgrade_delay.read();
+            assert(new_delay < old_delay, 'Only decreases need proposal');
+            assert(!self.pending_delay_exists.read(), 'Delay change already pending');
+            let eta = get_block_timestamp() + old_delay;
+            self.pending_delay_exists.write(true);
+            self.pending_delay_value.write(new_delay);
+            self.pending_delay_eta.write(eta);
+            self.emit(UpgradeDelayChangeProposed { new_delay, eta });
+        }
+
+        fn set_upgrade_delay(ref self: ContractState, new_delay: u64) {
+            self._assert_admin_or_upgrader();
+            self._assert_valid_upgrade_delay(new_delay);
+            let old_delay = self.upgrade_delay.read();
+            if new_delay < old_delay {
+                assert(self.pending_delay_exists.read(), 'Delay decrease not proposed');
+                assert(self.pending_delay_value.read() == new_delay, 'Wrong proposed delay');
+                assert(
+                    get_block_timestamp() >= self.pending_delay_eta.read(),
+                    'Delay change not elapsed',
+                );
+            }
+            self.upgrade_delay.write(new_delay);
+            self.pending_delay_exists.write(false);
+            self.pending_delay_value.write(0);
+            self.pending_delay_eta.write(0);
+            self.emit(UpgradeDelayChanged { old_delay, new_delay });
+        }
+
+        fn cancel_upgrade_delay_change(ref self: ContractState) {
+            self._assert_admin_or_upgrader();
+            assert(self.pending_delay_exists.read(), 'No pending delay change');
+            let proposed_delay = self.pending_delay_value.read();
+            self.pending_delay_exists.write(false);
+            self.pending_delay_value.write(0);
+            self.pending_delay_eta.write(0);
+            self.emit(UpgradeDelayChangeCancelled { proposed_delay });
+        }
+
+        fn get_pending_upgrade_delay(self: @ContractState) -> (bool, u64, u64) {
+            (
+                self.pending_delay_exists.read(),
+                self.pending_delay_value.read(),
+                self.pending_delay_eta.read(),
+            )
+        }
+
+        fn propose_vrf_provider_update(
+            ref self: ContractState, vrf_provider_address: ContractAddress,
+        ) {
+            assert(vrf_provider_address.is_non_zero(), 'VRF provider is zero');
+            let action_hash = self
+                ._admin_action_hash(ACTION_VRF_PROVIDER, vrf_provider_address.into(), 0);
+            self._schedule_admin_action(ACTION_VRF_PROVIDER, action_hash, false);
+        }
+
+        fn propose_game_token_update(ref self: ContractState, game_token_address: ContractAddress) {
+            assert(game_token_address.is_non_zero(), 'Game token is zero');
+            let action_hash = self
+                ._admin_action_hash(ACTION_GAME_TOKEN, game_token_address.into(), 0);
+            self._schedule_admin_action(ACTION_GAME_TOKEN, action_hash, false);
+        }
+
+        fn propose_game_reward_token_update(
+            ref self: ContractState, reward_token_address: ContractAddress,
+        ) {
+            assert(reward_token_address.is_non_zero(), 'Reward token is zero');
+            let action_hash = self
+                ._admin_action_hash(ACTION_REWARD_TOKEN, reward_token_address.into(), 0);
+            self._schedule_admin_action(ACTION_REWARD_TOKEN, action_hash, false);
+        }
+
+        fn propose_admin_update(ref self: ContractState, new_admin: ContractAddress) {
+            assert(new_admin.is_non_zero(), 'Admin address is zero');
+            assert(new_admin != self.admin_address.read(), 'Admin is unchanged');
+            let action_hash = self._admin_action_hash(ACTION_SET_ADMIN, new_admin.into(), 0);
+            self._schedule_admin_action(ACTION_SET_ADMIN, action_hash, false);
+        }
+
+        fn propose_token_withdrawal(
+            ref self: ContractState, token_address: ContractAddress, receiver: ContractAddress,
+        ) {
+            assert(token_address.is_non_zero(), 'Token address is zero');
+            assert(receiver.is_non_zero(), 'Receiver is zero');
+            let action_hash = self
+                ._admin_action_hash(ACTION_SAFE_SWEEP, token_address.into(), receiver.into());
+            self._schedule_admin_action(ACTION_SAFE_SWEEP, action_hash, false);
+        }
+
+        // A full sweep explicitly overrides player-liability reservations and
+        // is therefore legal only while paused both now and at execution.
+        fn propose_full_token_withdrawal(
+            ref self: ContractState, token_address: ContractAddress, receiver: ContractAddress,
+        ) {
+            assert(token_address.is_non_zero(), 'Token address is zero');
+            assert(receiver.is_non_zero(), 'Receiver is zero');
+            let action_hash = self
+                ._admin_action_hash(ACTION_FULL_SWEEP, token_address.into(), receiver.into());
+            self._schedule_admin_action(ACTION_FULL_SWEEP, action_hash, true);
+        }
+
+        fn cancel_admin_action(ref self: ContractState) {
+            self._assert_admin();
+            let action = self.pending_admin_action.read();
+            assert(action != 0, 'No pending admin action');
+            let action_hash = self.pending_admin_action_hash.read();
+            self._clear_admin_action();
+            self.emit(AdminActionCancelled { action, action_hash });
+        }
+
+        fn get_pending_admin_action(self: @ContractState) -> (felt252, felt252, u64) {
+            (
+                self.pending_admin_action.read(),
+                self.pending_admin_action_hash.read(),
+                self.pending_admin_action_eta.read(),
+            )
+        }
+
+        fn set_admin(ref self: ContractState, new_admin: ContractAddress) {
+            assert(new_admin.is_non_zero(), 'Admin address is zero');
+            let action_hash = self._admin_action_hash(ACTION_SET_ADMIN, new_admin.into(), 0);
+            self._consume_admin_action(ACTION_SET_ADMIN, action_hash, false);
+            let previous_admin = self.admin_address.read();
+            self.access_control._grant_role(DEFAULT_ADMIN_ROLE, new_admin);
+            self.access_control._grant_role(ADMIN_ROLE, new_admin);
+            self.access_control._grant_role(UPGRADE_ROLE, new_admin);
+            self.admin_address.write(new_admin);
+            self.ownable._transfer_ownership(new_admin);
+            self.access_control._revoke_role(UPGRADE_ROLE, previous_admin);
+            self.access_control._revoke_role(ADMIN_ROLE, previous_admin);
+            self.access_control._revoke_role(DEFAULT_ADMIN_ROLE, previous_admin);
+            self.emit(AdminChanged { previous_admin, new_admin });
+        }
+
+        fn get_admin(self: @ContractState) -> ContractAddress {
+            self.admin_address.read()
+        }
+
+        // This migration is intentionally narrow. Constructor defaults are not
+        // replayed because that would overwrite live rates, caps, maps and IOUs.
+        fn migrate_v2(ref self: ContractState) -> bool {
+            let caller = get_caller_address();
+            let via_upgrade_and_call = caller == get_contract_address();
+            let is_upgrader = self.access_control.is_role_effective(UPGRADE_ROLE, caller);
+            assert(via_upgrade_and_call || is_upgrader, 'Caller is not upgrader');
+            if self.upgrade_initialized_version.read() >= MIGRATION_VERSION {
+                return false;
+            }
+            assert(
+                self.hideFeeTierBoundary.read()
+                    * self.hideFeeBase.read() == self.dailySpendThreshold.read(),
+                'Hide fee invariant broken',
+            );
+            self.upgrade_initialized_version.write(MIGRATION_VERSION);
+            self.emit(MigrationApplied { version: MIGRATION_VERSION });
+            true
+        }
+
+        fn get_upgrade_initialized_version(self: @ContractState) -> u256 {
+            self.upgrade_initialized_version.read()
+        }
+    }
+
+    #[abi(embed_v0)]
     impl HelloStarknetImpl of super::IHelloStarknet<ContractState> {
         fn update_gas_fee_reservation(ref self: ContractState, feeAmount: u256) -> bool {
-            self.ownable.assert_only_owner();
+            self._assert_admin();
             self.gasFeeReservation.write(feeAmount);
             return true;
         }
@@ -2439,7 +3009,7 @@ mod HelloStarknet {
         }
 
         fn update_gamemaster_fee(ref self: ContractState, feeAmount: u256) -> bool {
-            self.ownable.assert_only_owner();
+            self._assert_admin();
             self.gameMasterFee.write(feeAmount);
             return true;
         }
@@ -2449,13 +3019,13 @@ mod HelloStarknet {
         }
 
         fn update_game_landowner_fee(ref self: ContractState, feeAmount: u256) -> bool {
-            self.ownable.assert_only_owner();
+            self._assert_admin();
             self.gameLandownerFee.write(feeAmount);
             return true;
         }
 
         fn update_minimum_allowance_fee(ref self: ContractState, minimumAmount: u256) -> bool {
-            self.ownable.assert_only_owner();
+            self._assert_admin();
             self.minimumAllowance.write(minimumAmount);
             return true;
         }
@@ -2535,7 +3105,7 @@ mod HelloStarknet {
         }
 
         fn update_round_keeper(ref self: ContractState, keeper: ContractAddress) -> bool {
-            self.ownable.assert_only_owner();
+            self._assert_admin();
             assert(!keeper.is_zero(), 'keeper is zero');
             self.round_keeper.write(keeper);
             true
@@ -2570,6 +3140,7 @@ mod HelloStarknet {
         }
 
         fn start_next_round(ref self: ContractState, params: NextRoundParams) -> bool {
+            self.pausable.assert_not_paused();
             assert(get_caller_address() == self.round_keeper.read(), 'caller is not keeper');
             assert(self.round_state.read() == ROUND_ENDING, 'round not ending');
             assert(
@@ -2580,11 +3151,7 @@ mod HelloStarknet {
             let nextRound: u256 = self.currentGameWeek.read() + 1;
             let stagedCount: u256 = self.total_reward_shares_for_hiders.read(nextRound);
             assert(stagedCount >= MIN_TREASURES_TO_START, 'not enough staged treasures');
-            assert(
-                params
-                    .expected_active_treasure_count == stagedCount,
-                'active count mismatch',
-            );
+            assert(params.expected_active_treasure_count == stagedCount, 'active count mismatch');
             assert(
                 params.expected_total_hidden_value == self.game_totals.read(nextRound),
                 'hidden value mismatch',
@@ -3249,7 +3816,8 @@ mod HelloStarknet {
             );
         }
 
-        // Points the game at a different VRF provider. Owner only.
+        // Points the game at a different VRF provider. ADMIN_ROLE only, after
+        // the matching proposal has waited the upgrade delay.
         //
         // This is what makes the current Sepolia workaround reversible without a
         // redeploy. The game is presently pointed at the testnet MockVrfProvider
@@ -3262,14 +3830,15 @@ mod HelloStarknet {
         //       0x051fea4450da9d6aee758bdeba88b2f665bcbf549d2c61421aa724e9ac0ced8f
         //   )
         //
-        // Only the owner set in the constructor
-        // (0x052a2b0b20d8796e57f0f00e99adfd61e0b40c4a49553d4197e4da6c1c023833)
-        // can call this, so a player cannot redirect the game at a provider of
-        // their own that returns coordinates they picked.
+        // A player cannot redirect the game at a provider of their own that
+        // returns coordinates they picked; the exact address must have been
+        // published through propose_vrf_provider_update first.
         fn update_vrf_provider(
             ref self: ContractState, vrfProviderAddress: ContractAddress,
         ) -> bool {
-            self.ownable.assert_only_owner();
+            let action_hash = self
+                ._admin_action_hash(ACTION_VRF_PROVIDER, vrfProviderAddress.into(), 0);
+            self._consume_admin_action(ACTION_VRF_PROVIDER, action_hash, false);
             self.vrf_provider_contract_address.write(vrfProviderAddress);
             return true;
         }
@@ -3282,7 +3851,8 @@ mod HelloStarknet {
             return self.vrf_provider_contract_address.read();
         }
 
-        // Points the game at a different ERC-20 for fees and rewards. Owner only.
+        // Points the game at a different ERC-20 for fees and rewards. This is a
+        // delayed ADMIN_ROLE operation.
         //
         // Handle with care - this is a setup and migration lever, not a routine
         // one. Two things go wrong if it is used casually:
@@ -3299,7 +3869,9 @@ mod HelloStarknet {
         // the old token have not approved anything on the new one, so their next
         // action reverts on 'token spend approval req' until they re-approve.
         fn update_game_token(ref self: ContractState, gameTokenAddress: ContractAddress) -> bool {
-            self.ownable.assert_only_owner();
+            let action_hash = self
+                ._admin_action_hash(ACTION_GAME_TOKEN, gameTokenAddress.into(), 0);
+            self._consume_admin_action(ACTION_GAME_TOKEN, action_hash, false);
             self.game_token_contract_address.write(gameTokenAddress);
             return true;
         }
@@ -3322,7 +3894,9 @@ mod HelloStarknet {
         fn update_game_reward_token(
             ref self: ContractState, rewardTokenAddress: ContractAddress,
         ) -> bool {
-            self.ownable.assert_only_owner();
+            let action_hash = self
+                ._admin_action_hash(ACTION_REWARD_TOKEN, rewardTokenAddress.into(), 0);
+            self._consume_admin_action(ACTION_REWARD_TOKEN, action_hash, false);
             self.game_reward_token_contract_address.write(rewardTokenAddress);
             return true;
         }
@@ -3345,7 +3919,7 @@ mod HelloStarknet {
             participationReward: u256,
             perHopReward: u256,
         ) -> bool {
-            self.ownable.assert_only_owner();
+            self._assert_admin();
             self.rewardHide.write(hideReward);
             self.rewardHideSurvived.write(hideSurvivedReward);
             self.rewardFind.write(findReward);
@@ -3379,7 +3953,7 @@ mod HelloStarknet {
             hideReward: u256,
             hideSurvivedReward: u256,
         ) -> bool {
-            self.ownable.assert_only_owner();
+            self._assert_admin();
             self.hopRewardBelowThreshold.write(perHopReward);
             self.participationBelowThreshold.write(participationReward);
             self.rewardHideBelowThreshold.write(hideReward);
@@ -3405,7 +3979,7 @@ mod HelloStarknet {
             hideReward: u256,
             hideSurvivedReward: u256,
         ) -> bool {
-            self.ownable.assert_only_owner();
+            self._assert_admin();
             self.hopRewardNewWallet.write(perHopReward);
             self.participationNewWallet.write(participationReward);
             self.rewardHideNewWallet.write(hideReward);
@@ -3441,7 +4015,7 @@ mod HelloStarknet {
             freeHopsPerDay: u256,
             freeSpawnsPerDay: u256,
         ) -> bool {
-            self.ownable.assert_only_owner();
+            self._assert_admin();
             assert(freeHopsPerDay < participationMinimum, 'free hops >= participation');
             assert(participationMinimum <= roundRewardCap, 'participation > round cap');
             self.participationMinimumHops.write(participationMinimum);
@@ -3466,7 +4040,7 @@ mod HelloStarknet {
         fn update_soft_caps(
             ref self: ContractState, dailyCap: u256, newWalletCap: u256, num: u256, den: u256,
         ) -> bool {
-            self.ownable.assert_only_owner();
+            self._assert_admin();
             assert(den > 0, 'soft cap den is zero');
             self.dailySoftCapRoz.write(dailyCap);
             self.newWalletSoftCapRoz.write(newWalletCap);
@@ -3499,7 +4073,7 @@ mod HelloStarknet {
         fn update_gate_thresholds(
             ref self: ContractState, dailyThreshold: u256, lifetimeThreshold: u256,
         ) -> bool {
-            self.ownable.assert_only_owner();
+            self._assert_admin();
             self.dailySpendThreshold.write(dailyThreshold);
             self.lifetimeSpendThreshold.write(lifetimeThreshold);
             return true;
@@ -3531,7 +4105,7 @@ mod HelloStarknet {
             dailyCap: u256,
             treasuresPerRound: u256,
         ) -> bool {
-            self.ownable.assert_only_owner();
+            self._assert_admin();
             assert(
                 feeTierBoundary * feeBase == self.dailySpendThreshold.read(),
                 'hide fee gate mismatch',
@@ -3567,7 +4141,7 @@ mod HelloStarknet {
         // index shifts when the tree is rebuilt, so a stale proof file silently
         // drops addresses back to the ordinary daily cap.
         fn set_whitelist_merkle_root(ref self: ContractState, newRoot: felt252) -> bool {
-            self.ownable.assert_only_owner();
+            self._assert_admin();
             self.whitelist_merkle_root.write(newRoot);
             return true;
         }
@@ -3586,7 +4160,7 @@ mod HelloStarknet {
         fn update_whitelist_caps(
             ref self: ContractState, roundCap: u256, collectiveCap: u256, hourlyCap: u256,
         ) -> bool {
-            self.ownable.assert_only_owner();
+            self._assert_admin();
             assert(collectiveCap <= self.maxTreasuresPerRound.read(), 'group cap above round cap');
             self.whitelistRoundCap.write(roundCap);
             self.whitelistCollectiveCap.write(collectiveCap);
@@ -3603,7 +4177,7 @@ mod HelloStarknet {
         }
 
         // ------------------------------------------------------------------
-        // Owner-settable schedules, one band at a time (2.3, 2.5)
+        // Admin-settable schedules, one band at a time (2.3, 2.5)
         // ------------------------------------------------------------------
 
         // Bands are indexed from 0 and read in order, so upToHop must increase
@@ -3611,7 +4185,7 @@ mod HelloStarknet {
         fn update_hop_price_band(
             ref self: ContractState, bandIndex: u8, upToHop: u256, price: u256,
         ) -> bool {
-            self.ownable.assert_only_owner();
+            self._assert_admin();
             self.hop_price_tier_limit.write(bandIndex, upToHop);
             self.hop_price_tier_price.write(bandIndex, price);
             return true;
@@ -3629,7 +4203,7 @@ mod HelloStarknet {
         fn update_volume_band(
             ref self: ContractState, bandIndex: u8, upToTreasures: u256, num: u256, den: u256,
         ) -> bool {
-            self.ownable.assert_only_owner();
+            self._assert_admin();
             assert(den > 0, 'volume band den is zero');
             assert(num <= den, 'volume band above 1x');
             self.volume_band_limit.write(bandIndex, upToTreasures);
@@ -3688,12 +4262,6 @@ mod HelloStarknet {
             return allowance - used;
         }
 
-        // Sweeps this contract's entire balance of the CURRENT game token to
-        // `receiver`. Owner only.
-        //
-        // Note it drains whichever token update_game_token last pointed at. If you
-        // ever switch tokens, sweep the old one BEFORE switching - afterwards this
-        // function can no longer reach it and the balance is stranded.
         // Sweep a token out of the contract (4j).
         //
         // Now takes a token address, so ROZ sent here by mistake is recoverable
@@ -3707,7 +4275,7 @@ mod HelloStarknet {
         //
         //   ROZ  - subtract total_reward_token_pending AND
         //          total_reward_token_missed. The first is the backing for every
-        //          accrued balance; without it the owner could sweep it and
+        //          accrued balance; without it the admin could sweep it and
         //          claim_reward_tokens would start failing, which is exactly the
         //          failure the coverage rule in 4c-i exists to prevent. The
         //          second is ROZ players earned while the contract was unfunded
@@ -3716,7 +4284,7 @@ mod HelloStarknet {
         //
         //          NOTE THE COST OF RESERVING MISSED. A wallet that never
         //          returns to call claim_missed_reward_token holds that much
-        //          back from the owner permanently. That is deliberate: the
+        //          back from the admin permanently. That is deliberate: the
         //          alternative is sweeping money a player could still come back
         //          and claim, and a reward that can be withdrawn out from under
         //          the player is not a reward.
@@ -3728,22 +4296,33 @@ mod HelloStarknet {
         //          and sweeping mid-round silently takes money players are
         //          entitled to.
         //
-        // Any other token is fully sweepable - nobody has a claim on it.
+        // Any other token is fully sweepable - nobody has a claim on it. The
+        // ordinary path still needs a delayed proposal. The explicit FULL path
+        // ignores all reservations only while paused at proposal AND execution.
         fn withdraw_token_balance(
             ref self: ContractState, tokenAddress: ContractAddress, receiver: ContractAddress,
         ) {
-            self.ownable.assert_only_owner();
+            let action = self.pending_admin_action.read();
+            assert(
+                action == ACTION_SAFE_SWEEP || action == ACTION_FULL_SWEEP,
+                'Withdrawal not proposed',
+            );
+            let action_hash = self._admin_action_hash(action, tokenAddress.into(), receiver.into());
+            let full_sweep = action == ACTION_FULL_SWEEP;
+            self._consume_admin_action(action, action_hash, full_sweep);
 
             let token_dispatcher = ERC20ABIDispatcher { contract_address: tokenAddress };
             let heldBalance: u256 = token_dispatcher.balance_of(get_contract_address());
 
             let mut owedToPlayers: u256 = 0;
 
-            if (tokenAddress == self.game_reward_token_contract_address.read()) {
-                owedToPlayers = self.total_reward_token_pending.read()
-                    + self.total_reward_token_missed.read();
-            } else if (tokenAddress == self.game_token_contract_address.read()) {
-                owedToPlayers = self.total_usdc_claimable.read();
+            if (!full_sweep) {
+                if (tokenAddress == self.game_reward_token_contract_address.read()) {
+                    owedToPlayers = self.total_reward_token_pending.read()
+                        + self.total_reward_token_missed.read();
+                } else if (tokenAddress == self.game_token_contract_address.read()) {
+                    owedToPlayers = self.total_usdc_claimable.read();
+                }
             }
 
             // Nothing above what players are owed. Return rather than revert:
@@ -3756,7 +4335,7 @@ mod HelloStarknet {
         }
 
         // What the sweep would release for a given token, without moving
-        // anything. Lets the owner check the surplus before acting.
+        // anything. Lets the admin check the surplus before acting.
         fn get_sweepable_balance(self: @ContractState, tokenAddress: ContractAddress) -> u256 {
             let token_dispatcher = ERC20ABIDispatcher { contract_address: tokenAddress };
             let heldBalance: u256 = token_dispatcher.balance_of(get_contract_address());
