@@ -184,9 +184,9 @@ Three rules of the calculation, because they change the values:
 | Player | Rounds and hops | Payment | Gets through at | **Established** | **New wallet** | Target |
 |---|---|---|---|---|---|---|
 | Light casual, no hide | 2 rounds, 20 hops each | $0.265 | **Never** | **6** | **6** | 25 - 70 |
-| Light casual, **2 hides** | 2 rounds, 20 hops each | $0.765 | Hop **34** | **~54** | ~54 | 25 - 70 |
-| Typical casual | 2.5 rounds, 25 hops each | $0.955 | The **round-3 hide** | **117.5** | **62.5** | 140 - 280 |
-| Active | 4 rounds, 32 hops each | $3.635 | Hop **60** | **285.9** | **202.4** | 300 - 500 |
+| Light casual, **2 hides** | 2 rounds, 20 hops each | $0.775 | Hop **33** | **~55** | ~55 | 25 - 70 |
+| Typical casual | 2.5 rounds, 25 hops each | $0.965 | The **round-3 hide** | **117.5** | **62.5** | 140 - 280 |
+| Active | 4 rounds, 32 hops each | $3.645 | Hop **59** | **286.7** | **202.7** | 300 - 500 |
 
 The established values include one hide cycle for the casual player and the
 active player. They include one find for the active player.
@@ -259,12 +259,12 @@ that a player below the gate can get it. Hops alone do not get it:
 
 | | |
 |---|---|
-| The maximum payment below $0.60 | **$0.595 - 64 hops** |
-| The ROZ from these hops | 64 x 0.15 = **9.6** |
+| The maximum payment below $0.60 | **$0.585 - 63 hops** |
+| The ROZ from these hops | 63 x 0.15 = **9.45** |
 | Participation bonus | **None** - the gate stops it |
 
-**9.6 ROZ is the maximum for one day of hops below the gate.** The target starts
-at 25. Hop number 65 costs $0.615 and gets through the gate. Then the player is
+**9.45 ROZ is the maximum for one day of hops below the gate.** The target starts
+at 25. Hop number 64 costs $0.605 and gets through the gate. Then the player is
 not a player below the gate.
 
 **Hides increase this maximum to 30.3, which gets to the target.** Two hides cost
@@ -283,7 +283,7 @@ each hide, but the $0.20 fee also made a hide a way to pay. The maximum increase
 from 9.6 to 30.3.
 
 The better result for the player is to get **through** the gate: **the same two
-hides move the light casual player over $0.60, to approximately 54 ROZ**, because
+hides move the light casual player over $0.60, to approximately 55 ROZ**, because
 all the rewards are full then. One hide gives 18 ROZ. This is less than the target,
 and also less than a careful day below the gate. **The worst position is between
 the two.**
@@ -293,7 +293,7 @@ alone are not sufficient.** The conflict here is much smaller than before. Befor
 no control operated on a hide, thus the route into the target and the cheapest
 farm route were the same **uncontrolled** action. Sections 5 and 5.2 now put the
 gate on the hides also. Thus the two share an action but not a danger: section 9.2
-gives the hide loop a minimum of $22.8M and not $0.8M. A new control on the hide
+gives the hide loop a minimum of $23.1M and not $0.8M. A new control on the hide
 loop still operates on this player. Keep the two together. Refer to section 11.
 
 Two more points are important:
@@ -304,13 +304,13 @@ wallet condition takes nothing more from this player. The new wallet condition
 decreases the rewards only for the players who pay.
 
 **The 40-hop maximum does not help the active player.** The hops and the
-participation bonus of this player give **95.85** ROZ. The daily maximum
+participation bonus of this player give **96.7** ROZ. The daily maximum
 (`dailySoftCapRoz`) is near 100 ROZ. Thus this player is below the daily maximum,
 and also far below the 40-hop maximum. The 40-hop maximum gives this player
 nothing. Refer to section 5.1.
 
 **The decision was made one time, and the correction opens part of it again.** The
-active player pays more: the hop cost increased from $1.38 to $3.135. The controls
+active player pays more: the hop cost increased from $1.38 to $3.145. The controls
 against the farmers also decrease the rewards for the correct players. You changed
 the targets and not the rewards, because a target is much less dangerous to change
 than a control against the farmers. That decision is still correct. But the values
@@ -394,7 +394,7 @@ four values. The owner can change each value. Refer to section 7.1.
 
 | Setting | Value | When it starts again |
 |---|---|---|
-| `dailyFreeHops` | **22** | Each day. All 4 rounds use the same 22 hops |
+| `dailyFreeHops` | **20** | Each day. All 4 rounds use the same 20 hops |
 | `participationMinimumHops` | **28** | Each day. The bonus operates one time each day |
 | `hopRewardCap` | **40** | Each **round** |
 | `dailyFreeSpawns` | **1** | Each day |
@@ -404,12 +404,12 @@ only. The contract does not use it.
 
 **Two rules control the sequence of these values. Do not break these rules.**
 
-1. `dailyFreeHops` (22) must be less than `participationMinimumHops` (28). Thus a
+1. `dailyFreeHops` (20) must be less than `participationMinimumHops` (28). Thus a
    player cannot get the bonus with free hops only.
 2. `participationMinimumHops` (28) must not be more than `hopRewardCap` (40).
    Thus the bonus needs 28 hops of a maximum of 40 hops. This is 70% of a round.
 
-The difference is 6 hops. These 6 hops cost $0.045.
+The difference is 8 hops. These 8 hops cost $0.055.
 
 **These two rules are no longer the primary control.** The daily payment limit in
 section 5.2 stops the participation bonus below $0.60 each day. The number of
@@ -418,21 +418,21 @@ payment limit does the work.
 
 ### The free allowance
 
-Each player gets **22 free hops and 1 free spawn each day**. The allowance is for
+Each player gets **20 USDC-free hops and 1 free spawn each day**. The allowance is for
 the day, not for one round. The player can use it in any round.
 
 | Player | Cost before | Cost after |
 |---|---|---|
-| Light casual | $0.50 | $0.18 |
-| Typical casual | $0.90 | $0.58 |
-| Active | $1.68 | $1.36 |
+| Light casual | $0.50 | $0.20 |
+| Typical casual | $0.90 | $0.60 |
+| Active | $1.68 | $1.38 |
 
-The allowance saves $0.32 each day for all the players.
+The allowance saves $0.30 each day for all the players.
 
 **The allowance is less than one full round.** The maximum is 40 hops in a round.
-The allowance is 22 hops. This is 55% of a round. This is correct: the
+The allowance is 20 hops. This is 50% of a round. This is correct: the
 participation bonus needs 28 hops. Thus a player cannot get the bonus with free
-hops only. The player must pay for 6 hops.
+hops only. The player must pay for 8 hops.
 
 **A free hop does not count for the payment limits in section 5.2.** A free hop
 costs nothing. Thus it adds nothing to the payment counters. Thus free hops alone
@@ -452,6 +452,13 @@ can never get to the $0.60 limit. Refer to section 9.3.
 The hops are the same because both give ROZ. The spawns are the same because
 neither gives ROZ.
 
+**Free means there is no USDC game fee.** The player still pays Starknet gas in
+STRK. A later paymaster campaign can sponsor no more than 20 hops, and may choose
+a lower cap. The fully sponsored count is `min(20, campaignCap)`. With a campaign
+cap of 15, hops 1 to 15 also have sponsored gas, hops 16 to 20 still have no USDC
+fee but use the player's STRK, and hop 21 and later use the tiered USDC fee plus
+gas unless another sponsor pays it.
+
 Thus the code is more simple. The free test controls the payment only. All the
 other steps operate in the same way.
 
@@ -465,29 +472,30 @@ The price of a hop increases when a wallet makes many hops in one day:
 
 | Hop number in the day | Price |
 |---|---|
-| 1 to 22 | Free |
-| 23 to 25 | $0.005 |
+| 1 to 20 | No USDC fee |
+| 21 to 25 | $0.005 |
 | 26 to 45 | $0.010 |
 | 46 to 65 | $0.020 |
 | 66 and more | $0.040 |
 
 **The count must go back to zero one time each day. It must not go back to zero
 at the end of a round.** If the count goes back to zero in each round, a wallet
-stays in the first tier. Then 32 hops in each of 4 rounds cost $0.34 and not
-$3.135. Thus the control does not operate.
+stays in the first tier. Then 32 hops in each of 4 rounds cost $0.35 and not
+$3.145. Thus the control does not operate.
 
 ### The effect of the new prices
 
 | Hops in a day | New price | Old price | Result |
 |---|---|---|---|
-| 30 | $0.065 | $0.08 | Less |
-| 45 | $0.215 | $0.23 | Less |
-| 46 | $0.235 | $0.24 | Less |
-| 47 | $0.255 | $0.25 | More |
-| 60 | $0.515 | $0.38 | More |
-| 128 | $3.135 | $1.06 | More |
+| 30 | $0.075 | $0.10 | Less |
+| 45 | $0.225 | $0.25 | Less |
+| 46 | $0.245 | $0.26 | Less |
+| 47 | $0.265 | $0.27 | Less |
+| 48 | $0.285 | $0.28 | More |
+| 60 | $0.525 | $0.40 | More |
+| 128 | $3.145 | $1.08 | More |
 
-The change point is 47 hops. Below this number the new prices are less. Above
+The change point is 48 hops. Below this number the new prices are less. At and above
 this number the new prices are more. This is correct: a light player pays less,
 and a player who makes many hops pays more.
 
@@ -498,8 +506,9 @@ the game decreases the subsequent rewards. The multiplier is 0.2.
 
 **Use a value near 100.** The hop maximum is 40 in a round. Thus the maximum from
 hops and participation is 160 + 18 = 178 ROZ. But the rule in section 5.2 puts
-this value out of reach: a wallet that hops to the limit gets 0.15 for the first
-49 hops, thus a day of 160 hops gives **136.35** ROZ. Only a wallet that gets
+this value out of reach: depending on spawn timing, a wallet that hops to the
+limit gets 0.15 for its first 48 to 63 hops. Four early spawns give a raw
+**137.2 ROZ**, and the soft cap reduces it to **136.24 ROZ**. Only a wallet that gets
 through the gate **before** it hops gets 178 ROZ. Six paid spawns do this, for
 $0.60. That is the behaviour of a farmer, not of a player.
 
@@ -509,7 +518,7 @@ operates for more players.
 **The 40-hop maximum and the daily maximum operate against each other at the top,
 and neither one gets to the correct player.** The 40-hop maximum was made larger
 to give a reward on the hops where a find is probable. But the active player gets
-**95.85** ROZ from hops and participation. This is below a daily maximum of 100,
+**96.7** ROZ from hops and participation. This is below a daily maximum of 100,
 and far below the 40-hop maximum. Thus the change does not help this player.
 Refer to section 11.
 
@@ -519,28 +528,29 @@ Refer to section 11.
 
 | | Before | After |
 |---|---|---|
-| Cost of a maximum day (160 hops, 4 spawns) | $1.68 | **$4.715** |
-| ROZ | 232 | **136.35** |
-| Cost for each ROZ | $0.0072 | **$0.0346** |
+| Cost of a maximum day (160 hops, 4 spawns) | $1.68 | **$4.725** |
+| ROZ | 232 | **136.24** |
+| Cost for each ROZ | $0.0072 | **$0.0347** |
 
-The cost is 4.8 times more. This is correct. The value is 136.35 ROZ and not 178
-ROZ, because the first 49 hops of the day give 0.15 each. Refer to section 5.2.
+The cost is approximately 4.8 times more. The value is 136.24 ROZ and not 178
+ROZ, because the first 48 hops of the largest route give 0.15 each and the soft
+cap reduces the excess. Refer to section 5.2.
 
 **They do not operate against many small wallets.** A wallet that makes 28 hops
 stays in the first two tiers. These tiers are less expensive than before:
 
 | | Before | After |
 |---|---|---|
-| Cost for each wallet | $0.06 | **$0.045** |
+| Cost for each wallet | $0.06 | **$0.055** |
 | ROZ | 46 | 46 |
-| Cost to take all the Year 1 tokens | $3,055 each day | **$2,292 each day** |
+| Cost to take all the Year 1 tokens | $3,055 each day | **$2,801 each day** |
 
 The new prices are more expensive for one large wallet. But they are less
 expensive for many small wallets. A wallet costs nothing to make. Thus a farmer
 uses more wallets.
 
 **Starknet gas is the real control.** A wallet makes 29 transactions each day.
-The game fees are $0.045. The gas is more than the fees. Thus the gas stops the
+The game fees are $0.055. The gas is more than the fees. Thus the gas stops the
 farmers more than the prices do. Measure the gas. Do not estimate it.
 
 To control the many-wallet method you need a different rule. Section 5.2 gives
@@ -611,15 +621,15 @@ The hide values above are the **wallet rate**. The contract then operates the
 section 5 Daily Volume Multiplier on the value that it selects - refer to rule 2.
 
 **The rates operate from the moment the wallet gets to the limit. They do not
-operate on the earlier actions.** A player who gets to $0.60 at hop 65 earns 0.15
-for hops 1 to 64. The player earns 1.0 from hop 65. To calculate the day again
+operate on the earlier actions.** A player who gets to $0.60 at hop 64 earns 0.15
+for hops 1 to 63. The player earns 1.0 from hop 64. To calculate the day again
 would be complex. It would also let a farmer make many inexpensive hops first and
 then make them more valuable.
 
 **This rule gives the gate most of its strength. It is easy to calculate wrong.**
 Each day starts at zero payment. Thus **each** wallet - a farm wallet and a
 correct player - gets the smaller rate for the first hops of the day. A wallet
-does not get 65 hops at 1.0 for $0.615. It gets 64 hops at 0.15 and 1 hop at 1.0.
+does not get 64 hops at 1.0 for $0.605. It gets 63 hops at 0.15 and 1 hop at 1.0.
 All the values in this plan use this rule. Two results follow, and both are in
 this document: the cheapest farm route costs much more than a simple calculation
 gives (below), and the correct players earn less than the older values gave
@@ -636,50 +646,50 @@ Refer to section 11.
 
 ### Rule 1 controls the many small wallets
 
-A wallet gets to $0.60 after **65 hops** ($0.615). A farmer does not use a spawn
+A wallet gets to $0.60 after **64 hops** ($0.605). A farmer does not use a spawn
 to get to the limit. A spawn costs $0.10 and gives no ROZ. A hop in the same
 price tier costs $0.02 and gives ROZ.
 
-The wallet gets **28.6 ROZ** at that point, not 65 + 18. The first 64 hops give
-0.15 each, and only hop 65 gives 1.0:
+The wallet gets **28.45 ROZ** at that point, not 64 + 18. The first 63 hops give
+0.15 each, and only hop 64 gives 1.0:
 
-`64 x 0.15 + 1.0 + 18 = 9.6 + 1 + 18 = 28.6`
+`63 x 0.15 + 1.0 + 18 = 9.45 + 1 + 18 = 28.45`
 
 | | Without the gate | With the gate |
 |---|---|---|
-| Cost for each wallet | $0.045 | **$0.615** |
-| ROZ | 46 | **28.6** |
-| Cost for each ROZ | $0.00098 | **$0.0215** |
-| Number of wallets to take all the Year 1 tokens | 50,923 | **81,904** |
-| Cost to take all the Year 1 tokens | $2,292 each day | **$50,371 each day** |
-| Market value with 5,000,000,000 tokens | $4.9M | **$107M** |
+| Cost for each wallet | $0.055 | **$0.605** |
+| ROZ | 46 | **28.45** |
+| Cost for each ROZ | $0.00120 | **$0.0213** |
+| Number of wallets to take all the Year 1 tokens | 50,923 | **82,336** |
+| Cost to take all the Year 1 tokens | $2,801 each day | **$49,813 each day** |
+| Market value with 5,000,000,000 tokens | $6.0M | **$106M** |
 
-The cost is **22 times more**. This is the control that section 5.1 does not
+The cost is approximately **18 times more**. This is the control that section 5.1 does not
 give. The gate makes the farmer pay more, and it also decreases what the wallet
 earns. The second effect is the larger one.
 
-**More than 65 hops does not help the farmer.** Each hop after hop 65 costs $0.04
-and gives 1 ROZ. This is more expensive than the average of $0.0215. Thus the
-cheapest wallet stops at 65 hops. A farmer who wants all 178 ROZ must get through
+**More than 64 hops does not help the farmer.** Each hop after hop 64 costs $0.04
+and gives 1 ROZ. This is more expensive than the average of $0.0213. Thus the
+cheapest wallet stops at 64 hops. A farmer who wants all 178 ROZ must get through
 the gate before the first hop. Six paid spawns do this for $0.60. That day costs
 $5.015 for 178 ROZ, which is $0.0282 for each ROZ. This is still more expensive
-than stopping at 65 hops.
+than stopping at 64 hops.
 
 ### Rule 3 controls the number of wallets
 
 A total payment limit controls the number of wallets, not the actions of one
 wallet. This is the correct target:
 
-| Total payment limit | Cost to start 81,904 wallets |
+| Total payment limit | Cost to start 82,336 wallets |
 |---|---|
-| $1 | $81,904 |
-| $2 | $163,808 |
-| **$3 (selected)** | **$245,712** |
-| $5 | $409,520 |
-| $10 | $819,040 |
+| $1 | $82,336 |
+| $2 | $164,672 |
+| **$3 (selected)** | **$247,008** |
+| $5 | $411,680 |
+| $10 | $823,360 |
 
-At $3, a farmer pays $245,712 one time. This is 4.9 days of the daily cost. At $5
-the farmer pays $409,520, which is 8.1 days. Thus the value of $3 gives
+At $3, a farmer pays $247,008 one time. This is 5.0 days of the daily cost. At $5
+the farmer pays $411,680, which is 8.3 days. Thus the value of $3 gives
 approximately one half of the control that $5 gives. Make this decision. Refer to
 section 11.
 
@@ -695,23 +705,23 @@ the gas earned **more** than before. The rate of **0.15** corrects this:
 
 | | The first values | Before | **Now** |
 |---|---|---|---|
-| ROZ each day with no cost | 20 x 0.2 = **4** | 22 x 0.3 = 6.6 | **22 x 0.15 = 3.3** |
-| Number of wallets to take all the Year 1 tokens | 585,617 | 354,919 | **709,838** |
+| ROZ each day with no USDC fee | 20 x 0.2 = **4** | 22 x 0.3 = 6.6 | **20 x 0.15 = 3** |
+| Number of wallets to take all the Year 1 tokens | 585,617 | 354,919 | **780,822** |
 
-The free allowance is still 22 hops. The rate did all of this. **709,838 wallets
-is 21% more than the first values ever needed.** Thus this route is not only
-corrected - it is the most difficult it has been. Rule 1 operates on the wallets
-that pay, and this effect operates on the wallets that never pay. The two now
-operate in the same direction.
+The current allowance is 20 hops. The smaller rate and restored allowance both
+do this. **780,822 wallets is 33% more than the first values ever needed.** Thus
+this route is not only corrected - it is the most difficult it has been. Rule 1
+operates on wallets that pay a game fee, and this effect operates on wallets that
+do not. The two now operate in the same direction.
 
 ### Each player type stays below the target
 
 | Player | Hops | Payment each day | Gets through at | Established | New wallet | Target |
 |---|---|---|---|---|---|---|
-| Light casual, no hide | 40 | $0.265 | **Never** | **6** | **6** | 25 - 70 |
-| Light casual, 2 hides | 40 | $0.765 | Hop 34 | **~54** | ~54 | 25 - 70 |
-| Typical casual | 62 | $0.955 | The round-3 hide | 117.5 | 62.5 | 140 - 280 |
-| Active | 128 | $3.635 | Hop 60 | 285.9 | 202.4 | 300 - 500 |
+| Light casual, no hide | 40 | $0.275 | **Never** | **6** | **6** | 25 - 70 |
+| Light casual, 2 hides | 40 | $0.775 | Hop 33 | **~55** | ~55 | 25 - 70 |
+| Typical casual | 62 | $0.965 | The round-3 hide | 117.5 | 62.5 | 140 - 280 |
+| Active | 128 | $3.645 | Hop 59 | 286.7 | 202.7 | 300 - 500 |
 
 **A light casual player and a small farmer pay the same amount.** Thus the gate
 cannot see the difference. It decreases the rewards for both.
@@ -726,7 +736,7 @@ active player 14.1 ROZ below. The correction is the larger cause. The hop rate o
 0.15 adds 8.1 ROZ and 8.8 ROZ more.
 
 **More hops cannot correct the light casual player.** The maximum payment below
-$0.60 is $0.595, which is 64 hops. These hops give 64 x 0.15 = **9.6 ROZ**, and
+$0.60 is $0.585, which is 63 hops. These hops give 63 x 0.15 = **9.45 ROZ**, and
 there is no participation bonus. Thus 9.6 ROZ is the maximum for a day of hops
 below the gate, and the target starts at 25.
 
@@ -926,7 +936,7 @@ The limits and the decreased rates from section 5.2:
 |---|---|---|
 | `participationMinimumHops` | 28 | a count |
 | `hopRewardCap` | 40 | a count, for each **round** |
-| `dailyFreeHops` | 22 | a count |
+| `dailyFreeHops` | 20 | a count |
 | `dailyFreeSpawns` | 1 | a count |
 | `dailySpendThreshold` | $0.60 | `600000` |
 | `lifetimeSpendThreshold` | $3.00 | `3000000` |
@@ -1080,7 +1090,7 @@ a bulk call to avoid the multiplier.
 
 **Step 0 gives the full rate to the action that gets through the gate.** The
 contract takes the fee, adds it to the counters, and reads the rate after that.
-Thus hop 65 gives 1.0, and the third hide of a day gives 30.
+Thus hop 64 gives 1.0, and the third hide of a day gives 30.
 
 **The participation bonus needs both conditions at each hop.** The contract must
 not give it at hop 28 and then forget it. A player can get to 28 hops below $0.60.
@@ -1196,7 +1206,7 @@ On the cheapest farm route, which uses 5, it is 5 times. Change the calculation 
 subtract the fees for each share. The result for one share does not change.
 
 **The limits have removed most of this problem.** The error moves the cheapest farm
-wallet from $1.209 to $1.158 each day, which is approximately 4%. Thus this is not
+wallet from $1.219 to $1.168 each day, which is approximately 4%. Thus this is not
 urgent now. But the calculation is still wrong: the fees are for each treasure, and
 the contract must subtract them for each treasure. The change is one line. A
 whitelisted address that claims 250 shares one time would still pay 250 times too
@@ -1495,33 +1505,33 @@ you decrease the rates first, the early players get less.
 ### 9.1 Farm wallets
 
 **One large wallet.** The new prices in section 5.1 control this method. The cost
-is now $4.715 each day for 136.35 ROZ. This is profitable if ROZ costs more than
-**$0.0346**. Before, the value was $0.0072. Thus the cost is 4.8 times more.
+is now $4.725 each day for 136.24 ROZ. This is profitable if ROZ costs more than
+**$0.0347**. Before, the value was $0.0072. Thus the cost is approximately 4.8 times more.
 
 **Many small wallets.** The new prices in section 5.1 do not control this method.
-They make it **less** expensive. A wallet that makes 28 hops pays $0.045 and
-earns 46 ROZ. The cost to take all the Year 1 tokens is $2,292 each day.
+They make it **less** expensive. A wallet that makes 28 hops pays $0.055 and
+earns 46 ROZ. The cost to take all the Year 1 tokens is $2,801 each day.
 
 **The gate in section 5.2 controls this method.** With the daily payment limit,
-the same wallet must pay $0.615 and it earns **28.6** ROZ. The cost to take all
-the Year 1 tokens becomes **$50,371 each day**. This is 22 times more. The total
-payment limit of $3 adds $245,712 more, one time.
+the same wallet must pay $0.605 and it earns **28.45** ROZ. The cost to take all
+the Year 1 tokens becomes **$49,813 each day**. This is approximately 18 times more. The total
+payment limit of $3 adds $247,008 more, one time.
 
 **A farmer selects the least expensive wallet, not the largest wallet.** Thus the
-wallet that makes 65 hops for $0.615 is the danger. It is profitable if ROZ costs
-more than **$0.0215**. This is a market value of $107M with 5,000,000,000 tokens.
+wallet that makes 64 hops for $0.605 is the danger. It is profitable if ROZ costs
+more than **$0.0213**. This is a market value of $106M with 5,000,000,000 tokens.
 This is a large value for a game token. Thus this danger is not near. The older
-value of $37M came from a calculation that gave the full rate to all 65 hops.
+value of $37M came from a calculation that gave the full rate to all 64 hops.
 Section 5.2 does not permit this.
 
 **Starknet gas is the largest control, and you have measured it.** A transaction
-costs **$0.025 to $0.04**. The hop route needs 66 transactions for 28.6 ROZ, thus
-gas adds $1.65 to $2.64 to the $0.615 of fees. The true cost is **$0.079 to
-$0.114** for each ROZ, which is a market value of **$396M to $569M**. **The hop
+costs **$0.025 to $0.04**. The hop route needs 65 transactions for 28.45 ROZ, thus
+gas adds $1.63 to $2.60 to the $0.605 of fees. The true cost is **$0.078 to
+$0.113** for each ROZ, which is a market value of **$392M to $563M**. **The hop
 route is not profitable.**
 
 **The cheapest route mixes hides and hops.** Section 9.2 gives it: 5 hides and 28
-hops give 262 ROZ for $1.209 of fees and $0.85 to $1.36 of gas. This is **$0.0079
+hops give 262 ROZ for $1.219 of fees and $0.85 to $1.36 of gas. This is **$0.0079
 to $0.0098** for each ROZ, or **$39M to $49M**. This is the value to watch.
 
 ### 9.2 The hide loop, and how section 5 controlled it
@@ -1555,7 +1565,7 @@ treasure the ROZ decreases more quickly than the fee increases.
 
 #### The cheapest wallet is still 3 hides and 28 hops
 
-The hide fees get through the gate exactly - 3 x $0.20 = $0.60. Then the 22 free
+The hide fees get through the gate exactly - 3 x $0.20 = $0.60. Then the 20 USDC-free
 hops give the full 1.0 and not 0.15. All three hides are in the 1.00x band:
 
 | Step | Payment after | Volume | ROZ |
@@ -1563,38 +1573,38 @@ hops give the full 1.0 and not 0.15. All three hides are in the 1.00x band:
 | Hide 1 | $0.20 - below | 1.00x | 4.5 + 7.5 |
 | Hide 2 | $0.40 - below | 1.00x | 4.5 + 7.5 |
 | Hide 3 | **$0.60 - gets through** | 1.00x | 30 + 50 |
-| 22 free hops | $0.60 | - | 22 |
-| Hops 23 to 28 (+$0.045) | $0.645 | - | 6 |
+| 20 USDC-free hops | $0.60 | - | 20 |
+| Hops 21 to 28 (+$0.055) | $0.655 | - | 8 |
 | Participation | - | - | 18 |
-| **Total** | **$0.6835 in total** | | **150 ROZ** |
+| **Total** | **$0.6935 in total** | | **150 ROZ** |
 
 **More than three hides is worse, and this is the purpose.** The complete curve
 for the farmer:
 
 | Hides | ROZ | Cost | For each ROZ | Market value |
 |---|---|---|---|---|
-| 1 | 39.1 | $0.628 | 0.01606 | $80.3M |
-| 2 | 49.4 | $0.631 | 0.01275 | $63.8M |
-| **3** | **150.0** | **$0.683** | **0.00456** | **$22.8M** |
-| 4 | 206.0 | $0.946 | 0.00459 | $23.0M |
-| 5 | 262.0 | $1.209 | 0.00461 | $23.1M |
-| 7 | 326.0 | $1.735 | 0.00532 | $26.6M |
-| 10 | 364.4 | $2.523 | 0.00692 | $34.6M |
+| 1 | 38.95 | $0.618 | 0.01586 | $79.3M |
+| 2 | 49.3 | $0.631 | 0.01279 | $64.0M |
+| **3** | **150.0** | **$0.693** | **0.00462** | **$23.1M** |
+| 4 | 206.0 | $0.956 | 0.00464 | $23.2M |
+| 5 | 262.0 | $1.219 | 0.00465 | $23.3M |
+| 7 | 326.0 | $1.745 | 0.00535 | $26.8M |
+| 10 | 364.4 | $2.533 | 0.00695 | $34.8M |
 
-**The change from 3 to 10 cost nothing.** The minimum stays at $22.8M, which is
+**The change from 3 to 10 cost nothing.** The minimum stays near $23.1M, which is
 the same value that the maximum of 3 gave. One hide and two hides are much worse,
-not better: a wallet without three hides must **hop** to $0.60, and it uses 44 to
-55 hops at 0.15 to arrive.
+not better: a wallet without three hides must **hop** to $0.60, and it uses 43 to
+54 hops to arrive.
 
 | | Before section 5 | **Now** |
 |---|---|---|
-| Cost for each ROZ, all hides survive | $0.00016 → **$0.8M** | **$0.00456 → $22.8M** |
-| Cost for each ROZ, a busy game | $0.0192 → $96M | **$0.0221 → $110M** |
-| Cost each day, a quiet round | $375 | **$10,674** |
+| Cost for each ROZ, all hides survive | $0.00016 → **$0.8M** | **$0.00462 → $23.1M** |
+| Cost for each ROZ, a busy game | $0.0192 → $96M | **$0.0222 → $111M** |
+| Cost each day, a quiet round | $375 | **$10,831** |
 | Number of wallets | ~1 | **15,616 each day** |
 | **Transactions** | **~147 each day** | **~500,000 each day** |
 
-**The minimum increased 28 times, and the transactions increased 3,400 times.**
+**The minimum increased approximately 29 times, and the transactions increased 3,400 times.**
 
 #### The cost still depends on the treasures that the finders take
 
@@ -1610,14 +1620,14 @@ thus the density stays the same.
 
 | Finds by the correct players, in each round | Treasures taken | Cost for each ROZ | Cost each day | Profitable above |
 |---|---|---|---|---|
-| ~1,875 - a busy game, ~5,000 players each day | 16.0% | **$0.0221** | $48,150 | **$110M** |
-| ~500 | 4.3% | $0.0100 | $21,700 | $50M |
-| ~100 - a quiet round | 0.9% | $0.00560 | $12,100 | $28M |
-| 0 - a round with no players | 0% | **$0.00456** | $10,674 | **$22.8M** |
+| ~1,875 - a busy game, ~5,000 players each day | 16.0% | **$0.0222** | $51,900 | **$111M** |
+| ~500 | 4.3% | $0.00909 | $21,299 | $45.5M |
+| ~100 - a quiet round | 0.9% | $0.00554 | $12,989 | $27.7M |
+| 0 - a round with no players | 0% | **$0.00462** | $10,831 | **$23.1M** |
 
 **Read the last line first now.** It is the best condition for the farmer, and
-$22.8M is not extreme. The same line gave $0.8M before section 5. The first line
-at $110M is **more** expensive than the hop route at $107M.
+$23.1M is not extreme. The same line gave $0.8M before section 5. The first line
+at $111M is **more** expensive than the hop route at $106M.
 
 **The danger from the time is much smaller.** A farmer still prefers the quiet
 rounds. But the difference between the first line and the last line is **4.8
@@ -1634,7 +1644,7 @@ thus they do not remove it now:
 | | The hop route | The hide route, before | **The hide route now** |
 |---|---|---|---|
 | Transactions to take all the Year 1 tokens | ~5.3 million each day | ~147 each day | **~500,000 each day** |
-| Fees | $50,371 each day | $375 to $45,000 | **$10,674 to $48,150** |
+| Fees | $49,813 each day | $375 to $45,000 | **$10,831 to $51,900** |
 | Money necessary | None | $146,405, returned | $234,240, returned |
 
 15,616 wallets x 32 transactions each - 3 hides, 28 hops and one claim. This is
@@ -1645,14 +1655,14 @@ each route.** Thus the values above are too small:
 
 | Route | Fees | Gas | Total | For each ROZ | Market value |
 |---|---|---|---|---|---|
-| 3 hides + 28 hops (32 tx) | $0.683 | $0.80 to $1.28 | $1.48 to $1.96 | $0.0099 to $0.0131 | **$49M to $65M** |
-| **5 hides + 28 hops (34 tx)** | $1.209 | $0.85 to $1.36 | $2.06 to $2.57 | **$0.0079 to $0.0098** | **$39M to $49M** |
-| 65 hops only (66 tx) | $0.615 | $1.65 to $2.64 | $2.27 to $3.26 | $0.079 to $0.114 | $396M to $569M |
+| 3 hides + 28 hops (32 tx) | $0.693 | $0.80 to $1.28 | $1.49 to $1.97 | $0.0100 to $0.0132 | **$50M to $66M** |
+| **5 hides + 28 hops (34 tx)** | $1.219 | $0.85 to $1.36 | $2.07 to $2.58 | **$0.0079 to $0.0098** | **$39M to $49M** |
+| 64 hops only (65 tx) | $0.605 | $1.63 to $2.60 | $2.23 to $3.21 | $0.078 to $0.113 | $392M to $563M |
 
 **Gas changes the best wallet for the farmer.** With the fees only, the farmer
 stops at three hides. With the gas, the best number is **five**, because more
 treasures in one wallet divide the fixed cost of the 29 hop and claim
-transactions. The minimum increases from $22.8M to **$39M to $49M**.
+transactions. The minimum increases from $23.1M to **$39M to $49M**.
 
 #### The round maximum gives a limit on the quantity
 
@@ -1668,7 +1678,7 @@ can take at any price**, and this is the limit that operates:
 The Year 1 budget is 2,342,466 ROZ each day. Thus this is **25.4%**. **A hide farm
 cannot take all the tokens** - not at any price, and not with any number of
 wallets. After one quarter of the daily tokens the farmer must use the hop route
-at $396M or more, and nobody does this.
+at $392M or more, and nobody does this.
 
 This is a different type of protection, and a better one: it does not change with
 the ROZ price, with the gas, or with the number of treasures that the finders take.
@@ -1694,16 +1704,16 @@ to the payment counters. Thus each hop gives 0.15 ROZ and not 1.0 ROZ:
 
 | Source | ROZ |
 |---|---|
-| 22 free hops x **0.15** | 3.3 |
-| Participation bonus. It stops below $0.60. Also, 22 is less than 28 | **0** |
+| 20 USDC-free hops x **0.15** | 3 |
+| Participation bonus. It stops below $0.60. Also, 20 is less than 28 | **0** |
 | Spawn. A spawn gives no ROZ | 0 |
-| **Total each day, with no cost** | **3.3** |
+| **Total each day, with no USDC fee** | **3** |
 
-Approximately **709,838** wallets can take all the tokens for Year 1. These
+Approximately **780,822** wallets can take all the tokens for Year 1. These
 wallets pay Starknet gas only.
 
 **Two controls stop the participation bonus.** The payment limit stops it. Also,
-the free allowance (22) is less than the participation minimum (28). One control
+the free allowance (20) is less than the participation minimum (28). One control
 is sufficient. Two controls cost nothing more.
 
 Obey this rule: **keep the free allowance less than the participation minimum.**
@@ -1716,16 +1726,16 @@ three times:
 |---|---|---|
 | 20 free hops, 0.2 multiplier | 4 | 585,617 |
 | 22 free hops, 0.3 | 6.6 | 354,919 |
-| **22 free hops, 0.15** | **3.3** | **709,838** |
+| **20 free hops, 0.15** | **3** | **780,822** |
 
-The allowance is still 22 hops. The rate did all of this. 709,838 wallets is 21%
+The allowance is 20 hops again and the rate is lower. 780,822 wallets is 33%
 more than the first values needed. Thus this route is the most difficult it has
 been.
 
 **But be careful with this value.** `hopRewardBelowThreshold` does not operate
 only on the wallets that pay nothing. Each day starts at zero payment. Thus it is
-also the rate for the first hops of each correct player's day: 54 hops for the
-typical casual player, and 59 hops for the active player. The change from 0.3 to
+also the rate for the first hops of each correct player's day: 50 hops for the
+typical casual player, and 58 hops for the active player. The change from 0.3 to
 0.15 removed 8.1 ROZ and 8.8 ROZ from these two players. To make the value smaller
 again is not free. `dailyFreeHops` is the other control, and it operates only
 inside the allowance.
@@ -1778,7 +1788,7 @@ write "no game fee" and not "free" until the paymaster operates.
 4. Hop 28 gives the participation bonus one time. Hop 41 gives nothing.
 4a. The participation bonus operates one time each day. Make 28 hops in round 1,
    then make 28 hops in round 2. The bonus does not operate a second time.
-4b. **The hop price increases correctly.** Hops 1 to 22 cost nothing. Hop 23 costs
+4b. **The hop price increases correctly.** Hops 1 to 20 have no USDC fee. Hop 21 costs
    `5000`. Hop 26 costs `10000`. Hop 46 costs `20000`. Hop 66 costs `40000`.
    **Hop 41 is the first hop of round 2. It must not cost `5000`.** The count must
    not go back to zero at the end of a round. This is the most important test for
@@ -1789,10 +1799,10 @@ write "no game fee" and not "free" until the paymaster operates.
    18 ROZ for the bonus. Test the bonus. The gate stops the bonus. It does not
    decrease the bonus.
 4d-i. **The hop that gets through the gate gives the full rate. The earlier hops
-   do not change.** Let a new wallet make 65 hops with no spawns. Hops 1 to 64
-   must each give `0.15e18`. Hop 65 must give `1e18`. The total balance is
-   `28.6e18` with the participation bonus. Read the balance again after hop 65 and
-   make sure that the first 64 rewards did **not** increase. Most of the strength
+   do not change.** Let a new wallet make 64 hops with no spawns. Hops 1 to 63
+   must each give `0.15e18`. Hop 64 must give `1e18`. The total balance is
+   `28.45e18` with the participation bonus. Read the balance again after hop 64 and
+   make sure that the first 63 rewards did **not** increase. Most of the strength
    of the gate is in this rule. A contract that calculates the day again gives this
    wallet almost three times more.
 4d-ii. **The participation bonus operates after a late gate crossing.** Make 28
@@ -1809,7 +1819,7 @@ write "no game fee" and not "free" until the paymaster operates.
    gets more than the $3 limit for the $0.2128 that a hide really costs. This is
    **14 times** less expensive, and rules 1 and 3 stop. Refer to section 5.2
    rule 1.
-4e-i. **A free hop gives no payment credit.** After 22 free hops, the two payment
+4e-i. **A free hop gives no payment credit.** After 20 USDC-free hops, the two payment
    totals are still zero. Thus free play alone can never get to the limit.
 4e-ii. **Three hides get through the daily gate exactly, and the third gives the
    full rate.** From test 4e: hides 1 and 2 give `4.5e18` each. Hide 3 - the hide
@@ -1878,11 +1888,11 @@ write "no game fee" and not "free" until the paymaster operates.
 5. A spawn gives 0 ROZ. This is correct for a free spawn and a paid spawn.
 6. **With no ROZ in the contract:** a hide, a move and a spawn all operate. The
    USDC claim pays in full. This is the most important test.
-7. A wallet with no USDC and no approval can spawn one time and hop 22 times.
-   The balance is **3.3 ROZ**, because the wallet is below $0.60. **The
+7. A wallet with no USDC and no approval can spawn one time and hop 20 times.
+   The balance is **3 ROZ**, because the wallet is below $0.60. **The
    participation bonus does not operate**, for two reasons: the wallet is below
-   $0.60, and 22 hops is less than 28. This is the most important anti-farm test.
-7a. Give USDC to the same wallet. Let it hop to hop 65. The hops after `600000`
+   $0.60, and 20 hops is less than 28. This is the most important anti-farm test.
+7a. Give USDC to the same wallet. Let it hop to hop 64. The hops after `600000`
    give 1 ROZ. The earlier hops keep 0.15 ROZ. The contract does not calculate
    them again.
 8. A bulk hide of $1,000 **fails** with `'daily hide cap'` from a wallet that is
@@ -1958,7 +1968,7 @@ write "no game fee" and not "free" until the paymaster operates.
     $0.00741 for each ROZ and would put the typical casual and active players back
     in their targets - but the farm effect is the larger of the two.
 14. ~~**What is the daily maximum reward?**~~ **`dailySoftCapRoz` = 136.** It is a
-    small quantity below the natural maximum of 136.35, thus it stops only the
+    small quantity below the raw maximum of 137.2, thus it stops only the
     route that pays for spawns before it hops. Refer to section 5.1.
 15. ~~**How much does Starknet gas cost?**~~ **$0.025 to $0.04 for each
     transaction**, measured. It is now more than the game fees on each route
@@ -1974,7 +1984,7 @@ write "no game fee" and not "free" until the paymaster operates.
     needs a new value - a total of the USDC that players can claim - because the
     contract calculates the USDC from the shares and never adds it together.
 19. ~~**Is "a light casual player must hide" correct?**~~ **Yes.** Two hides give
-    approximately 54 ROZ, and 2 hides with 42 hops give 30.3 ROZ below the gate.
+    approximately 55 ROZ, and 2 hides with 42 hops give 30.3 ROZ below the gate.
 20. ~~**The rewards change with the order of the actions.**~~ **Put a message in
     the display: "hide after you pay $0.60".**
 21. ~~**The participation bonus needs the two conditions.**~~ **Confirmed.** The
@@ -1999,21 +2009,21 @@ write "no game fee" and not "free" until the paymaster operates.
    early.
 8. **No player type gets the target reward - accepted as it is.** The targets are
    25 to 70, 140 to 280, and 300 to 500. The light casual player gets **6** (or
-   approximately 54 with two hides), the typical casual player gets **117.5**, and
-   the active player gets **285.9**. You examined the three options - decrease the
+   approximately 55 with two hides), the typical casual player gets **117.5**, and
+   the active player gets **286.7**. You examined the three options - decrease the
    targets again, increase `hopRewardBelowThreshold`, or decrease
    `dailySpendThreshold` - and **you took none of them**, because only the last one
    helps the light casual player and it is also the one that makes the gate weaker.
    Examine this first if the real players stop early.
 12. **The light casual player is the furthest below the target, and the middle is
-    a trap - accepted as it is.** This player pays $0.265 each day and gets 6 ROZ,
-    and the target starts at 25. **Two hides give approximately 54 ROZ, and 2 hides
+    a trap - accepted as it is.** This player pays $0.275 each day and gets 6 ROZ,
+    and the target starts at 25. **Two hides give approximately 55 ROZ, and 2 hides
     with 42 hops give 30.3 ROZ below the gate. But one hide gives only 18 ROZ** -
     less than both. A player who hides one time and stops is in the worst position,
     and nothing tells them this. Put it in the display.
 15. **Is $3 the correct total payment limit? - accepted as it is.** $3 gives a
-    cost of $245,712 one time. $5 gives $409,520, thus $3 gives approximately one
-    half of the control. Accepted: the ratio does not change - the cost is 4.9 days
+    cost of $247,008 one time. $5 gives $411,680, thus $3 gives approximately one
+    half of the control. Accepted: the ratio does not change - the cost is 5.0 days
     of the daily cost with each value - and the daily limit decides where the light
     casual player stops.
 25. ~~**The whitelist protects each address, and not the group.**~~ **Corrected
@@ -2095,7 +2105,7 @@ write "no game fee" and not "free" until the paymaster operates.
     whitelisted addresses. Or you can increase 2,840 - but the map increases with
     the square root of T, thus you must first test 500 x 500. Refer to section 6.
 28. **The gas does more against the farmers than the price list does** (section
-    9.2). The cheapest farm wallet pays **$1.209 of fees and $0.85 to $1.36 of
+    9.2). The cheapest farm wallet pays **$1.219 of fees and $0.85 to $1.36 of
     gas** - the gas is the larger part. Thus section 5.1 has four price tiers for
     the smaller of the two costs. One flat price could give the same protection
     with less complexity. Examine this when you have measured the real gas.

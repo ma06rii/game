@@ -96,7 +96,7 @@ it lands the wallet precisely on the threshold.
 
 | | Was | Now |
 |---|---|---|
-| Hops | flat $0.10 | **22 free/day**, then $0.005 → $0.04 tiered by daily volume |
+| Hops | flat $0.10 | **20 USDC-free/day**, then $0.005 → $0.04 tiered by daily volume |
 | Spawns | $1.00 | **1 free/day**, then $0.10 |
 | Hop reward cap | 32/round | 40/round |
 | Participation bonus | per round | **once per calendar day**, needs 28 hops **and** $0.60 |
@@ -160,7 +160,7 @@ be new.
 | `get_total_reward_token_pending()` | `u256` | All IOUs. Compare to the contract's ROZ balance |
 | `get_player_daily_state(addr)` | `(hops, roz, hides, spend, freeHopsUsed)` | Everything resetting at 00:00 UTC |
 | `get_player_lifetime_spend(addr)` | `u256` | New-wallet status, against $3 |
-| `get_free_hops_remaining(addr)` | `u256` | "N free hops left today" |
+| `get_free_hops_remaining(addr)` | `u256` | "N hops with no USDC fee left today" |
 | `get_hide_settings()` | `(feeBase, feeHigh, tierBoundary, dailyCap, perRound)` | |
 | `get_gate_thresholds()` | `(daily, lifetime)` | The $0.60 and $3 lines |
 | `get_hop_limits()` | `(participationMin, roundCap, freeHops, freeSpawns)` | |
@@ -223,7 +223,7 @@ Vue 3 + Vite, `starknet.js` ^9.2.1, `@cartridge/controller` ^0.13.16.
 | `415` | `approveGameContractToSpend(tokenUnitAmount)` | **Budget must now include hide fees** |
 | `492` | `getGameRewardTokenBalance()` | Keep — but it is only the *wallet* half (§5.3) |
 | `685` | `entrypoint: 'finder_player_generate_position'` | Works; 1 free/day then $0.10 |
-| `758`, `813`, `874`, `932` | `entrypoint: 'finder_player_move_position'` | Works; 22 free/day then tiered |
+| `758`, `813`, `874`, `932` | `entrypoint: 'finder_player_move_position'` | Works; 20 USDC-free/day then tiered |
 | `960`, `994` | `hideTreasure()` / `entrypoint: 'hide_treasure'` | Works, but now costs a fee and is capped at 10/day |
 | `1225–1241` | Reward-token contract + decimals setup | Repoint at ROZ (18 decimals) |
 | `2362`, `2394` | `gamerRewardTokenDue` display | Feed from the contract, not the old formula |
@@ -290,8 +290,13 @@ three-hide route across.
 wallet" from the token's `balance_of`. A claim button when pending > 0, calling
 `claim_reward_tokens()`.
 
-**4 — Daily allowances.** Free hops remaining (of 22), hides used (of 10), free
+**4 — Daily allowances.** USDC-free hops remaining (of 20), hides used (of 10), free
 spawn used. All reset 00:00 UTC.
+
+"Free" waives the game fee only: gas is still paid in STRK. If a later
+paymaster campaign sponsors fewer than 20 hops (for example 15), show the two
+limits separately. The fully sponsored count is `min(20, campaignCap)`; hops
+above the campaign cap but not above 20 still have no USDC fee.
 
 **5 — Diminishing returns.** The multiplier for the *next* treasure. A player at
 8 hides today should see their next is worth 0.20×.
@@ -316,7 +321,7 @@ Add to `controllerPolicies.js`: `hide_treasure_bulk`, `claim_reward_tokens`,
 
 1. Approve, hide three times → gate meter reads $0.60, and hop rewards visibly
    change afterwards.
-2. Hop 22 times free → counter reaches zero, hop 23 charges $0.005.
+2. Hop 20 times with no USDC fee → counter reaches zero; hop 21 charges $0.005.
 3. Pending ROZ non-zero → claim → wallet balance rises, pending returns to zero.
 4. Hide 8 times → next-treasure multiplier shows 0.20×; the 11th hide is refused.
 5. Point at a contract holding no ROZ → gameplay still works, accrual-paused

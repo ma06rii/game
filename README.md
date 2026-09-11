@@ -37,10 +37,15 @@ from Doppler or deployment outputs instead of copying a second snapshot.
 | ROZ reward token | `0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b` |
 | Test VRF provider | `0x01baad38bde8d3d60eebab5b96f72a297d52e6d1386bc3d4ec5344d9a30388bd` |
 | Legacy owner | `0x052a2b0b20d8796e57f0f00e99adfd61e0b40c4a49553d4197e4da6c1c023833` |
+| Live hop limits | participation `28`, round reward cap `40`, USDC-free/day `20`, free spawns/day `1` |
 
 The test VRF provider is Sepolia-only. Do not deploy or configure it on
 mainnet. Operational balances and historical deployments are documented in
 [`ROZ_DEPLOYMENT_AND_FUNDING.md`](ROZ_DEPLOYMENT_AND_FUNDING.md).
+
+The first 20 hops of each UTC day waive the USDC game fee; players still pay
+gas in STRK. A future paymaster campaign is a separate limit and may sponsor at
+most 20 hops, or fewer (for example 15).
 
 ## Prerequisites
 

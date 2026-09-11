@@ -826,13 +826,13 @@ mod HelloStarknet {
         // ------------------------------------------------------------------
         participationMinimumHops: u256, // 28 - hops needed for the daily bonus
         hopRewardCap: u256, // 40 - rewarded hops per ROUND
-        dailyFreeHops: u256, // 22 - deliberately BELOW 28, see below
+        dailyFreeHops: u256, // 20 - deliberately BELOW 28, see below
         dailyFreeSpawns: u256, // 1
         dailySoftCapRoz: u256, // 136 - hops + participation only
         softCapMultiplierNum: u256, // 1 } 0.2x beyond the soft cap
         softCapMultiplierDen: u256, // 5 }
         newWalletSoftCapRoz: u256, // 80 - near inert, ~142 hops to bind
-        // dailyFreeHops (22) MUST stay strictly below participationMinimumHops
+        // dailyFreeHops (20) MUST stay strictly below participationMinimumHops
         // (28), so the 18-ROZ bonus can never be had for free. Since 2.6 the
         // spend threshold is the primary guard and this ordering is defence in
         // depth, but breaking it would reopen a zero-cost route to the bonus.
@@ -1181,7 +1181,7 @@ mod HelloStarknet {
             // --- Limits and allowances (2.2, 2.3) ---
             self.participationMinimumHops.write(28);
             self.hopRewardCap.write(40); // per ROUND
-            self.dailyFreeHops.write(22); // strictly below 28
+            self.dailyFreeHops.write(20); // strictly below 28
             self.dailyFreeSpawns.write(1);
             self.dailySoftCapRoz.write(136000000000000000000); // 136
             self.softCapMultiplierNum.write(1); // 0.2x
@@ -1210,7 +1210,7 @@ mod HelloStarknet {
 
             // --- Progressive hop prices (2.5) ---
             // Band i covers hops up to hop_price_tier_limit[i] of the DAY. The
-            // free allowance is applied before this, so band 0 starts at hop 23.
+            // free allowance is applied before this, so band 0 starts at hop 21.
             self.hop_price_tier_limit.write(0, 25);
             self.hop_price_tier_price.write(0, 5000); //  $0.005
             self.hop_price_tier_limit.write(1, 45);
@@ -1677,10 +1677,10 @@ mod HelloStarknet {
         // participation ever see - they never touch the volume multiplier, which
         // belongs to hides.
         //
-        // The cap is set to 136, just under the 136.35 a 160-hop day can
-        // actually reach, so in practice it binds only the wallet that clears
-        // $0.60 on spawns BEFORE it starts hopping. An honest active player
-        // reaches about 95.85 and never meets it at all. That is deliberate: it
+        // The cap is set to 136, just under the 137.2 raw ROZ a 160-hop day can
+        // reach when four spawns are taken before hopping. In practice it binds
+        // only that bought-crossing route. An honest active player reaches
+        // about 96.7 and never meets it at all. That is deliberate: it
         // is a backstop against one shape of farm, not a brake on real play.
         fn _applyHopSoftCap(
             ref self: ContractState, gamerWalletAddress: ContractAddress, amount: u256,
@@ -4002,7 +4002,7 @@ mod HelloStarknet {
 
         // Two orderings carry the design here and neither may be broken:
         //
-        //   freeHopsPerDay (22) < participationMinimum (28)
+        //   freeHopsPerDay (20) < participationMinimum (28)
         //       so the 18-ROZ bonus can never be reached on free hops alone
         //   participationMinimum (28) <= roundRewardCap (40)
         //       so the bonus is demanding without needing a perfect round

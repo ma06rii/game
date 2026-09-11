@@ -187,7 +187,7 @@ fn test_hop_limits_and_gate_thresholds() {
     let (participationMin, roundCap, freeHops, freeSpawns) = dispatcher.get_hop_limits();
     assert(participationMin == 28, 'participationMin != 28');
     assert(roundCap == 40, 'roundCap != 40');
-    assert(freeHops == 22, 'freeHops != 22');
+    assert(freeHops == 20, 'freeHops != 20');
     assert(freeSpawns == 1, 'freeSpawns != 1');
 
     // The ordering that stops the 18-ROZ bonus being had for nothing.
@@ -292,7 +292,7 @@ fn test_fresh_wallet_state() {
 
     let player: ContractAddress = contract_address_const::<0x1234>();
 
-    assert(dispatcher.get_free_hops_remaining(player) == 22, 'free hops != 22');
+    assert(dispatcher.get_free_hops_remaining(player) == 20, 'free hops != 20');
     assert(dispatcher.get_player_lifetime_spend(player) == 0, 'lifetime spend != 0');
     assert(dispatcher.get_reward_token_pending(player) == 0, 'pending != 0');
     assert(dispatcher.get_total_reward_token_pending() == 0, 'total pending != 0');
@@ -940,8 +940,8 @@ fn test_first_spawn_is_free_and_pays_no_roz() {
 //
 // This is the zero-cost sybil surface from 4l-i-a, measured directly. A wallet
 // that never pays cannot clear the $0.60 gate, so its hops resolve to
-// hopRewardBelowThreshold and it earns 22 x 0.15 = 3.3 ROZ a day for nothing
-// but gas. That 3.3 is the figure the 709,838-wallet estimate rests on.
+// hopRewardBelowThreshold and it earns 20 x 0.15 = 3 ROZ a day for nothing
+// but gas. That 3 ROZ is the figure the 780,822-wallet estimate rests on.
 #[test]
 fn test_free_hops_earn_but_never_count_as_spend() {
     let player: ContractAddress = contract_address_const::<0xb002>();
@@ -951,13 +951,13 @@ fn test_free_hops_earn_but_never_count_as_spend() {
     start_cheat_caller_address(game, player);
     dispatcher.finder_player_generate_position();
 
-    assert(dispatcher.get_free_hops_remaining(player) == 22, 'should start with 22');
+    assert(dispatcher.get_free_hops_remaining(player) == 20, 'should start with 20');
 
-    // Twenty-two free hops. Direction 1 and 2 alternate so the player walks
+    // Twenty free hops. Direction 1 and 2 alternate so the player walks
     // back and forth rather than off the edge of the 14x14 board.
     let mut hopped: u32 = 0;
     loop {
-        if (hopped == 22) {
+        if (hopped == 20) {
             break;
         }
         hop_safely(game, player);
@@ -967,8 +967,8 @@ fn test_free_hops_earn_but_never_count_as_spend() {
 
     let (hopsToday, _, _, spendToday, freeUsed) = dispatcher.get_player_daily_state(player);
 
-    assert(hopsToday == 22, 'should have hopped 22');
-    assert(freeUsed == 22, 'all 22 free hops used');
+    assert(hopsToday == 20, 'should have hopped 20');
+    assert(freeUsed == 20, 'all 20 free hops used');
     assert(dispatcher.get_free_hops_remaining(player) == 0, 'allowance should be spent');
 
     // NOTHING was charged, so nothing is spend - which is exactly why free play
@@ -976,15 +976,15 @@ fn test_free_hops_earn_but_never_count_as_spend() {
     assert(spendToday == 0, 'free hops are not spend');
     assert(dispatcher.get_player_lifetime_spend(player) == 0, 'free hops not lifetime spend');
 
-    // 22 x 0.15 = 3.3 ROZ. A free hop earns exactly what a paid hop by the same
+    // 20 x 0.15 = 3 ROZ. A free hop earns exactly what a paid hop by the same
     // wallet would - the rate is set by the gate, never by whether the hop was
     // charged for.
-    assert(dispatcher.get_reward_token_pending(player) == 3300000000000000000, 'should be 3.3 ROZ');
+    assert(dispatcher.get_reward_token_pending(player) == 3000000000000000000, 'should be 3 ROZ');
 }
 
 // TEST 5e-i continued - PARTICIPATION IS LOCKED TWICE OVER for a free player.
 //
-// The wallet cannot reach 28 hops on a 22-hop allowance, and even if it could
+// The wallet cannot reach 28 hops on a 20-hop allowance, and even if it could
 // the bonus is withdrawn below the spend threshold. Either lock alone would be
 // enough; keeping both costs nothing.
 #[test]
@@ -1003,7 +1003,7 @@ fn test_free_player_cannot_reach_participation() {
 
     let mut hopped: u32 = 0;
     loop {
-        if (hopped == 22) {
+        if (hopped == 20) {
             break;
         }
         hop_safely(game, player);
@@ -1011,14 +1011,14 @@ fn test_free_player_cannot_reach_participation() {
     }
     stop_cheat_caller_address(game);
 
-    // 3.3 ROZ and not a unit more. An 18-ROZ participation bonus on top would
+    // 3 ROZ and not a unit more. An 18-ROZ participation bonus on top would
     // be immediately visible here.
-    assert(dispatcher.get_reward_token_pending(player) == 3300000000000000000, 'no bonus expected');
+    assert(dispatcher.get_reward_token_pending(player) == 3000000000000000000, 'no bonus expected');
 }
 
 // The 2.5 tier prices, and the fact that a paid hop DOES count as spend.
 //
-// Hops 1-22 are free. Hop 23 is the first charged one, at the opening tier
+// Hops 1-20 are free. Hop 21 is the first charged one, at the opening tier
 // price of $0.005.
 #[test]
 fn test_paid_hops_charge_the_tier_price_and_count_as_spend() {
@@ -1032,7 +1032,7 @@ fn test_paid_hops_charge_the_tier_price_and_count_as_spend() {
     // Burn the free allowance.
     let mut hopped: u32 = 0;
     loop {
-        if (hopped == 22) {
+        if (hopped == 20) {
             break;
         }
         hop_safely(game, player);
@@ -1042,19 +1042,67 @@ fn test_paid_hops_charge_the_tier_price_and_count_as_spend() {
     let (_, _, _, spendBefore, _) = dispatcher.get_player_daily_state(player);
     assert(spendBefore == 0, 'free hops cost nothing');
 
-    // Hop 23 - the first paid one.
+    // Hop 21 - the first paid one.
     hop_safely(game, player);
     stop_cheat_caller_address(game);
 
     let (hopsToday, _, _, spendAfter, _) = dispatcher.get_player_daily_state(player);
 
-    assert(hopsToday == 23, 'should have hopped 23');
+    assert(hopsToday == 21, 'should have hopped 21');
 
     // The opening tier, $0.005. Band 0 runs to daily hop 25.
     let (bandLimit, bandPrice) = dispatcher.get_hop_price_band(0);
     assert(bandLimit == 25, 'band 0 should end at 25');
-    assert(spendAfter == bandPrice, 'hop 23 should cost band 0');
+    assert(spendAfter == bandPrice, 'hop 21 should cost band 0');
     assert(spendAfter == 5000, 'band 0 should be 0.005');
+}
+
+// Lowering the allowance during a UTC day never charges for hops that already
+// happened. A player who has used more than the new allowance simply has zero
+// free hops remaining, and their next hop is charged normally.
+#[test]
+fn test_lowering_free_hops_mid_day_is_not_retroactive() {
+    let player: ContractAddress = contract_address_const::<0xb014>();
+    let (game, _, _) = deploy_wired(player, 100000000);
+    let dispatcher = IHelloStarknetDispatcher { contract_address: game };
+
+    // Model a live day that began under the former 22-hop allowance.
+    start_cheat_caller_address(game, admin_address());
+    assert(dispatcher.update_hop_limits(28, 40, 22, 1), 'old allowance not set');
+    stop_cheat_caller_address(game);
+
+    start_cheat_caller_address(game, player);
+    dispatcher.finder_player_generate_position();
+    let mut hopped: u32 = 0;
+    loop {
+        if (hopped == 21) {
+            break;
+        }
+        hop_safely(game, player);
+        hopped = hopped + 1;
+    }
+    stop_cheat_caller_address(game);
+
+    let (_, _, _, spend_before, free_used_before) = dispatcher.get_player_daily_state(player);
+    assert(free_used_before == 21, 'expected 21 old free hops');
+    assert(spend_before == 0, 'old free hops must remain free');
+
+    // Apply the new live setting. Remaining allowance floors at zero even
+    // though the usage counter is greater than the new cap.
+    start_cheat_caller_address(game, admin_address());
+    assert(dispatcher.update_hop_limits(28, 40, 20, 1), 'new allowance not set');
+    stop_cheat_caller_address(game);
+    assert(dispatcher.get_free_hops_remaining(player) == 0, 'remaining must floor at zero');
+    let (_, _, _, spend_after_update, _) = dispatcher.get_player_daily_state(player);
+    assert(spend_after_update == 0, 'update charged old hops');
+
+    start_cheat_caller_address(game, player);
+    hop_safely(game, player);
+    stop_cheat_caller_address(game);
+
+    let (hops_after, _, _, spend_after_hop, _) = dispatcher.get_player_daily_state(player);
+    assert(hops_after == 22, 'next hop should still execute');
+    assert(spend_after_hop == 5000, 'next hop should be charged');
 }
 
 // The per-ROUND reward cap. Hops past it still MOVE the player - they simply
@@ -1112,7 +1160,7 @@ fn test_participation_waits_for_both_conditions() {
     start_cheat_caller_address(game, player);
     dispatcher.finder_player_generate_position();
 
-    // 28 hops: 22 free, then 6 paid at the opening tiers. Nowhere near $0.60.
+    // 28 hops: 20 free, then 8 paid at the opening tiers. Nowhere near $0.60.
     let mut hopped: u32 = 0;
     loop {
         if (hopped == 28) {

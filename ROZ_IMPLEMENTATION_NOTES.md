@@ -162,7 +162,8 @@ lets rewards accrue.
 | `test_rates_resolve_to_lowest_and_never_multiply` | **4.5e18** — and explicitly not `15e18` (new-wallet only) or `2.25e18` (multiplied) |
 | `test_bulk_hide_equals_the_same_number_of_single_hides` | Identical ROZ and spend, so there is nothing to gain by splitting or batching |
 | `test_volume_multiplier_reduces_later_treasures` | Marginals 15 → 10.5 → 1.2, day total **64.2 ROZ** |
-| `test_free_hops_earn_but_never_count_as_spend` | 22 free hops → **3.3 ROZ**, spend 0. The §4l-i-a zero-cost figure |
+| `test_free_hops_earn_but_never_count_as_spend` | 20 USDC-free hops → **3 ROZ**, spend 0. Gas remains payable in STRK |
+| `test_lowering_free_hops_mid_day_is_not_retroactive` | A wallet above the lowered cap has zero remaining; prior hops stay free and the next hop is charged |
 | `test_participation_waits_for_both_conditions` | Bonus withheld at 28 hops, fires once spend crosses |
 | `test_whitelist_group_cap_leaves_room_for_ordinary_players` | Group cap refuses a whitelisted address whose own cap would allow it — **and an ordinary player still hides** |
 | `test_sweep_leaves_what_players_are_owed` | Only the fee is sweepable; the stake is not |

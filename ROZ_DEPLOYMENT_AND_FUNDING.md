@@ -32,6 +32,17 @@ and how to run the tests, see `ROZ_IMPLEMENTATION_NOTES.md`.
 | **Game contract balance** | **0 ROZ, 0 USDC** — verified on 2026-09-03 |
 | Lifecycle after bootstrap expiry | round `0`, `ENDING`; round `1` did not open with zero staged treasures |
 
+### Live parameter changes
+
+| UTC date | Change | Transaction | Block | Verified result |
+|---|---|---|---|---|
+| 2026-09-11 | `dailyFreeHops`: 22 → 20 via owner-only `update_hop_limits(28, 40, 20, 1)` | `0x0545c00bd73150a4642014d62047ebcefcc4f0708d5d06800c94c2fd11b5a311` | `14900145` | `get_hop_limits()` → `(28, 40, 20, 1)` |
+
+This update is not retroactive. A wallet that had already used 20 or more free
+hops that day immediately had zero remaining, but no earlier hop was charged;
+its next hop used the normal price tier. "Free" here means no USDC game fee.
+Gas remains payable in STRK.
+
 ### Superseded game contracts
 
 Newest first. **State never migrates between deployments** — each redeploy leaves

@@ -117,7 +117,7 @@ owner-settable — see §4b for the storage table and §4l for the allowance log
 
 | Setting | Storage name | Value | Scope | Purpose |
 |---|---|---|---|---|
-| Daily free hops | `dailyFreeHops` | **22** | Per calendar day, shared across all four rounds | Lets a player try the game at no cost |
+| Daily free hops | `dailyFreeHops` | **20** | Per calendar day, shared across all four rounds | Waives the USDC fee for a player's first 20 hops |
 | Participation minimum hops | `participationMinimumHops` | **28** | Per calendar day — the bonus pays once daily | Puts the 18-ROZ bonus out of reach of free hops alone |
 | Per-round hop cap | `hopRewardCap` | **40** | Per **round** | Stops grinding within a single round |
 | Daily free spawns | `dailyFreeSpawns` | **1** | Per calendar day | One free repositioning a day |
@@ -125,13 +125,13 @@ owner-settable — see §4b for the storage table and §4l for the allowance log
 
 **Two orderings carry the design, and neither may be broken:**
 
-1. **`dailyFreeHops` (22) < `participationMinimumHops` (28).** The bonus can never
+1. **`dailyFreeHops` (20) < `participationMinimumHops` (28).** The bonus can never
    be reached on free hops alone — see §4l-i-a.
 2. **`participationMinimumHops` (28) ≤ `hopRewardCap` (40).** The bonus needs 28
    of a possible 40 — **70% of a round**, so participation is demanding without
    requiring a near-perfect round.
 
-The gap is 6 hops, which cost **$0.045** at the §2.5 tier prices. That gap alone
+The gap is 8 hops, which cost **$0.055** at the §2.5 tier prices. That gap alone
 is no longer the real guard on participation: **the $0.60 daily spend threshold in
 §2.6 is**, because the bonus is unavailable below it however many hops are made.
 The ordering is now defence in depth rather than the whole defence.
@@ -217,10 +217,10 @@ Three modelling conventions, all stated because they change the answer:
 
 | Player | Round pattern | Hops | Daily spend | Crosses at | **Established** | **New wallet** | Target |
 |---|---|---|---|---|---|---|---|
-| Light casual | 2 rounds × 20 hops, no hide | 40 | $0.265 | **never** | **6** | **6** | 25 – 70 |
-| Light casual **+ 2 hides** | 2 rounds × 20 hops | 40 | $0.765 | hop **34** | **≈54** | ≈54 | 25 – 70 |
-| Typical casual | 2.5 rounds × 25 hops | 62 | $0.955 | the **round-3 hide** | **117.5** | **62.5** | 140 – 280 |
-| Active | 4 rounds × 32 hops | 128 | $3.635 | hop **60** | **285.9** | **202.4** | 300 – 500 |
+| Light casual | 2 rounds × 20 hops, no hide | 40 | $0.275 | **never** | **6** | **6** | 25 – 70 |
+| Light casual **+ 2 hides** | 2 rounds × 20 hops | 40 | $0.775 | hop **33** | **≈55** | ≈55 | 25 – 70 |
+| Typical casual | 2.5 rounds × 25 hops | 62 | $0.965 | the **round-3 hide** | **117.5** | **62.5** | 140 – 280 |
+| Active | 4 rounds × 32 hops | 128 | $3.645 | hop **59** | **286.7** | **202.7** | 300 – 500 |
 
 Established figures include one hide cycle for the casual and active players and
 one find for the active player. Days to leave new-wallet status at a $3 lifetime
@@ -241,25 +241,25 @@ crossing:
 
 | Player | As first stated | Non-retroactive at 0.3 | At 0.15 | **With gated hides** |
 |---|---|---|---|---|
-| Light casual | 12 | 12 | 6 | **6** (≈54 with 2 hides) |
+| Light casual | 12 | 12 | 6 | **6** (≈55 with 2 hides) |
 | Typical casual | 160 | 122.2 | 114.1 | **117.5** |
-| Active | 336 | 294.7 | 285.9 | **285.9** |
+| Active | 336 | 294.7 | 285.9 | **286.7** |
 
 **Most of the drop was the non-retroactivity correction, not any rate change.** It
 cost the typical casual 37.8 ROZ and the active player 41.3; the halved hop rate
 added 8.1 and 8.8; gating the hides gave 3.4 back to the typical casual. Either
 the bands come down again or a rate has to rise — see §9.
 
-**A light casual who hides twice now lands inside their band**, at roughly 54 ROZ.
+**A light casual who hides twice now lands inside their band**, at roughly 55 ROZ.
 That is new: two hides cost $0.40 in fees, which combined with their hop and spawn
-spend carries them over $0.60 at hop 34, after which everything pays full. The
+spend carries them over $0.60 at hop 33, after which everything pays full. The
 route into the band changed shape — it used to be one instant hide at the full 30,
 and it is now two hides that clear the gate. One hide alone leaves them at 18,
 still short.
 
 **`hopRewardBelowThreshold` is not a farmer-only parameter.** Because every day
 starts at zero spend, *every* player earns this rate on their opening stretch —
-the first 54 hops for a typical casual, 59 for an active player. §4l-i-a treats it
+the first 50 hops for a typical casual, 58 for an active player. §4l-i-a treats it
 as the lever that sets zero-cost sybil yield, which it is, but it also sets the
 opening of every honest day. Tune it with both in view.
 
@@ -293,12 +293,12 @@ checking that it is reachable there. On hops alone it is not:
 
 | | |
 |---|---|
-| Most a wallet can spend and stay under $0.60 | **$0.595 — 64 hops** |
-| ROZ from those hops at the below-threshold rate | 64 × 0.15 = **9.6** |
+| Most a wallet can spend and stay under $0.60 | **$0.585 — 63 hops** |
+| ROZ from those hops at the below-threshold rate | 63 × 0.15 = **9.45** |
 | Participation | **None** — withdrawn below the threshold |
 
-**9.6 ROZ is the ceiling on a below-gate day of hopping**, and the band starts at
-25. Hop 65 costs $0.615 and crosses the gate, at which point the player is no
+**9.45 ROZ is the ceiling on a below-gate day of hopping**, and the band starts at
+25. Hop 64 costs $0.605 and crosses the gate, at which point the player is no
 longer a below-gate player at all.
 
 **Mixing in hides raises that ceiling to 30.3, which clears the floor.** Two hides
@@ -318,7 +318,7 @@ per-hide payout but the $0.20 fee also made hiding a way to spend, and on balanc
 the ceiling rose from 9.6 to 30.3.
 
 The alternative, and the better outcome for the player, is simply to cross:
-**two hides carry the modelled light casual over $0.60 and to roughly 54 ROZ**,
+**two hides carry the modelled light casual over $0.60 and to roughly 55 ROZ**,
 comfortably inside the band, because everything then pays full. One hide leaves
 them at 18 — below the floor, and below the 30.3 a deliberate below-gate day
 would give them. **The worst place to be is halfway.**
@@ -328,7 +328,7 @@ to hop.** The collision that used to sit here is much smaller than it was. Hidin
 was previously the one action no anti-farm measure reached, which made the route
 into the band and the plan's cheapest farm route the same *ungoverned* mechanic.
 §2.3 and §2.6 now gate hiding as well, so the two share a mechanic but no longer
-share an exposure — §4l-ii puts the hide loop's floor at $22.8M rather than
+share an exposure — §4l-ii puts the hide loop's floor at $23.1M rather than
 $0.8M. Anything further done to bound the hide loop will still land on this
 player, so keep the two in view together. See §9.
 
@@ -341,11 +341,11 @@ costs them nothing further. New-wallet status therefore only bites players who
 
 **Raising `hopRewardCap` to 40 still does not help an honest active player**, but
 the reason has changed. Non-retroactivity puts their hops-plus-participation at
-**95.85**, just under a `dailySoftCapRoz` of 100 — so the soft cap no longer
+**96.7**, just under a `dailySoftCapRoz` of 100 — so the soft cap no longer
 clips them, and the round cap does not bind either. The 40-hop cap buys them
 nothing because they never get near the ceiling it raises. See §2.5.
 
-Meanwhile the active player's hop fees are $3.135 against $1.38 before §2.5:
+Meanwhile the active player's hop fees are $3.145 against $1.38 before §2.5:
 earning less and paying more. The anti-farm measures work, but they are not free —
 they land on honest players too.
 
@@ -364,7 +364,7 @@ and raising a rate is open in §9.
 | Action | Price | Contract value (USDC, 6dp) | Notes |
 |---|---|---|---|
 | Hide treasure | **$0.20 / $0.25** + a $5 stake | `hideFeeBase` **`200000`**, `hideFeeHigh` **`250000`**, `currentHiderFee` unchanged at `5000000` | **Max 10 a day.** The fee is never returned; the $5 is staked |
-| Single hop | **$0.005 – $0.04** | tiered — see §2.5 | 22 free per day; the price rises with daily volume |
+| Single hop | **$0.005 – $0.04** | tiered — see §2.5 | 20 free per day; the price rises with daily volume |
 | Spawn new position | **$0.10** | `currentSpawnNewPositionFee` `1000000` → **`100000`** | 1 free per day |
 
 **The hop price is no longer flat.** `currentFinderFee` is replaced by the tier
@@ -447,34 +447,34 @@ has to part with meaningful money before deciding whether they enjoy the game.
 
 ### The allowance
 
-**22 free hops and 1 free spawn per day, shared across every round in that day** —
+**20 free hops and 1 free spawn per day, shared across every round in that day** —
 a single daily bucket, not a per-round one.
 
 | Player | Gross | After allowance | Saved |
 |---|---|---|---|
-| Light casual (30 hops, 2 spawns) | $0.50 | **$0.18** | $0.32 |
-| Typical casual (60 hops, 3 spawns) | $0.90 | **$0.58** | $0.32 |
-| Active (128 hops, 4 spawns) | $1.68 | **$1.36** | $0.32 |
+| Light casual (30 hops, 2 spawns) | $0.50 | **$0.20** | $0.30 |
+| Typical casual (60 hops, 3 spawns) | $0.90 | **$0.60** | $0.30 |
+| Active (128 hops, 4 spawns) | $1.68 | **$1.38** | $0.30 |
 
-The saving is a flat **$0.32** for everyone, because the allowance is fixed —
-worth 64% to a light casual and 19% to an active player.
+The saving is a flat **$0.30** for everyone, because the allowance is fixed —
+worth 60% to a light casual and 18% to an active player.
 
 ### The allowance deliberately falls short of a full round
 
-22 free hops against a 40-hop cap is **55% of a round**, not all of it. That is
+20 free hops against a 40-hop cap is **50% of a round**, not all of it. That is
 the point: the participation minimum is 28 hops, so **the bonus can never be
-reached on free hops alone**. A player has to make 6 paid hops to earn it — about
-**$0.045** at the §2.5 tier prices.
+reached on free hops alone**. A player has to make 8 paid hops to earn it — about
+**$0.055** at the §2.5 tier prices.
 
 That relationship — allowance below minimum — used to be the whole guard on
 zero-cost farming. It no longer is: the §2.6 daily spend threshold withdraws
-participation entirely below $0.60/day, so the 6-hop gap is now the weaker of the
-two locks. Zero-cost yield is capped at **3.3 ROZ/day** — see §4l-i-a.
+participation entirely below $0.60/day, so the 8-hop gap is now the weaker of the
+two locks. Zero-USDC-fee yield is capped at **3 ROZ/day** — see §4l-i-a.
 
-The free tier costs **$0.32 per day** per player who uses it in full, down from
-$4.00 at the old prices.
+The free tier waives **$0.30 per day** per player who uses it in full, down from
+$3.00 at the old prices.
 
-Players may spread the 22 hops across several rounds, but pay $0.10 for each
+Players may spread the 20 hops across several rounds, but pay $0.10 for each
 spawn beyond the first.
 
 **The allowance does far less work than the price cut.** Dropping hops to $0.01
@@ -482,17 +482,25 @@ saves an active player $15.12/day; the allowance saves $0.30 on top. Worth
 weighing against the complexity in §4l — most of the anti-frustration win is
 already banked by the new prices.
 
+Here and throughout this plan, **free means no USDC game fee**. The player still
+pays Starknet gas in STRK today. A future paymaster may sponsor at most these 20
+hops, or a lower campaign cap: the effective fully sponsored allowance is
+`min(20, campaignCap)`. For example, with a campaign cap of 15, hops 1–15 are
+USDC-free and gas-sponsored, hops 16–20 remain USDC-free but the player pays
+STRK gas, and hop 21 onward pays the tiered USDC fee plus gas unless separately
+sponsored.
+
 ### Two interactions worth noting
 
 **Participation costs more than the allowance covers — deliberately.** The bonus
-needs 28 hops in the day, against a 22-hop allowance, so 6 hops must be paid for.
+needs 28 hops in the day, against a 20-hop allowance, so 8 hops must be paid for.
 Since the bonus now pays once per calendar day rather than once per round, that is
-6 paid hops in total — roughly **$0.045**, not the $1.00/day that a per-round
+8 paid hops in total — roughly **$0.055**, not the $1.00/day that a per-round
 bonus used to demand.
 
 That gap is not an oversight, but it is no longer the binding constraint. The
 §2.6 daily spend threshold requires **$0.60** before participation pays at all,
-which is more than thirteen times the cost of the 6-hop gap. Closing the gap would
+which is more than ten times the cost of the 8-hop gap. Closing the gap would
 not by itself reopen the hole — removing the spend threshold would.
 
 **Free actions do not endanger anyone's payout.** Hop and spawn fees are pure
@@ -607,32 +615,33 @@ A hop costs more the more a wallet has hopped **that day**:
 
 | Daily hop number | Price |
 |---|---|
-| 1 – 22 | **Free** (the §2.3 allowance) |
-| 23 – 25 | $0.005 |
+| 1 – 20 | **Free** (the §2.3 allowance) |
+| 21 – 25 | $0.005 |
 | 26 – 45 | $0.010 |
 | 46 – 65 | $0.020 |
 | 66 and beyond | $0.040 |
 
 **The tiers must reset daily, never per round.** With per-round tiers a farmer
 re-enters the cheap tiers four times a day: 32 hops in each of four rounds costs
-**$0.34** instead of $3.135 — roughly **nine times cheaper**, which guts the
+**$0.35** instead of $3.145 — roughly **nine times cheaper**, which guts the
 measure entirely.
 
-### The crossover sits at 47 hops a day
+### The crossover sits at 48 hops a day
 
 Below it the new schedule is cheaper than the old flat $0.01; above it, dearer:
 
 | Hops/day | Progressive | Old flat | |
 |---|---|---|---|
-| 30 | $0.065 | $0.08 | cheaper |
-| 45 | $0.215 | $0.23 | cheaper |
-| 46 | $0.235 | $0.24 | cheaper |
-| **47** | **$0.255** | **$0.25** | dearer |
-| 60 | $0.515 | $0.38 | dearer |
-| 128 | $3.135 | $1.06 | dearer |
+| 30 | $0.075 | $0.10 | cheaper |
+| 45 | $0.225 | $0.25 | cheaper |
+| 46 | $0.245 | $0.26 | cheaper |
+| 47 | $0.265 | $0.27 | cheaper |
+| **48** | **$0.285** | **$0.28** | dearer |
+| 60 | $0.525 | $0.40 | dearer |
+| 128 | $3.145 | $1.08 | dearer |
 
 That is the shape intended: light play gets cheaper, grinding gets dearer. Note
-the typical casual at 60 hops/day now pays **36% more**, while earning near the
+the typical casual at 60 hops/day now pays **31% more**, while earning near the
 bottom of their revised band (§2.2).
 
 ### Participation once per calendar day
@@ -648,8 +657,10 @@ down — 0.2× or zero. Casuals never reach it; grinders do.
 
 **Set to 136.** With `hopRewardCap` at 40 per round the theoretical maximum from
 hops plus participation is `160 + 18 = 178 ROZ`, but non-retroactivity puts that
-out of ordinary reach: a wallet that hops its way to the threshold spends its
-first 49–64 hops at 0.15, so a 160-hop day yields **136.35** on the natural route.
+out of ordinary reach: depending on spawn timing, a wallet that hops its way to
+the threshold spends its first 48–63 hops at 0.15. Taking four spawns first gives
+the largest raw 160-hop result, **137.2 ROZ**, which the soft cap reduces to
+**136.24 ROZ**.
 The full 178 is only reached by a wallet that clears $0.60 *before* it starts
 hopping — six paid spawns will do it for $0.60 — which is farm behaviour, not
 play. See §2.6.
@@ -659,9 +670,9 @@ design.** Be honest about what it catches:
 
 | Who | Hops + participation | Against a cap of 136 |
 |---|---|---|
-| Honest active player | 95.85 | never binds |
+| Honest active player | 96.7 | never binds |
 | Cheapest farm wallet (§4l-ii) | 46 | never binds |
-| 160-hop maximising wallet | 136.35 | clips **0.35** |
+| 160-hop maximising wallet | 137.2 raw | clips to **136.24** |
 | Six-spawns-first route | 178 | clips to **144.4** |
 
 So it exists to bound the bought-crossing route and nothing else. That is a
@@ -671,13 +682,13 @@ work across the grinding band — the §2.3 hide limits and the §2.6 gate do th
 **At 136 the two caps no longer fight.** Raising `hopRewardCap` from 32 to 40 was
 meant to stop an honest player earning nothing on the hops where a find becomes
 likely (§2.4). A soft cap near 100 would have clipped that back at the daily
-level; 136 sits above the natural 136.35 ceiling, so the round cap's benefit
-survives. Neither cap reaches the honest active player at 95.85 — which is the
+level; 136 sits close to the natural 137.2 ceiling, so the round cap's benefit
+largely survives. Neither cap reaches the honest active player at 96.7 — which is the
 point, not a defect.
 
 ### Free hops stay below the farm point
 
-`dailyFreeHops` (22) sits below `participationMinimumHops` (28), so the bonus can
+`dailyFreeHops` (20) sits below `participationMinimumHops` (28), so the bonus can
 never be had for nothing. It is no longer the primary guard, though — §2.6's
 daily spend threshold withdraws participation below $0.60/day whatever the hop
 count. Keep the ordering as defence in depth; see §4l-i-a.
@@ -690,13 +701,13 @@ count. Keep the ordering as defence in depth; see §4l-i-a.
 
 | | Before | After |
 |---|---|---|
-| Cost of a maximum day (160 hops, 4 spawns) | $1.68 | **$4.715** |
-| Yield | 232 ROZ | **136.35 ROZ** |
-| Break-even | $0.0072/ROZ | **$0.0346/ROZ** |
+| Cost of a maximum day (160 hops, 4 spawns) | $1.68 | **$4.725** |
+| Yield | 232 ROZ | **136.24 ROZ** |
+| Break-even | $0.0072/ROZ | **$0.0347/ROZ** |
 
-**4.8× more expensive.** A whale is meaningfully deterred. The yield is 136.35
-rather than the theoretical 178 because non-retroactivity charges the first 49
-hops of the day at 0.15 — see §2.6.
+**About 4.8× more expensive.** A whale is meaningfully deterred. With four
+spawns taken first, non-retroactivity charges the first 48 hops of the day at
+0.15 and the soft cap reduces the raw 137.2 ROZ — see §2.6.
 
 **Against many small wallets, they make matters slightly worse.** A wallet doing
 just 28 hops — enough for participation, using the free spawn — never leaves the
@@ -704,25 +715,25 @@ two cheapest tiers, where hops cost **well under** the old flat rate:
 
 | | Before | After |
 |---|---|---|
-| Cost per wallet | $0.06 | **$0.045** |
+| Cost per wallet | $0.06 | **$0.055** |
 | Yield | 46 ROZ | 46 ROZ |
-| Break-even | $0.00130 | **$0.00098** |
-| Cost to drain Year 1 (~50,923 wallets) | $3,055/day | **$2,292/day** |
+| Break-even | $0.00130 | **$0.00120** |
+| Cost to drain Year 1 (~50,923 wallets) | $3,055/day | **$2,801/day** |
 
 Progressive pricing punishes **concentration** and rewards **distribution**, and
 wallets cost nothing to create. So the farmer's answer is simply more wallets,
 each staying in the cheap tiers.
 
 **What actually constrains the distributed attack is gas.** Twenty-eight hops plus
-a spawn is 29 transactions per wallet per day, against $0.045 of game fees. At any
+a spawn is 29 transactions per wallet per day, against $0.055 of game fees. At any
 plausible Starknet price the gas bill is many times the fees — so gas, not the
 fee schedule, is doing the anti-farm work. That is worth **measuring** rather
 than assuming, since it also sets the floor on what honest play costs.
 
 Closing the distribution route needs a different kind of lever — a per-wallet
 minimum spend, gating rewards on a funded balance, or proof of humanity. **That
-is what §2.6 adds**, and it takes the cost of draining Year 1 from $2,292/day to
-$50,371/day.
+is what §2.6 adds**, and it takes the cost of draining Year 1 from $2,801/day to
+$49,813/day.
 
 ---
 
@@ -795,8 +806,8 @@ New-wallet status is left permanently once $3 of lifetime spend is reached. Both
 thresholds count **spend**, which §2.6 rule 1 below defines narrowly.
 
 **Rates apply from the moment the threshold is crossed, not retroactively.**
-**Settled** — §9. A player who reaches $0.60 on their 65th hop earns 0.15 on hops
-1–64 and 1.0 from hop 65 onward. Recomputing the day would mean either replaying
+**Settled** — §9. A player who reaches $0.60 on their 64th hop earns 0.15 on hops
+1–63 and 1.0 from hop 64 onward. Recomputing the day would mean either replaying
 every hop or storing enough to true up at day end — real complexity for a modest
 gain, and it would let a farmer bank cheap hops and upgrade them later. The
 alternative was weighed explicitly: reversing it would return the farm break-even
@@ -805,8 +816,8 @@ bands, and it was rejected because the farm effect is the larger of the two.
 
 **This rule carries most of the gate's strength, and it is easy to model wrong.**
 Because every calendar day starts at zero spend, *every* wallet — farm or honest —
-earns the reduced rate on its opening stretch of hops. A wallet does not get 65
-hops at 1.0 for $0.615; it gets 64 at 0.15 and one at 1.0. Every yield figure in
+earns the reduced rate on its opening stretch of hops. A wallet does not get 64
+hops at 1.0 for $0.605; it gets 63 at 0.15 and one at 1.0. Every yield figure in
 this plan is computed that way. Two consequences follow directly, and both are
 stated where they arise: the cheapest farm route is far dearer than a naive
 reading suggests (below), and honest players earn less than the older figures
@@ -822,49 +833,49 @@ crosses sooner and earns more than one who spawns late. Both are recorded in §9
 
 ### Measure 1 does the work §2.5 could not
 
-$0.60/day is first reached at **65 hops** ($0.615). No farmer buys a spawn to
+$0.60/day is first reached at **64 hops** ($0.605). No farmer buys a spawn to
 clear it: spawns cost $0.10 and earn nothing, while hops in the same price band
 cost $0.02 and earn ROZ.
 
-The yield at that point is **28.6 ROZ**, not 65 + 18. Non-retroactivity means the
-first 64 hops pay 0.15 and only hop 65 pays 1.0:
+The yield at that point is **28.45 ROZ**, not 64 + 18. Non-retroactivity means the
+first 63 hops pay 0.15 and only hop 64 pays 1.0:
 
-`64 × 0.15 + 1.0 + 18 = 9.6 + 1 + 18 = 28.6`
+`63 × 0.15 + 1.0 + 18 = 9.45 + 1 + 18 = 28.45`
 
 | | Ungated (§2.5) | With the gate |
 |---|---|---|
-| Cost per farm wallet | $0.045 | **$0.615** |
-| Yield | 46 ROZ | **28.6 ROZ** |
-| Break-even | $0.00098/ROZ | **$0.0215/ROZ** |
-| Wallets to drain Year 1 | 50,923 | **81,904** |
-| Cost to drain Year 1 | $2,292/day | **$50,371/day** |
-| Market cap at 5B supply | $4.9M | **$107M** |
+| Cost per farm wallet | $0.055 | **$0.605** |
+| Yield | 46 ROZ | **28.45 ROZ** |
+| Break-even | $0.00120/ROZ | **$0.0213/ROZ** |
+| Wallets to drain Year 1 | 50,923 | **82,336** |
+| Cost to drain Year 1 | $2,801/day | **$49,813/day** |
+| Market cap at 5B supply | $6.0M | **$106M** |
 
-**22× more expensive**, and it lands precisely where progressive pricing failed.
+**About 18× more expensive**, and it lands precisely where progressive pricing failed.
 The gate does not merely raise the farmer's bill — it also cuts what the wallet
 earns, and the second effect is the larger of the two.
 
-**Hopping past 65 does not help the farmer.** Each further hop costs $0.04 and
-yields 1 ROZ, which is worse than the $0.0215 average, so the cheapest wallet
-stops at 65. A farmer who wants the full 178-ROZ ceiling must clear $0.60 before
+**Hopping past 64 does not help the farmer.** Each further hop costs $0.04 and
+yields 1 ROZ, which is worse than the $0.0213 average, so the cheapest wallet
+stops at 64. A farmer who wants the full 178-ROZ ceiling must clear $0.60 before
 hopping at all — six paid spawns for $0.60 — which costs $5.015 for 178 ROZ,
-$0.0282/ROZ. Still dearer than stopping at 65.
+$0.0282/ROZ. Still dearer than stopping at 64.
 
 ### Measure 3 attacks churn, but $3 is a modest barrier
 
 A lifetime threshold attacks wallet *churn* rather than wallet *activity*, which
 is the farmer's actual cost centre:
 
-| Lifetime threshold | Cost to onboard 81,904 farm wallets |
+| Lifetime threshold | Cost to onboard 82,336 farm wallets |
 |---|---|
-| $1 | $81,904 |
-| $2 | $163,808 |
-| **$3 (chosen)** | **$245,712** |
-| $5 | $409,520 |
-| $10 | $819,040 |
+| $1 | $82,336 |
+| $2 | $164,672 |
+| **$3 (chosen)** | **$247,008** |
+| $5 | $411,680 |
+| $10 | $823,360 |
 
-At $3 the one-off barrier is **$245,712**, which is **4.9 days** of the gated
-running cost. At $5 it would be $409,520, or 8.1 days. The threshold is a direct
+At $3 the one-off barrier is **$247,008**, which is **5.0 days** of the gated
+running cost. At $5 it would be $411,680, or 8.3 days. The threshold is a direct
 lever on how much churn costs, and $3 buys roughly half of what $5 would — worth
 setting deliberately rather than by default. Recorded in §9.
 
@@ -881,22 +892,23 @@ so a wallet paying nothing but gas earned **more** than before. Lowering
 
 | | Pre-gate settings | Previous | **Current** |
 |---|---|---|---|
-| Zero-cost daily yield | 20 × 0.2 = **4 ROZ** | 22 × 0.3 = 6.6 | **22 × 0.15 = 3.3** |
-| Wallets to drain Year 1 on gas alone | 585,617 | 354,919 | **709,838** |
+| Zero-USDC-fee daily yield | 20 × 0.2 = **4 ROZ** | 22 × 0.3 = 6.6 | **20 × 0.15 = 3** |
+| Wallets to drain Year 1 on gas alone | 585,617 | 354,919 | **780,822** |
 
-The allowance is still 22, so the rate did all the work. **709,838 wallets is 21%
-more than the pre-gate settings ever required**, so this route is not merely back
-to where it was — it is the tightest it has been. Measure 1 governs wallets that
-spend and this governs wallets that never do; both now point the same way.
+The current allowance is 20, so both the lower rate and the restored allowance
+tighten the route. **780,822 wallets is 33% more than the pre-gate settings ever
+required**, so this is the tightest version yet. Measure 1 governs wallets that
+spend and this governs wallets that never pay a game fee; both now point the same
+way.
 
 ### The honest cost: every profile now falls short
 
 | Player | Hops | Daily spend | Crosses at | Established | New wallet | Target |
 |---|---|---|---|---|---|---|
-| Light casual, no hide | 40 | $0.265 | **never** | **6** | **6** | 25 – 70 |
-| Light casual, 2 hides | 40 | $0.765 | hop 34 | **≈54** | ≈54 | 25 – 70 |
-| Typical casual | 62 | $0.955 | round-3 hide | 117.5 | 62.5 | 140 – 280 |
-| Active | 128 | $3.635 | hop 60 | 285.9 | 202.4 | 300 – 500 |
+| Light casual, no hide | 40 | $0.275 | **never** | **6** | **6** | 25 – 70 |
+| Light casual, 2 hides | 40 | $0.775 | hop 33 | **≈55** | ≈55 | 25 – 70 |
+| Typical casual | 62 | $0.965 | round-3 hide | 117.5 | 62.5 | 140 – 280 |
+| Active | 128 | $3.645 | hop 59 | 286.7 | 202.7 | 300 – 500 |
 
 **A light casual and a small farmer are indistinguishable by spend.** The gate
 cannot separate them, so it hits both — 6 against a floor of 25, and raising the
@@ -909,8 +921,8 @@ short. Non-retroactivity is the larger cause; the halved hop rate adds 8.1 and
 8.8. This is the trade the gate asks for, now measured properly.
 
 **Hopping cannot close the light casual's gap, structurally.** The most a wallet
-can spend while staying under $0.60 is $0.595 — 64 hops — which pays
-64 × 0.15 = **9.6 ROZ** with no participation. That is the ceiling for any
+can spend while staying under $0.60 is $0.585 — 63 hops — which pays
+63 × 0.15 = **9.45 ROZ** with no participation. That is the ceiling for any
 below-gate day of hopping, and it sits well below the 25 floor.
 
 **Hiding can close it, in either direction.** Two hides plus 42 hops reaches
@@ -1079,9 +1091,9 @@ threshold values, each with an owner-gated setter and getter:
 |---|---|---|
 | `participationMinimumHops` | 28 | plain count, `u256` |
 | `hopRewardCap` | 40 | plain count, `u256` — per **round** |
-| `dailyFreeHops` | 22 | plain count, `u256` |
+| `dailyFreeHops` | 20 | plain count, `u256` |
 | `dailyFreeSpawns` | 1 | plain count, `u256` |
-| `dailySoftCapRoz` | **136** (18dp) | see §2.5. Sits just under the 136.35 natural ceiling, so it binds only the bought-crossing route |
+| `dailySoftCapRoz` | **136** (18dp) | see §2.5. Sits just under the 137.2 raw maximum with four early spawns, so it binds only the bought-crossing route |
 | `softCapMultiplierNum` / `Den` | 1 / 5 | 0.2× beyond the cap — applies to **hops and participation only** |
 | `dailySpendThreshold` | `600000` ($0.60) | §2.6 measure 1 |
 | `lifetimeSpendThreshold` | `3000000` ($3.00) | §2.6 measure 3 |
@@ -1218,7 +1230,7 @@ redeploy — measure 5 in §2.5 exists precisely to drive that retuning.
 
 **There is no `rewardDailySpawn`.** Spawning pays nothing, free or paid, so the
 daily reward and its streak formula are gone. `participationMinimumHops` (28) is
-deliberately set **above** `dailyFreeHops` (22), though since §2.6 that ordering is
+deliberately set **above** `dailyFreeHops` (20), though since §2.6 that ordering is
 the secondary guard: `dailySpendThreshold` withdraws the bonus below $0.60/day
 whatever the hop count.
 
@@ -1473,7 +1485,7 @@ what stops a farmer splitting a bulk call to escape the curve.
 
 **Step 0 is what makes the hop that crosses the threshold pay the full rate.**
 The fee is charged, the spend counters are updated, and only then is the rate
-read — so the 65th hop in §2.6's worked example earns 1.0, not 0.15. Every figure
+read — so the 64th hop in §2.6's worked example earns 1.0, not 0.15. Every figure
 in this plan is computed that way.
 
 **Participation is tested against both of its conditions each time, and fires on
@@ -1854,11 +1866,11 @@ Implements §2.3. Four pieces.
 **1. Two configurable allowances**, owner-settable like every other rate:
 
 ```cairo
-dailyFreeHops:   u256,   // 22 - 55% of a round against the 40 hop cap, and
+dailyFreeHops:   u256,   // 20 - 50% of a round against the 40 hop cap, and
                          //      deliberately BELOW participationMinimumHops
                          //      (28). Since 2.6 the daily spend threshold is
                          //      the primary guard; this ordering is defence in
-                         //      depth. Zero-cost yield is 3.3 ROZ - see 4l-i-a.
+                         //      depth. Zero-USDC-fee yield is 3 ROZ - see 4l-i-a.
 dailyFreeSpawns: u256,   // 1  - one free round a day
 ```
 
@@ -1987,7 +1999,7 @@ explain.
 ### 4l-i-a. The allowance sits below the participation minimum, by design
 
 Free hops earn ROZ, so a zero-cost wallet earns *something*. Three settings cap
-how much: **`dailyFreeHops` is 22, `participationMinimumHops` is 28, and
+how much: **`dailyFreeHops` is 20, `participationMinimumHops` is 28, and
 `dailySpendThreshold` is $0.60.**
 
 A wallet that never pays cannot clear the spend threshold — free hops add nothing
@@ -1996,10 +2008,10 @@ to the spend counters — so its hops pay `hopRewardBelowThreshold`, not
 
 | | ROZ |
 |---|---|
-| 22 free hops × **0.15** (below the $0.60 threshold) | 3.3 |
-| Participation — withdrawn below the threshold, and 22 < 28 in any case | **0** |
+| 20 USDC-free hops × **0.15** (below the $0.60 threshold) | 3 |
+| Participation — withdrawn below the threshold, and 20 < 28 in any case | **0** |
 | Spawn — pays nothing, free or paid | 0 |
-| **Total, at zero USDC cost** | **3.3/day** |
+| **Total, at zero USDC fee** | **3/day** |
 
 **Participation is now locked twice over.** The §2.6 spend threshold withdraws it
 outright, and the hop ordering would deny it anyway. Either lock alone is
@@ -2010,7 +2022,7 @@ The ordering rule still stands — **keep `dailyFreeHops` strictly below
 allowance were raised above 28, a zero-cost wallet would still earn only
 `28 × 0.15 = 4.2` rather than gaining the bonus, because the spend threshold holds.
 
-Against the Year 1 budget of 2,342,466 ROZ/day, roughly **709,838 throwaway
+Against the Year 1 budget of 2,342,466 ROZ/day, roughly **780,822 throwaway
 wallets** would be needed to drain the tranche, paying Starknet gas throughout.
 
 **This was a regression, and lowering the rate has reversed it.** The route has
@@ -2020,11 +2032,11 @@ been through three settings:
 |---|---|---|
 | 20 free hops, 0.2× multiplier | 4 ROZ | 585,617 |
 | 22 free hops, 0.3 absolute | 6.6 ROZ | 354,919 |
-| **22 free hops, 0.15 absolute** | **3.3 ROZ** | **709,838** |
+| **20 free hops, 0.15 absolute** | **3 ROZ** | **780,822** |
 
-The allowance never moved back — the rate did all of it. 709,838 is **21% more
-wallets than the original settings ever required**, so this is now the tightest
-the zero-cost route has been, not merely a return to par.
+The allowance is back at 20 and the rate is lower. 780,822 is **33% more wallets
+than the original settings required**, so this is now the tightest the
+zero-USDC-fee route has been, not merely a return to par.
 
 **One caveat on the lever, because it is easy to over-pull.**
 `hopRewardBelowThreshold` is not confined to this attack. Every calendar day
@@ -2039,7 +2051,7 @@ Remaining levers if it still looks too generous:
   to the caveat above.
 - **Lower `dailyFreeHops`** — linear in the same figure, and it touches only
   wallets inside the allowance, so it does not hit honest players who hop past
-  22. But it is also the onboarding budget, so it trades against measure 2.
+  20. But it is also the onboarding budget, so it trades against measure 2.
 - **Accept it on testnet**, and gate on a funded balance before mainnet.
 
 ### 4l-ii. The hide loop, and how §2.3 bounded it
@@ -2051,16 +2063,16 @@ by a wide margin. §2.3 and §2.6 changed that:
 | Route | ROZ | Real cost | Break-even |
 |---|---|---|---|
 | Per-hop, mid-tier | 1 | $0.01 | $0.01000 |
-| 65 paid hops — the cheapest route through the §2.6 gate | 28.6 | $0.615 | $0.0215 |
+| 64 paid hops — the cheapest route through the §2.6 gate | 28.45 | $0.605 | $0.0213 |
 | ~~Hide cycle, ungated and unfound~~ *(superseded)* | ~~80~~ | ~~$0.0128~~ | ~~$0.00016~~ |
-| **3 hides + 28 hops — the cheapest wallet now** | **150** | **$0.6835** | **$0.00456** |
+| **3 hides + 28 hops — the cheapest wallet now** | **150** | **$0.6935** | **$0.00462** |
 
 There is no spawn row — a spawn pays nothing.
 
-The 65-hop row: below $0.60 of daily spend the participation bonus is withdrawn
+The 64-hop row: below $0.60 of daily spend the participation bonus is withdrawn
 entirely, so a farmer must reach the threshold before the hop route is worth
-running at all. Its yield is 28.6 rather than 83 because non-retroactivity pays
-only hop 65 at the full rate — see §2.6.
+running at all. Its yield is 28.45 rather than 82 because non-retroactivity pays
+only hop 64 at the full rate — see §2.6.
 
 #### What used to make hiding uniquely cheap
 
@@ -2090,7 +2102,7 @@ treasure the marginal yield falls faster than the marginal fee.
 
 #### The cheapest wallet is still 3 hides plus 28 hops
 
-The hide fees clear the gate exactly — 3 × $0.20 = $0.60 — after which the 22 free
+The hide fees clear the gate exactly — 3 × $0.20 = $0.60 — after which the 20 free
 hops pay the full 1.0 rather than 0.15. All three hides sit in the 1.00× band:
 
 | Step | Spend after | Volume | ROZ |
@@ -2098,42 +2110,42 @@ hops pay the full 1.0 rather than 0.15. All three hides sit in the 1.00× band:
 | Hide 1 | $0.20 — below | 1.00× | 4.5 + 7.5 |
 | Hide 2 | $0.40 — below | 1.00× | 4.5 + 7.5 |
 | Hide 3 | **$0.60 — crosses** | 1.00× | 30 + 50 |
-| 22 free hops | $0.60 | — | 22 |
-| Hops 23–28 (+$0.045) | $0.645 | — | 6 |
+| 20 USDC-free hops | $0.60 | — | 20 |
+| Hops 21–28 (+$0.055) | $0.655 | — | 8 |
 | Participation | — | — | 18 |
-| **Total** | **$0.6835 all in** | | **150 ROZ** |
+| **Total** | **$0.6935 all in** | | **150 ROZ** |
 
-$0.6835 is $0.60 of hide fees, $0.045 of hop fees and 3 × $0.0128 retained on
+$0.6935 is $0.60 of hide fees, $0.055 of hop fees and 3 × $0.0128 retained on
 claim.
 
 **Hiding past three is worse, which is the point.** The farmer's whole curve:
 
 | Hides | ROZ | Cost | $/ROZ | Cap at 5B |
 |---|---|---|---|---|
-| 1 | 39.1 | $0.628 | 0.01606 | $80.3M |
-| 2 | 49.4 | $0.631 | 0.01275 | $63.8M |
-| **3** | **150.0** | **$0.683** | **0.00456** | **$22.8M** |
-| 4 | 206.0 | $0.946 | 0.00459 | $23.0M |
-| 5 | 262.0 | $1.209 | 0.00461 | $23.1M |
-| 7 | 326.0 | $1.735 | 0.00532 | $26.6M |
-| 10 | 364.4 | $2.523 | 0.00692 | $34.6M |
+| 1 | 38.95 | $0.618 | 0.01586 | $79.3M |
+| 2 | 49.3 | $0.631 | 0.01279 | $64.0M |
+| **3** | **150.0** | **$0.693** | **0.00462** | **$23.1M** |
+| 4 | 206.0 | $0.956 | 0.00464 | $23.2M |
+| 5 | 262.0 | $1.219 | 0.00465 | $23.3M |
+| 7 | 326.0 | $1.745 | 0.00535 | $26.8M |
+| 10 | 364.4 | $2.533 | 0.00695 | $34.8M |
 
-**Raising the cap from 3 to 10 cost nothing.** The floor stays at $22.8M, exactly
+**Raising the cap from 3 to 10 cost nothing.** The floor stays near $23.1M, exactly
 where the 3-a-day design had it. One and two hides are far worse, not better: a
 wallet without three hides has to *hop* to $0.60, spending 44–55 hops at 0.15 to
 get there.
 
 | | Before §2.3 | **Now** |
 |---|---|---|
-| Break-even, all hides survive | $0.00016/ROZ → **$0.8M** cap | **$0.00456/ROZ → $22.8M** |
+| Break-even, all hides survive | $0.00016/ROZ → **$0.8M** cap | **$0.00462/ROZ → $23.1M** |
 | Break-even, busy game (`P(found)` 16%) | $0.0192 → $96M | **$0.0221 → $110M** |
-| Cost to drain Year 1, quiet | $375/day | **$10,674/day** |
+| Cost to drain Year 1, quiet | $375/day | **$10,831/day** |
 | Wallets needed | ~1 | **15,616/day** |
 | **Transactions** | **~147/day** | **~500,000/day** |
 | Capital locked, refundable | $146,405 | $234,240 |
 
-**The floor rises 28× and the transaction count 3,400×.** Against the gated hop
-route's $107M the hide loop is now 4.7× cheaper rather than 134×, and the gas
+**The floor rises about 29× and the transaction count 3,400×.** Against the gated hop
+route's $106M the hide loop is now 4.6× cheaper rather than 134×, and the gas
 argument the rest of the plan leans on applies to it again.
 
 #### What the route actually costs depends on `P(found)`
@@ -2142,7 +2154,7 @@ The wallet above assumes every hide survives. If found, the finder takes the $5
 stake, and only the instant reward is kept. Per wallet of 3 hides:
 
 ```
-cost = 3 × P(found) × $5   +  $0.6835
+cost = 3 × P(found) × $5   +  $0.6935
 ROZ  = 39                  +  (1 − P(found)) × 65   +  46 from the hops
 ```
 
@@ -2156,14 +2168,14 @@ proportionally and finds per honest hop stay put.
 
 | Honest finds per round | P(found) | Break-even | Cost to drain Year 1 | Profitable above |
 |---|---|---|---|---|
-| ~1,875 — a healthy game, ≈5,000 daily actives | 16.0% | **$0.0221/ROZ** | $48,150/day | **$110M** |
-| ~500 | 4.3% | $0.0100 | $21,700/day | $50M |
-| ~100 — a quiet round | 0.9% | $0.00560 | $12,100/day | $28M |
-| 0 — a dead round | 0% | **$0.00456** | $10,674/day | **$22.8M** |
+| ~1,875 — a healthy game, ≈5,000 daily actives | 16.0% | **$0.0222/ROZ** | $51,900/day | **$111M** |
+| ~500 | 4.3% | $0.00909 | $21,299/day | $45.5M |
+| ~100 — a quiet round | 0.9% | $0.00554 | $12,989/day | $27.7M |
+| 0 — a dead round | 0% | **$0.00462** | $10,831/day | **$23.1M** |
 
-**Read the bottom row first now.** It is the farmer's best case, and at $22.8M it
+**Read the bottom row first now.** It is the farmer's best case, and at $23.1M it
 is no longer the runaway it was — the same row read $0.8M before §2.3. The top row
-at $110M is *dearer* than the gated hop route's $107M.
+at $111M is *dearer* than the gated hop route's $106M.
 
 **The timing exposure is much smaller.** A farmer still prefers quiet rounds, but
 the swing between the top and bottom rows is now **4.8×**, against 120× before.
@@ -2179,7 +2191,7 @@ rather than transactions restores it:
 | | Gated hop route | Hide route, before §2.3 | **Hide route now** |
 |---|---|---|---|
 | Transactions to drain Year 1 | ~5.3M/day | ~147/day | **~500,000/day** |
-| Fees | $50,371/day | $375 – $45,000/day | **$10,674 – $48,150/day** |
+| Fees | $49,813/day | $375 – $45,000/day | **$10,831 – $51,900/day** |
 | Capital required | none | $146,405, refundable | $234,240, refundable |
 
 15,616 wallets × 32 transactions each — 3 hides, 28 hops and a claim. **About
@@ -2191,17 +2203,17 @@ substantially:
 
 | Route | Fees | Gas | Total | Break-even | Cap at 5B |
 |---|---|---|---|---|---|
-| 3 hides + 28 hops (32 tx) | $0.683 | $0.80 – $1.28 | $1.48 – $1.96 | $0.0099 – $0.0131 | **$49M – $65M** |
-| **5 hides + 28 hops (34 tx)** | $1.209 | $0.85 – $1.36 | $2.06 – $2.57 | **$0.0079 – $0.0098** | **$39M – $49M** |
-| 65 hops only (66 tx) | $0.615 | $1.65 – $2.64 | $2.27 – $3.26 | $0.079 – $0.114 | $396M – $569M |
+| 3 hides + 28 hops (32 tx) | $0.693 | $0.80 – $1.28 | $1.49 – $1.97 | $0.0100 – $0.0132 | **$50M – $66M** |
+| **5 hides + 28 hops (34 tx)** | $1.219 | $0.85 – $1.36 | $2.07 – $2.58 | **$0.0079 – $0.0098** | **$39M – $49M** |
+| 64 hops only (65 tx) | $0.605 | $1.63 – $2.60 | $2.23 – $3.21 | $0.078 – $0.113 | $392M – $563M |
 
 **Gas changes which wallet is optimal.** On fees alone the farmer stops at three
 hides; once gas is counted the best shape is **five**, because more treasures per
 wallet amortises the fixed 29-transaction hop-and-claim leg. The floor rises from
-$22.8M to **$39M – $49M**.
+$23.1M to **$39M – $49M**.
 
-**The pure hop route is effectively dead** at $396M+. It costs 66 transactions for
-28.6 ROZ — 2.3 transactions per ROZ, against 0.13 for the hide route. Everything
+**The pure hop route is effectively dead** at $392M+. It costs 65 transactions for
+28.45 ROZ — 2.3 transactions per ROZ, against 0.13 for the hide route. Everything
 that matters now runs through hiding.
 
 #### The round cap puts a hard ceiling on volume
@@ -2244,23 +2256,23 @@ wallet is five hides:
 
 | | **5 hides + 28 hops** | 3 hides + 28 hops | Hops only | Maximising hop wallet |
 |---|---|---|---|---|
-| Daily fees | $1.209 | $0.6835 | $0.615 | $4.715 |
-| Daily yield | **262 ROZ** | 150 ROZ | 28.6 ROZ | 136.35 ROZ |
-| Break-even, fees only | $0.00461 → $23.1M | **$0.00456 → $22.8M** | $0.0215 → $107M | $0.0346 → $173M |
-| **Break-even, with gas** | **$0.0079–$0.0098 → $39M–$49M** | $0.0099–$0.0131 → $49M–$65M | $0.079–$0.114 → $396M+ | — |
+| Daily fees | $1.219 | $0.6935 | $0.605 | $4.725 |
+| Daily yield | **262 ROZ** | 150 ROZ | 28.45 ROZ | 136.24 ROZ |
+| Break-even, fees only | $0.00465 → $23.3M | **$0.00462 → $23.1M** | $0.0213 → $106M | $0.0347 → $173M |
+| **Break-even, with gas** | **$0.0079–$0.0098 → $39M–$49M** | $0.0100–$0.0132 → $50M–$66M | $0.078–$0.113 → $392M+ | — |
 | Volume ceiling | **25.4% of the tranche** | 25.4% | unbounded | unbounded |
 
 **$39M–$49M is the live number**, and it is bounded at a quarter of daily issuance
 by `maxTreasuresPerRound`. Before §2.3 the same column read **$0.8M** and had no
 volume ceiling at all.
 
-The maximising hop wallet reaches 136.35 rather than 178 because it too pays 0.15
-on its first 49 hops. The full 178 requires clearing $0.60 on spawns before
+The maximising hop wallet receives 136.24 rather than 178 because it pays 0.15
+on its first 48 hops and then meets the soft cap. The full raw 178 requires clearing $0.60 on spawns before
 hopping ($5.015 for 178 ROZ, $0.0282/ROZ) — and `dailySoftCapRoz` at 136 clips
 that route back to 144.4, which is the only thing that cap does (§2.5).
 
 Note what the free allowance does and does not do: it holds a **zero-cost** wallet
-to 3.3 ROZ/day, but a farmer willing to spend $0.615 is only slowed by the gate,
+to 3 ROZ/day, but a farmer willing to spend $0.605 is only slowed by the gate,
 not by the allowance. The allowance defends against throwaway wallets; §2.6
 defends against funded ones. Neither addresses a farmer who simply pays. The fix
 for that is a tokenomics choice, not an engineering one; see §9.
@@ -2278,7 +2290,7 @@ the trade disappears: a free hop saves the tier price and earns exactly what a
 paid hop earns at the player's resolved rate. There is nothing left to route
 around.
 
-The cost of that fix is the sybil surface in §4l-i-a — **3.3 ROZ/day** for a
+The cost of that fix is the sybil surface in §4l-i-a — **3 ROZ/day** for a
 wallet that spends nothing. Kept here as a record of why the rule changed.
 
 One residual wrinkle, worth knowing rather than fixing: because free hops do not
@@ -2468,7 +2480,7 @@ non-whitelisted wallet is now limited to 10 treasures a day, so the worst case i
 | 5 hides, claimed one at a time | $0.0640 | correct |
 | 5 hides, claimed together | **$0.0128** | 5× under-charged |
 
-In cash terms that moves the cheapest farm wallet from $1.209 to $1.158 a day —
+In cash terms that moves the cheapest farm wallet from $1.219 to $1.168 a day —
 about 4%, against the 200× it would have been. **The urgency is gone; the
 correctness argument is not.** The deduction represents per-treasure costs, so
 charging it per claim is simply wrong, and the fix is one line.
@@ -2811,8 +2823,8 @@ Also:
 5a. **Participation is daily, not per round (§2.5).** After earning it in round 1,
    reach 28 hops again in round 2 — it must **not** credit a second time. Cross
    midnight UTC and it credits again.
-5b. **Progressive pricing (§2.5).** Hop 23 charges `5000`, hop 26 charges
-   `10000`, hop 46 charges `20000`, hop 66 charges `40000`. Hops 1–22 charge
+5b. **Progressive pricing (§2.5).** Hop 21 charges `5000`, hop 26 charges
+   `10000`, hop 46 charges `20000`, hop 66 charges `40000`. Hops 1–20 charge
    nothing. **The tiers must not reset at a round boundary** — hop 41, the first
    of round 2, still charges the tier its daily number falls in, not `5000`. This
    is the single most important assertion in the anti-farm work.
@@ -2825,10 +2837,10 @@ Also:
    Assert the participation case explicitly — it is withdrawn below the threshold,
    not reduced.
 5d-i. **The crossing hop pays the full rate, and earlier hops are not upgraded.**
-   Hop a fresh wallet all the way to hop 65 with no spawns. Hops 1–64 must credit
-   `0.15e18` each and hop 65 `1e18`, for a pending total of `28.6e18` including
-   participation. Re-read the pending balance after hop 65 and confirm the first
-   64 credits were **not** revised upward — non-retroactivity is what most of the
+   Hop a fresh wallet all the way to hop 64 with no spawns. Hops 1–63 must credit
+   `0.15e18` each and hop 64 `1e18`, for a pending total of `28.45e18` including
+   participation. Re-read the pending balance after hop 64 and confirm the first
+   63 credits were **not** revised upward — non-retroactivity is what most of the
    gate's strength rests on, and a retroactive implementation would nearly treble
    this wallet's yield.
 5d-ii. **Participation survives a late crossing.** Reach 28 hops while still below
@@ -2843,7 +2855,7 @@ Also:
    not merely that it is non-zero: `15600000` would mean the stake is counting,
    and the $3 lifetime gate then falls to the $0.2128 a surviving hide really
    costs — **14× cheaper** — with both §2.6 measures void. See §2.6 rule 1.
-5e-i. **A free hop gives no spend credit either.** Twenty-two free hops must
+5e-i. **A free hop gives no spend credit either.** Twenty USDC-free hops must
    leave both spend counters at zero, so free play alone can never clear the gate.
 5e-ii. **Three hides clear the daily gate exactly, and the third pays full.**
    Following on from 5e: hides 1 and 2 credit `4.5e18` each, and hide 3 — the one
@@ -2971,18 +2983,18 @@ Also:
     - The second spawn that day **does** revert for lack of approval, proving the
       allowance is 1.
     - Hops succeed and move the player, with no USDC leaving the wallet.
-    - `get_free_hops_remaining` counts down from 22; at zero the next hop reverts
+    - `get_free_hops_remaining` counts down from 20; at zero the next hop reverts
       for lack of approval rather than silently doing nothing.
     - Fund and approve the same wallet, then confirm the next hop charges exactly
       `10000` units ($0.01) and the next spawn `100000` ($0.10).
 17. **Free and paid differ only in cost (§4l-i).** From the zero-balance wallet:
-    - After 22 free hops in one round, pending ROZ is exactly **`3.3e18`** —
+    - After 20 USDC-free hops in one round, pending ROZ is exactly **`3e18`** —
       `hopRewardBelowThreshold` on every free hop, because free hops add nothing
       to the spend counters and the wallet is below $0.60. A free hop earns
       exactly what a *paid* hop by the same wallet would earn — the rate is set by
       the gate, never by whether the hop was charged for.
     - **Participation does not fire**, for two independent reasons: the wallet is
-      below the daily spend threshold, and 22 hops is below the 28-hop minimum.
+      below the daily spend threshold, and 20 hops is below the 28-hop minimum.
       This is the cap on zero-cost farming and the most important assertion here.
     - Fund the wallet and hop up to 65. Once `player_spend_today` reaches
       `600000`, subsequent hops credit `1e18` and participation credits `18e18`
@@ -3091,13 +3103,13 @@ the Ekubo pool, and staking or in-game spending of ROZ.
   (§2.3, §2.6, §4m). Hide rewards are gated (4.5 / 7.5 below the threshold, 15 /
   25 for a new wallet), a **tiered fee** applies, and a **Daily Volume Multiplier**
   scales rewards down past the third treasure of a day. Find/steal stays at 110
-  for everyone, deliberately. The route's floor moves from **$0.8M to $22.8M** on
+  for everyone, deliberately. The route's floor moves from **$0.8M to $23.1M** on
   fees, **$39M–$49M** with measured gas, and its transaction cost from ~147/day to
   ~500,000/day.
 - ~~Does raising the hide cap to 10 weaken the gate?~~ — **no** (§4l-ii). It would
   have, on its own: each extra surviving hide adds 80 ROZ for $0.25. The Daily
   Volume Multiplier cancels it exactly — the farmer's optimum stays at three hides
-  and **$0.00456/ROZ**, the same figure the 3-a-day design produced.
+  and **$0.00462/ROZ**, effectively the same floor the 3-a-day design produced.
 - ~~Should the volume multiplier key to transaction size or daily count?~~ —
   **daily count** (§2.3). Keyed to transaction size it was bypassable by sending
   ten single hides instead of one bulk call of ten, which would have made the farm
@@ -3127,7 +3139,7 @@ the Ekubo pool, and staking or in-game spending of ROZ.
   the typical casual and active profiles back into their bands; the farm effect is
   the larger of the two, so the rule stands.
 - ~~What should `dailySoftCapRoz` be?~~ — **136** (§2.5). It sits just under the
-  136.35 natural ceiling, so it binds only the six-spawns-first route. Near-inert
+  137.2 raw ceiling, so it binds only the bought-crossing route. Near-inert
   by design, and no longer in conflict with `hopRewardCap`.
 - ~~Does the per-hop reward stay at 1 in year 2?~~ — **no, it tapers with the
   tranche** (§4b-i). 630M ÷ 855M = **0.7368**, which is where the 0.74 figure came
@@ -3139,10 +3151,10 @@ the Ekubo pool, and staking or in-game spending of ROZ.
   everyone, bounded by treasures rather than calls, with an owner-controlled
   Merkle whitelist for addresses that need to seed a map.
 - ~~Zero-cost wallets earn more than they used to~~ — **resolved** (§4l-i-a).
-  `hopRewardBelowThreshold` at **0.15** puts zero-cost yield at **3.3 ROZ/day**
-  and the wallets needed to drain Year 1 at **709,838** — 21% more than the
+  `hopRewardBelowThreshold` at **0.15** and 20 free hops put zero-USDC-fee yield
+  at **3 ROZ/day** and the wallets needed to drain Year 1 at **780,822** — 33% more than the
   original pre-gate settings required, so this route is now the tightest it has
-  been. The free allowance stayed at 22; the rate did all the work.
+  been. Both the rate and restored 20-hop allowance do the work.
 - ~~Is the claim-time ROZ lost or retryable?~~ — **retryable**, §4h.
 - ~~Does the daily reward outweigh the core loop?~~ — **no.** At a maximum of 22
   it now sits below a find (110) and a completed hide cycle (80).
@@ -3160,10 +3172,10 @@ the Ekubo pool, and staking or in-game spending of ROZ.
   exhausts the tranche early and stops all new rewards until the next release.
 - **The live farm number is $39M–$49M, and it is bounded at a quarter of the
   tranche** (§4l-ii). The cheapest wallet is **5 hides + 28 hops — 262 ROZ for
-  $1.209 in fees plus $0.85–$1.36 of gas**. On fees alone it is $22.8M at three
+  $1.219 in fees plus $0.85–$1.36 of gas**. On fees alone it is $23.1M at three
   hides; gas is what moves both the optimum and the floor. Above 25.4% of daily
   issuance `maxTreasuresPerRound` stops the route entirely, and the fallback hop
-  route costs $396M+. Worth re-deriving whenever gas moves materially.
+  route costs $392M+. Worth re-deriving whenever gas moves materially.
 - **The keeper is a single point of failure** (§4k). EventBridge plus Lambda is
   decided, but the Lambda's key can start or corrupt any round, and a missed
   invocation means a round never begins. An on-chain permissionless
@@ -3187,16 +3199,16 @@ the Ekubo pool, and staking or in-game spending of ROZ.
   day** — which needs the same day-index state and keeps spawns reward-free as
   decided. The nine-row streak table is preserved in git history if it returns.
 - **No player type meets its target — accepted as it stands** (§2.2). The bands
-  are 25–70 / 140–280 / 300–500; the light casual earns **6** (≈54 with two
-  hides), the typical casual **117.5** and the active player **285.9**. The
+  are 25–70 / 140–280 / 300–500; the light casual earns **6** (≈55 with two
+  hides), the typical casual **117.5** and the active player **286.7**. The
   options were weighed — lower the bands again, raise `hopRewardBelowThreshold`,
   or lower `dailySpendThreshold` — and **none was taken**, on the grounds that
   only the last helps the light casual and it is also the one that weakens the
   gate. Recorded as an accepted cost rather than an open question, but it should
   be the first thing re-examined if real players churn early.
 - ~~Progressive pricing makes distributed farming cheaper~~ **Addressed by §2.6.**
-  The daily spend threshold takes the cost of draining Year 1 from $2,292/day to
-  **$50,371/day**, and the $3 lifetime threshold adds a **$245,712** one-off
+  The daily spend threshold takes the cost of draining Year 1 from $2,801/day to
+  **$49,813/day**, and the $3 lifetime threshold adds a **$247,008** one-off
   onboarding barrier.
 - **Earnings depend on the order a player takes their actions** (§2.6). Spend
   accrues in action order, so a player who spawns at the start of a round crosses
@@ -3304,8 +3316,8 @@ the Ekubo pool, and staking or in-game spending of ROZ.
   permanent. This is the action-ordering effect below, but an order of magnitude
   larger than the spawn case that first raised it. A UI hint ("hide after you have
   spent $0.60") fixes it for anyone who reads it and nobody who does not.
-- **Is $3 lifetime too low? — accepted as it stands.** It buys a **$245,712**
-  onboarding barrier where $5 would buy $409,520, so $3 gives roughly half the
+- **Is $3 lifetime too low? — accepted as it stands.** It buys a **$247,008**
+  onboarding barrier where $5 would buy $411,680, so $3 gives roughly half the
   anti-churn effect. Accepted deliberately: the ratio is unchanged at about 4.9
   days of running cost either way, and the daily threshold does the work of
   deciding where the casual cliff falls.
@@ -3319,13 +3331,13 @@ the Ekubo pool, and staking or in-game spending of ROZ.
   `hider_survival_roz`, on paths players take dozens of times a day. At $0.025–
   $0.04 a transaction this is now a measurable share of what a player spends.
 - **Gas is doing more anti-farm work than the fee schedule** (§4l-ii). The cheapest
-  farm wallet pays **$1.209 in fees and $0.85–$1.36 in gas** — gas is the larger
+  farm wallet pays **$1.219 in fees and $0.85–$1.36 in gas** — gas is the larger
   half. That raises a design question the plan has not faced: §2.5's four-tier
   progressive hop schedule is a lot of machinery for the smaller of the two costs,
   and a flat price might now buy the same protection for less complexity. Worth
   revisiting once real gas is observed rather than quoted.
 - **Is the typical casual paying 36% more acceptable?** At 60 hops/day the tiered
-  schedule costs $0.515 against $0.38 flat, and that player earns 117.5 against a
+  schedule costs $0.525 against $0.40 flat, and that player earns 117.5 against a
   140–280 band. Both accepted above, but they compound: this profile pays more and
   earns less than the design originally intended.
 - **The hard grid bounds now follow from `maxTreasuresPerRound`** (§2.4, §4m-i).
@@ -3343,7 +3355,7 @@ the Ekubo pool, and staking or in-game spending of ROZ.
   so the revenue argument that used to justify keeping it is weaker; it stays
   because it is what makes the claim path self-funding.
 - **Should the allowance cover full participation?** It deliberately does not:
-  28 hops are needed against a 22-hop allowance, so 6 hops (~$0.045) must be paid
+  28 hops are needed against a 20-hop allowance, so 8 hops (~$0.055) must be paid
   for. Since the bonus now pays once per calendar day, that is the whole cost —
   not the $1.00/day a per-round bonus demanded. The gap is no longer the binding
   constraint either, since §2.6's $0.60 threshold withdraws the bonus outright
