@@ -87,6 +87,23 @@ tests/test_contract.cairo       contract and regression tests
 `mock_erc20` and `mock_vrf_provider` are testing components; they are not
 production dependencies.
 
+The build's `target/dev/project_name_HelloStarknet.contract_class.json` contains
+the current source ABI in its `abi` field. Static ABI copies are no longer
+checked in; the frontend fetches the deployed class ABI from Starknet.
+
+The source no longer includes the old Pragma callback API:
+`receive_random_words`, `update_seed_modulo_divisor`, and the getter/setter
+pairs for callback fee, publish delay, and number of words. Spawning uses
+`consume_random(Source::Nonce(caller))` synchronously. This source cleanup
+does not change the deployment recorded above; a future deployment must follow
+the coordinated deployment procedure.
+
+Historical VRF context remains in [VRF_SPAWN_FIX_CONTEXT.md](VRF_SPAWN_FIX_CONTEXT.md)
+and [VRF_SPAWN_FIX_PLAN.md](VRF_SPAWN_FIX_PLAN.md). The single retained copy of the
+[frontend USDC migration notes](https://github.com/ma06rii/game_frontend/blob/bug/fixapp/USDC_MIGRATION_FRONTEND.md)
+lives in the frontend repository. Historical notes may describe files and APIs
+that have since been removed; use this README for current operations.
+
 ## Round and treasure model
 
 - Round `0` is the one intentionally empty bootstrap round.

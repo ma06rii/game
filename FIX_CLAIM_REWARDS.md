@@ -63,7 +63,7 @@
      - src/lib.cairo - configurable gamecimal USDC,
      ETH-flavoured identifiers renamed.
      (vrfProviderAddress, gameTokenAddr
-     - USDC_MIGRATION_FRONTEND.md - the
+     - [Frontend USDC migration notes](https://github.com/ma06rii/game_frontend/blob/bug/fixapp/USDC_MIGRATION_FRONTEND.md)
 
      Only deployment and the post-deplo
 

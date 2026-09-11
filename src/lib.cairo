@@ -108,10 +108,6 @@ pub trait IHelloStarknet<TContractState> {
     fn get_reward_token_due(
         self: @TContractState, gamerWalletAddress: ContractAddress, gameWeek: u256,
     ) -> (u256, u256, u256);
-    fn update_callback_fee_limit(ref self: TContractState, maxGasFeeAmount: u128) -> bool;
-    fn update_publish_delay(ref self: TContractState, minNumberOfBlocks: u64) -> bool;
-    fn update_num_words(ref self: TContractState, numberOfRandomNumbers: u64) -> bool;
-    fn update_seed_modulo_divisor(ref self: TContractState, value: u256) -> bool;
     fn update_vrf_provider(ref self: TContractState, vrfProviderAddress: ContractAddress) -> bool;
     fn get_vrf_provider(self: @TContractState) -> ContractAddress;
     fn update_game_token(ref self: TContractState, gameTokenAddress: ContractAddress) -> bool;
@@ -198,22 +194,12 @@ pub trait IHelloStarknet<TContractState> {
         self: @TContractState, gamerWalletAddress: ContractAddress,
     ) -> u256;
     fn get_free_hops_remaining(self: @TContractState, gamerWalletAddress: ContractAddress) -> u256;
-    fn receive_random_words(
-        ref self: TContractState,
-        requester_address: ContractAddress,
-        request_id: u64,
-        random_words: Span<felt252>,
-        calldata: Array<felt252>,
-    );
     fn finder_player_generate_position(ref self: TContractState) -> bool;
     fn withdraw_token_balance(
         ref self: TContractState, tokenAddress: ContractAddress, receiver: ContractAddress,
     );
     fn get_sweepable_balance(self: @TContractState, tokenAddress: ContractAddress) -> u256;
     fn get_game_landowner_fee(self: @TContractState) -> u256;
-    fn get_num_words(self: @TContractState) -> u64;
-    fn get_publish_delay(self: @TContractState) -> u64;
-    fn get_callback_fee_limit(self: @TContractState) -> u128;
     fn get_gamemaster_fee(self: @TContractState) -> u256;
     fn get_gas_fee_reservation(self: @TContractState) -> u256;
     fn get_game_token_reward(self: @TContractState) -> u256;
@@ -303,13 +289,6 @@ trait InternalFunctionsTrait<TContractState> {
         ref self: TContractState, gamerWalletAddress: ContractAddress, gameWeek: u256,
     ) -> bool;
     fn _transfer_token(ref self: TContractState, recipient: ContractAddress, amount: u256) -> bool;
-    fn _createRandomnessCalldata(
-        self: @TContractState, gamerWalletAddress: ContractAddress,
-    ) -> Array<felt252>;
-    fn _retrieveRandomnessCalldata(
-        self: @TContractState, calldataArr: Array<felt252>,
-    ) -> ContractAddress;
-    fn _getSeed(self: @TContractState, finderGamerAddress: ContractAddress) -> u64;
     fn _request_randomness_from_vrf_provider(
         ref self: TContractState, caller: ContractAddress,
     ) -> bool;
@@ -317,10 +296,9 @@ trait InternalFunctionsTrait<TContractState> {
 
 #[starknet::contract]
 mod HelloStarknet {
-    use core::array::{ArrayTrait, SpanTrait};
-    use core::hash::{HashStateExTrait, HashStateTrait};
+    use core::array::ArrayTrait;
+    use core::hash::HashStateTrait;
     use core::integer::{BoundedInt, u128_byte_reverse};
-    use core::keccak::{cairo_keccak, keccak_u256s_be_inputs, keccak_u256s_le_inputs};
     use core::num::traits::zero::Zero;
     use core::option::OptionTrait;
     // Poseidon is the hash the off-chain merkle tooling uses for the bulk-hide
@@ -329,19 +307,15 @@ mod HelloStarknet {
     // to the ordinary daily cap). See _verifyWhitelist.
     use core::poseidon::PoseidonTrait;
     use core::serde::Serde;
-    use core::to_byte_array::FormatAsByteArray;
     use core::traits::{Into, TryInto};
     use openzeppelin::access::ownable::OwnableComponent;
-    // use pragma_lib::abi::{IRandomnessDispatcher, IRandomnessDispatcherTrait};
     use openzeppelin::token::erc20::interface::{ERC20ABIDispatcher, ERC20ABIDispatcherTrait};
-    use project_name::IHelloStarknet;
-    use starknet::class_hash::class_hash_const;
     use starknet::{
-        ContractAddress, SyscallResultTrait, contract_address_const, get_block_number,
+        ContractAddress, SyscallResultTrait, contract_address_const,
         get_block_timestamp, get_caller_address, get_contract_address, syscalls,
     };
     use super::{
-        IVrfProvider, IVrfProviderDispatcher, IVrfProviderDispatcherTrait, NextRoundParams, Source,
+        IVrfProviderDispatcher, IVrfProviderDispatcherTrait, NextRoundParams, Source,
     };
 
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
@@ -534,18 +508,12 @@ mod HelloStarknet {
 
     #[storage]
     struct Storage {
-        //Divisor used to get a value to generate a seed value for randmoness request.
-        seedModuloDivisor: u256,
         //Randomness Request
         //Address of the VRF provider this game asks for random numbers. Set from
         //a constructor argument and changeable afterwards by the owner through
         //update_vrf_provider, so the game can be pointed at Cartridge's real
         //provider or at a testnet mock without redeploying.
         vrf_provider_contract_address: ContractAddress,
-        min_block_number_storage: u64,
-        callback_fee_limit: u128, // e.g. 1000000000000
-        publish_delay: u64, // e.g. 3
-        num_words: u64, // e.g. 2
         //Game token
         //The ERC-20 that every fee, reward and treasure value in this contract is
         //denominated in. Set from a constructor argument and changeable afterwards
@@ -595,10 +563,9 @@ mod HelloStarknet {
         main_game_grid_size: LegacyMap<u256, (u128, u128)>,
         //Game_totals: LegacyMap::<gameWeek, totalHiddenTreasureValue>,
         game_totals: LegacyMap<u256, u256>,
-        // The gross stake and net claim value attached to one share in a target
-        // round. They are snapshotted when the funding round opens, so later
-        // configuration changes cannot reprice existing claims.
-        round_hider_stake: LegacyMap<u256, u256>,
+        // The net claim value attached to one share in a target round is
+        // snapshotted when the funding round opens, so later configuration
+        // changes cannot reprice existing claims.
         round_claim_value_per_share: LegacyMap<u256, u256>,
         //Claim_share_amounts: LegacyMap::<(gameWeek, gamerWalletAddress), totalShareCount>,
         claim_share_amounts: LegacyMap<(u256, ContractAddress), u256>,
@@ -888,14 +855,6 @@ mod HelloStarknet {
         self.gasFeeReservation.write(3333); //$ 0.0033 held back to cover gas
         self.gameMasterFee.write(8333); //$ 0.0083 to the game master
         self.gameLandownerFee.write(1167); //$ 0.0012 to the landowner
-        // callback_fee_limit, publish_delay, num_words and seedModuloDivisor are
-        // leftovers from the old Pragma VRF flow and are no longer read on any
-        // live path. callback_fee_limit is a gas allowance, not a game-token
-        // amount, so it is deliberately NOT rescaled with the fees above.
-        self.callback_fee_limit.write(5000000000000000);
-        self.publish_delay.write(0);
-        self.num_words.write(1_u64);
-        self.seedModuloDivisor.write(128000000000);
 
         // Previously hardcoded here. Now supplied by whoever deploys the class,
         // so testnet and mainnet can point at different providers. See the
@@ -1589,20 +1548,8 @@ mod HelloStarknet {
         fn _receive_random_words_2(
             ref self: ContractState, requester_address: ContractAddress, random_words: felt252,
         ) {
-            // Have to make sure that the caller is the Pragma Randomness Oracle contract
-            // let caller_address = get_caller_address();
-            // assert(
-            //     caller_address == self.vrf_provider_contract_address.read(),
-            //     'caller not randomness contract'
-            // );
-            // and that the current block is within publish_delay of the request block
-            // let current_block_number = get_block_number();
-            // let min_block_number = self.min_block_number_storage.read();
-            // assert(min_block_number <= current_block_number, 'block number issue');
-
             let gameWeek = self.currentGameWeek.read();
 
-            // let random_word_0: felt252 = *random_words.at(0);
             let random_word_0: felt252 = random_words;
 
             let random_word_0_AsNumber: u256 = random_word_0.try_into().unwrap();
@@ -1621,9 +1568,6 @@ mod HelloStarknet {
             let reducedNumberXCoordinate: u128 = (random_word_0_AsNumber_A % maxGridX) + 1_u128;
 
             let reducedNumberYCoordinate: u128 = (random_word_0_AsNumber_B % maxGridY) + 1_u128;
-
-            // let gamerWalletAddressFromCalldata: ContractAddress = self
-            //     ._retrieveRandomnessCalldata(calldata);
 
             self
                 ._updatePlayerPosition(
@@ -1796,9 +1740,7 @@ mod HelloStarknet {
             self.main_game.write(gameWeek, (params.merkle_root, 0, params.hider_stake));
             self.main_game_grid_size.write(gameWeek, (params.grid_size_x, params.grid_size_y));
 
-            // These maps contain live/staged facts populated by hides. Never
-            // overwrite either slot when its round is opened.
-            self.round_hider_stake.write(gameWeek + 1, params.hider_stake);
+            // Snapshot next round's claim value while its treasures are funded.
             self.round_claim_value_per_share.write(gameWeek + 1, params.hider_stake - deductions);
 
             self.hideFeeBase.write(params.hide_fee_base);
@@ -1839,26 +1781,6 @@ mod HelloStarknet {
                 );
 
             return true;
-        }
-
-        fn _createRandomnessCalldata(
-            self: @ContractState, gamerWalletAddress: ContractAddress,
-        ) -> Array<felt252> {
-            let mut calldataArr = ArrayTrait::<felt252>::new();
-
-            calldataArr.append(gamerWalletAddress.into());
-
-            return calldataArr;
-        }
-
-        fn _retrieveRandomnessCalldata(
-            self: @ContractState, calldataArr: Array<felt252>,
-        ) -> ContractAddress {
-            let decodeAddress: felt252 = *calldataArr.at(0);
-
-            let contractAddressAgain: ContractAddress = decodeAddress.try_into().unwrap();
-
-            return contractAddressAgain;
         }
 
         // Hide one or more treasures. The single and bulk entrypoints both come
@@ -2470,20 +2392,6 @@ mod HelloStarknet {
             return claimShareCount * claimValuePerShare;
         }
 
-        fn _getSeed(self: @ContractState, finderGamerAddress: ContractAddress) -> u64 {
-            let getBlockNumber: u64 = get_block_number();
-
-            let callerAsFelt: felt252 = finderGamerAddress.into();
-
-            let callerAsNumber: u256 = callerAsFelt.try_into().unwrap();
-
-            let callerAsu64: u64 = (callerAsNumber % self.seedModuloDivisor.read())
-                .try_into()
-                .unwrap();
-
-            return callerAsu64 + getBlockNumber;
-        }
-
         // Asks the configured VRF provider for one random number and turns it
         // straight into the player's starting grid position.
         //
@@ -2501,8 +2409,6 @@ mod HelloStarknet {
         //   MockVrfProvider      - generates a number on the spot, so it cannot
         //                          revert for a missing proof. Testnet only.
         //
-        // (The commented-out code below is the older Pragma VRF flow, which used
-        // a request now / callback later model. It is kept for reference only.)
         fn _request_randomness_from_vrf_provider(
             ref self: ContractState, caller: ContractAddress,
         ) -> bool {
@@ -2511,54 +2417,10 @@ mod HelloStarknet {
                 contract_address: randomness_contract_address,
             };
 
-            // let callback_fee_limit = self.callback_fee_limit.read();
-            // let publish_delay = self.publish_delay.read();
-            // let num_words = self.num_words.read();
-
-            // Approve the randomness contract to transfer the callback fee
-            // Pragma charged its callback fee in ETH, which is why this dead block
-            // still names ETH rather than the configured game token.
-            // let eth_dispatcher = ERC20ABIDispatcher {
-            //     contract_address: contract_address_const::<
-            //         0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7
-            //     >() // ETH Contract Address
-            // };
-            // eth_dispatcher
-            //     .approve(
-            //         randomness_contract_address,
-            //         (callback_fee_limit + callback_fee_limit / 5).into()
-            //     );
-
-            // let calldata = self._createRandomnessCalldata(caller);
-            // let callback_address = get_contract_address();
-            // let seed = self._getSeed(caller);
-
-            // Request the randomness
-            // randomness_dispatcher
-            //     .request_random(
-            //         seed, callback_address, callback_fee_limit, publish_delay, num_words,
-            //         calldata
-            //     );
-
-            // randomness_dispatcher
-            //     .request_random(
-            //         callback_address, Source::Nonce(caller)
-            //     );
-
-            // let current_block_number = get_block_number();
-            // self.min_block_number_storage.write(current_block_number + publish_delay);
-
-            //Add here the code to consume the random number immediately
-            //receive_random_words
-            //Source::Nonce(caller) says "the randomness for this player". The
-            //frontend names the same source in its own request_random call, so
-            //both halves of the spawn multicall refer to the same request.
+            // Match the player source used by the frontend VRF request.
             let random_value = randomness_dispatcher.consume_random(Source::Nonce(caller));
-            //check if random_value is valid
 
             self._receive_random_words_2(caller, random_value);
-            //update function to return 'true'
-            //Then add an assertion check that this function was executed successfully.
 
             return true;
         }
@@ -2584,36 +2446,6 @@ mod HelloStarknet {
 
         fn get_gamemaster_fee(self: @ContractState) -> u256 {
             return self.gameMasterFee.read();
-        }
-
-        fn update_callback_fee_limit(ref self: ContractState, maxGasFeeAmount: u128) -> bool {
-            self.ownable.assert_only_owner();
-            self.callback_fee_limit.write(maxGasFeeAmount);
-            return true;
-        }
-
-        fn get_callback_fee_limit(self: @ContractState) -> u128 {
-            return self.callback_fee_limit.read();
-        }
-
-        fn update_publish_delay(ref self: ContractState, minNumberOfBlocks: u64) -> bool {
-            self.ownable.assert_only_owner();
-            self.publish_delay.write(minNumberOfBlocks);
-            return true;
-        }
-
-        fn get_publish_delay(self: @ContractState) -> u64 {
-            return self.publish_delay.read();
-        }
-
-        fn update_num_words(ref self: ContractState, numberOfRandomNumbers: u64) -> bool {
-            self.ownable.assert_only_owner();
-            self.num_words.write(numberOfRandomNumbers);
-            return true;
-        }
-
-        fn get_num_words(self: @ContractState) -> u64 {
-            return self.num_words.read();
         }
 
         fn update_game_landowner_fee(ref self: ContractState, feeAmount: u256) -> bool {
@@ -3417,12 +3249,6 @@ mod HelloStarknet {
             );
         }
 
-        fn update_seed_modulo_divisor(ref self: ContractState, value: u256) -> bool {
-            self.ownable.assert_only_owner();
-            self.seedModuloDivisor.write(value);
-            return true;
-        }
-
         // Points the game at a different VRF provider. Owner only.
         //
         // This is what makes the current Sepolia workaround reversible without a
@@ -3860,57 +3686,6 @@ mod HelloStarknet {
             }
 
             return allowance - used;
-        }
-
-        fn receive_random_words(
-            ref self: ContractState,
-            requester_address: ContractAddress,
-            request_id: u64,
-            random_words: Span<felt252>,
-            calldata: Array<felt252>,
-        ) {
-            // Have to make sure that the caller is the Pragma Randomness Oracle contract
-            let caller_address = get_caller_address();
-            assert(
-                caller_address == self.vrf_provider_contract_address.read(),
-                'caller not randomness contract',
-            );
-            // and that the current block is within publish_delay of the request block
-            let current_block_number = get_block_number();
-            let min_block_number = self.min_block_number_storage.read();
-            assert(min_block_number <= current_block_number, 'block number issue');
-
-            let gameWeek = self.currentGameWeek.read();
-
-            let random_word_0: felt252 = *random_words.at(0);
-
-            let random_word_0_AsNumber: u256 = random_word_0.try_into().unwrap();
-
-            let random_word_0_AsNumber_A: u128 = random_word_0_AsNumber.high;
-            let random_word_0_AsNumber_B: u128 = random_word_0_AsNumber.low;
-
-            let (maxGridX, maxGridY) = self.main_game_grid_size.read(gameWeek);
-
-            let reducedNumberXCoordinate: u128 = (random_word_0_AsNumber_A - 1_u128) % maxGridX
-                .try_into()
-                .unwrap()
-                + 1_u128;
-
-            let reducedNumberYCoordinate: u128 = (random_word_0_AsNumber_B - 1_u128) % maxGridY
-                .try_into()
-                .unwrap()
-                + 1_u128;
-
-            let gamerWalletAddressFromCalldata: ContractAddress = self
-                ._retrieveRandomnessCalldata(calldata);
-
-            self
-                ._updatePlayerPosition(
-                    reducedNumberXCoordinate,
-                    reducedNumberYCoordinate,
-                    gamerWalletAddressFromCalldata,
-                    gameWeek,
-                );
         }
 
         // Sweeps this contract's entire balance of the CURRENT game token to
