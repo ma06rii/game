@@ -110,14 +110,14 @@ pub trait IHelloStarknet<TContractState> {
         self: @TContractState, gamerWalletAddress: ContractAddress, gameWeek: u256,
     ) -> (u256, u256, u256);
     fn update_vrf_provider(ref self: TContractState, vrfProviderAddress: ContractAddress) -> bool;
-    fn get_vrf_provider(self: @TContractState) -> ContractAddress;
     fn update_game_token(ref self: TContractState, gameTokenAddress: ContractAddress) -> bool;
-    fn get_game_token(self: @TContractState) -> ContractAddress;
     // ROZ reward token - address and rates (4a, 4b)
     fn update_game_reward_token(
         ref self: TContractState, rewardTokenAddress: ContractAddress,
     ) -> bool;
-    fn get_game_reward_token(self: @TContractState) -> ContractAddress;
+    fn get_contract_addresses(
+        self: @TContractState,
+    ) -> (ContractAddress, ContractAddress, ContractAddress);
     fn get_reward_rates(self: @TContractState) -> (u256, u256, u256, u256, u256);
     fn get_below_threshold_rates(self: @TContractState) -> (u256, u256, u256, u256);
     fn get_new_wallet_rates(self: @TContractState) -> (u256, u256, u256, u256);
@@ -139,14 +139,13 @@ pub trait IHelloStarknet<TContractState> {
     // batch is applied and then validated as a whole - see the implementation.
     fn set_params(ref self: TContractState, keys: Array<felt252>, values: Array<u256>) -> bool;
 
-    fn update_hop_price_band(
-        ref self: TContractState, bandIndex: u8, upToHop: u256, price: u256,
+    // bandKind 0 updates a hop band (num is the price; den must be zero).
+    // bandKind 1 updates a volume band (num/den is the multiplier).
+    fn update_price_band(
+        ref self: TContractState, bandKind: u8, bandIndex: u8, upTo: u256, num: u256, den: u256,
     ) -> bool;
-    fn get_hop_price_band(self: @TContractState, bandIndex: u8) -> (u256, u256);
-    fn update_volume_band(
-        ref self: TContractState, bandIndex: u8, upToTreasures: u256, num: u256, den: u256,
-    ) -> bool;
-    fn get_volume_band(self: @TContractState, bandIndex: u8) -> (u256, u256, u256);
+    // Returns (limit, num, den). Hop bands use price as num and zero as den.
+    fn get_price_band(self: @TContractState, bandKind: u8, bandIndex: u8) -> (u256, u256, u256);
     // Per-player state, so a deploy can be inspected without a block explorer
     fn get_player_daily_state(
         self: @TContractState, gamerWalletAddress: ContractAddress,
@@ -160,10 +159,6 @@ pub trait IHelloStarknet<TContractState> {
         ref self: TContractState, tokenAddress: ContractAddress, receiver: ContractAddress,
     );
     fn get_sweepable_balance(self: @TContractState, tokenAddress: ContractAddress) -> u256;
-    fn get_game_landowner_fee(self: @TContractState) -> u256;
-    fn get_gamemaster_fee(self: @TContractState) -> u256;
-    fn get_gas_fee_reservation(self: @TContractState) -> u256;
-    fn get_game_token_reward(self: @TContractState) -> u256;
     fn get_game_week(self: @TContractState) -> u256;
     fn get_round_status(self: @TContractState) -> (u256, u8, u64, u64, u64, u256, u256, u64);
     fn get_next_round_totals(self: @TContractState) -> (u256, u256);
@@ -172,12 +167,7 @@ pub trait IHelloStarknet<TContractState> {
     fn update_round_keeper(ref self: TContractState, keeper: ContractAddress) -> bool;
     fn get_game_week_treasure_total(self: @TContractState, gameWeek: u256) -> u256;
     fn get_game_grid_size(self: @TContractState, gameWeek: u256) -> (u128, u128);
-    fn get_total_number_of_finders(self: @TContractState, gameWeek: u256) -> u256;
-    fn get_total_number_of_hiders(self: @TContractState, gameWeek: u256) -> u256;
-    fn get_main_game_info(self: @TContractState, gameWeek: u256) -> (u256, u256, u256);
-    fn get_generate_position_fee(self: @TContractState) -> u256;
     fn get_hider_player_fee(self: @TContractState) -> u256;
-    fn get_finder_player_fee(self: @TContractState) -> u256;
     fn get_claim_share_amounts(
         self: @TContractState, gameWeek: u256, gamerWalletAddress: ContractAddress,
     ) -> u256;
@@ -361,6 +351,12 @@ mod HelloStarknet {
     const END_REASON_ALL_FOUND: u8 = 0;
     const END_REASON_TIME_EXPIRED: u8 = 1;
     const VALIDATION_GRACE_SECONDS: u64 = 60;
+    const OPEN_ENDED_BAND: u256 = 0xffffffffffffffffffffffffffffffff;
+    // Poseidon hash (with the array length) of the canonical 35-key order used
+    // by set_params. One comparison proves the initial batch has no omissions,
+    // duplicates or unknown keys without carrying a second lookup table.
+    const INITIAL_SETTINGS_KEYS_HASH: felt252 =
+        0x2fd8f8c89dc0378422bb486a63f213ce2f1f691fbd0cd61e4b05c02de92bcc8;
     // Round zero is created directly by the constructor. Every round opened
     // through start_next_round must contain at least this many real, staged
     // treasures; equality with a zero on-chain count is not sufficient.
@@ -985,6 +981,12 @@ mod HelloStarknet {
         pending_admin_action: felt252,
         pending_admin_action_hash: felt252,
         pending_admin_action_eta: u64,
+        // A deployment may only leave its initial paused state after all
+        // scalar settings and both complete pricing schedules have been
+        // installed. These fields are append-only upgrade-safe state.
+        settings_initialized: bool,
+        hop_bands_initialized: u8,
+        volume_bands_initialized: u8,
     }
 
     // vrfProviderAddress is the contract this game will ask for random numbers
@@ -1033,10 +1035,6 @@ mod HelloStarknet {
         pauserAddress: ContractAddress,
         upgradeDelay: u64,
     ) {
-        let ownerAddress: ContractAddress = contract_address_const::<
-            0x052a2b0b20d8796e57f0f00e99adfd61e0b40c4a49553d4197e4da6c1c023833,
-        >();
-
         assert(adminAddress.is_non_zero(), 'Admin address is zero');
         assert(pauserAddress.is_non_zero(), 'Pauser address is zero');
         assert(adminAddress != pauserAddress, 'Admin must differ from pauser');
@@ -1045,8 +1043,7 @@ mod HelloStarknet {
         // Preserve the historical Ownable storage position, but make the
         // explicit admin the owner too so legacy ownership tooling agrees with
         // AccessControl from the first transaction.
-        self.ownable.initializer(ownerAddress);
-        self.ownable._transfer_ownership(adminAddress);
+        self.ownable.initializer(adminAddress);
         self.access_control.initializer();
         self.access_control.set_role_admin(PAUSE_ROLE, ADMIN_ROLE);
         self.access_control._grant_role(DEFAULT_ADMIN_ROLE, adminAddress);
@@ -1057,10 +1054,6 @@ mod HelloStarknet {
         self.upgrade_delay.write(upgradeDelay);
         self.upgrade_initialized_version.write(MIGRATION_VERSION);
 
-        self.gasFeeReservation.write(3333); //$ 0.0033 held back to cover gas
-        self.gameMasterFee.write(8333); //$ 0.0083 to the game master
-        self.gameLandownerFee.write(1167); //$ 0.0012 to the landowner
-
         // Previously hardcoded here. Now supplied by whoever deploys the class,
         // so testnet and mainnet can point at different providers. See the
         // comment above this constructor for the addresses involved.
@@ -1069,10 +1062,6 @@ mod HelloStarknet {
         // Likewise supplied at deploy time. Currently USDC on Sepolia,
         // 0x0512feac6339ff7889822cb5aa2a86c848e9d392bb0e3e237c008674feed8343.
         self.game_token_contract_address.write(gameTokenAddress);
-
-        self.currentGameTokenReward.write(11666667); //$ 11.6667 reward per share
-
-        self.minimumAllowance.write(7000000); //$ 7.00 minimum spend approval
 
         // The ROZ token, deployed in phase 1 and passed in here.
         self.game_reward_token_contract_address.write(rewardTokenAddress);
@@ -1083,8 +1072,9 @@ mod HelloStarknet {
         // 5,329 of the 81,920 casm felts Starknet allows a contract. Removing
         // them is what brings this class under that limit.
         //
-        // So a freshly deployed contract has EVERY rate, limit, fee and band at
-        // zero, and the admin must set them through the update_* entrypoints
+        // So a freshly deployed contract has every configurable rate, limit,
+        // fee and band at zero, and the admin must set them through set_params
+        // and the indexed band entrypoint
         // before the game can be played. See "Post-deploy initialisation" in
         // ROZ_DEPLOYMENT_AND_FUNDING.md for the sequence and the one ordering
         // rule it must obey.
@@ -1126,18 +1116,6 @@ mod HelloStarknet {
             );
     }
 
-    // Every ROZ reward setting, in one place, called once from the constructor.
-    //
-    // It is a separate function rather than inline constructor code for a
-    // practical reason: an upgrade does NOT re-run the constructor, so any
-    // setting added in a later version would read back as zero - and a zero
-    // dailyHideCap or maxTreasuresPerRound silently stops all hiding. A future
-    // migration may reuse the exact initialization for a NEW field, but must
-    // never replay this whole function over live settings and player state.
-    #[generate_trait]
-    impl RewardSettingsInit of RewardSettingsInitTrait {
-    }
-
     #[generate_trait]
     impl InternalFunctions of InternalFunctionsTrait {
         // #[inline(never)] IS LOAD-BEARING, not a style choice. This is called
@@ -1171,7 +1149,7 @@ mod HelloStarknet {
                 self.participationBelowThreshold.write(value);
             } else if key == 'rewardHideBelowThreshold' {
                 self.rewardHideBelowThreshold.write(value);
-            } else if key == 'hideSurvivedBelowThreshold' {  // field name is 32 chars, one over the felt252 limit
+            } else if key == 'hideSurvivedBelowThreshold' { // field name is 32 chars, one over the felt252 limit
                 self.rewardHideSurvivedBelowThreshold.write(value);
             } else if key == 'hopRewardNewWallet' {
                 self.hopRewardNewWallet.write(value);
@@ -2764,6 +2742,9 @@ mod HelloStarknet {
 
         fn unpause(ref self: ContractState) {
             self.access_control.assert_only_role(PAUSE_ROLE);
+            assert(self.settings_initialized.read(), 'settings not initialized');
+            assert(self.hop_bands_initialized.read() == 4, 'hop bands incomplete');
+            assert(self.volume_bands_initialized.read() == 6, 'volume bands incomplete');
             // A full sweep is authorized only for one uninterrupted paused
             // window. Unpausing cancels it, so pause -> propose -> unpause ->
             // pause cannot reuse the old ETA.
@@ -3010,44 +2991,12 @@ mod HelloStarknet {
 
     #[abi(embed_v0)]
     impl HelloStarknetImpl of super::IHelloStarknet<ContractState> {
-        fn get_gas_fee_reservation(self: @ContractState) -> u256 {
-            return self.gasFeeReservation.read();
-        }
-
-        fn get_gamemaster_fee(self: @ContractState) -> u256 {
-            return self.gameMasterFee.read();
-        }
-
         fn get_minimum_allowance_fee(self: @ContractState) -> u256 {
             return self.minimumAllowance.read();
         }
 
-        fn get_game_landowner_fee(self: @ContractState) -> u256 {
-            return self.gameLandownerFee.read();
-        }
-
-        fn get_finder_player_fee(self: @ContractState) -> u256 {
-            return self.currentFinderFee.read();
-        }
-
         fn get_hider_player_fee(self: @ContractState) -> u256 {
             return self.currentHiderFee.read();
-        }
-
-        fn get_generate_position_fee(self: @ContractState) -> u256 {
-            return self.currentSpawnNewPositionFee.read();
-        }
-
-        fn get_main_game_info(self: @ContractState, gameWeek: u256) -> (u256, u256, u256) {
-            return self.main_game.read(gameWeek);
-        }
-
-        fn get_total_number_of_hiders(self: @ContractState, gameWeek: u256) -> u256 {
-            return self.total_reward_shares_for_hiders.read(gameWeek);
-        }
-
-        fn get_total_number_of_finders(self: @ContractState, gameWeek: u256) -> u256 {
-            return self.total_reward_shares_for_finders.read(gameWeek);
         }
 
         fn get_game_grid_size(self: @ContractState, gameWeek: u256) -> (u128, u128) {
@@ -3097,10 +3046,6 @@ mod HelloStarknet {
             assert(!keeper.is_zero(), 'keeper is zero');
             self.round_keeper.write(keeper);
             true
-        }
-
-        fn get_game_token_reward(self: @ContractState) -> u256 {
-            return self.currentGameTokenReward.read();
         }
 
         fn get_claim_share_amounts(
@@ -3835,10 +3780,6 @@ mod HelloStarknet {
         // call this - it is the quickest way to confirm, after a deploy or after
         // update_vrf_provider, that the game is talking to the provider you
         // think it is.
-        fn get_vrf_provider(self: @ContractState) -> ContractAddress {
-            return self.vrf_provider_contract_address.read();
-        }
-
         // Points the game at a different ERC-20 for fees and rewards. This is a
         // delayed ADMIN_ROLE operation.
         //
@@ -3867,10 +3808,6 @@ mod HelloStarknet {
         // Reads back the token the game is currently charging fees in. Anyone can
         // call this; it is the quickest way to confirm a deploy wired up the token
         // you intended.
-        fn get_game_token(self: @ContractState) -> ContractAddress {
-            return self.game_token_contract_address.read();
-        }
-
         // ------------------------------------------------------------------
         // ROZ reward token - address and rates (4a, 4b)
         // ------------------------------------------------------------------
@@ -3889,8 +3826,16 @@ mod HelloStarknet {
             return true;
         }
 
-        fn get_game_reward_token(self: @ContractState) -> ContractAddress {
-            return self.game_reward_token_contract_address.read();
+        // One wrapper returns all immutable-at-deploy wiring. Each address can
+        // still be changed only through its delayed administration action.
+        fn get_contract_addresses(
+            self: @ContractState,
+        ) -> (ContractAddress, ContractAddress, ContractAddress) {
+            return (
+                self.vrf_provider_contract_address.read(),
+                self.game_token_contract_address.read(),
+                self.game_reward_token_contract_address.read(),
+            );
         }
 
         fn get_reward_rates(self: @ContractState) -> (u256, u256, u256, u256, u256) {
@@ -4017,64 +3962,115 @@ mod HelloStarknet {
         // the WHOLE configuration on every call, not over the fields being
         // written. Changing one setting therefore requires the settings it
         // depends on to be consistent already, or to travel in the same batch.
-        // On a freshly deployed contract every setting is zero, so the FIRST
-        // batch must carry all of them - a partial first batch fails
-        // _assertSettingsInvariants and writes nothing. See "Post-deploy
+        // On a freshly deployed contract the FIRST batch must use the exact
+        // canonical 35-key order. The Poseidon check below rejects omissions,
+        // duplicates and typos before any setting is written. See "Post-deploy
         // initialisation" in ROZ_DEPLOYMENT_AND_FUNDING.md.
-        fn set_params(
-            ref self: ContractState, keys: Array<felt252>, values: Array<u256>,
-        ) -> bool {
+        fn set_params(ref self: ContractState, keys: Array<felt252>, values: Array<u256>) -> bool {
             self._assert_admin();
 
             assert(keys.len() == values.len(), 'keys and values differ');
             assert(keys.len() > 0, 'no parameters given');
+
+            // The first batch is the deployment boundary: it must contain each
+            // of the thirty-five recognised settings exactly once. Unknown
+            // keys fail in _applyParam and duplicates fail here, so length 35
+            // proves the complete key set was supplied. Later admin updates
+            // may intentionally change only the fields that travel together.
+            let first_batch = !self.settings_initialized.read();
+            if first_batch {
+                assert(keys.len() == 35, 'initial batch must have 35');
+                assert(
+                    poseidon_hash_span(keys.span()) == INITIAL_SETTINGS_KEYS_HASH,
+                    'initial keys invalid',
+                );
+            }
 
             let mut i: u32 = 0;
             loop {
                 if (i == keys.len()) {
                     break;
                 }
-                self._applyParam(*keys.at(i), *values.at(i));
+                let key = *keys.at(i);
+                self._applyParam(key, *values.at(i));
                 i = i + 1;
             }
 
             // Validate the RESULT, not the arguments. See the note above.
             self._assertSettingsInvariants();
+            if first_batch {
+                // Round zero was created while every configurable deduction
+                // was still zero. Correct the already-staged round-one claim
+                // snapshot in this same atomic initialization transaction.
+                let deductions = self.gasFeeReservation.read()
+                    + self.gameMasterFee.read()
+                    + self.gameLandownerFee.read();
+                let claim_value = self.currentHiderFee.read() - deductions;
+                assert(claim_value > 0, 'deductions consume stake');
+                self
+                    .round_claim_value_per_share
+                    .write(self.currentGameWeek.read() + 1, claim_value);
+                self.settings_initialized.write(true);
+            }
 
             return true;
         }
 
-        fn update_hop_price_band(
-            ref self: ContractState, bandIndex: u8, upToHop: u256, price: u256,
+        fn update_price_band(
+            ref self: ContractState, bandKind: u8, bandIndex: u8, upTo: u256, num: u256, den: u256,
         ) -> bool {
             self._assert_admin();
-            self.hop_price_tier_limit.write(bandIndex, upToHop);
-            self.hop_price_tier_price.write(bandIndex, price);
+            assert(bandKind < 2, 'band kind out of range');
+            assert(upTo > 0, 'band limit is zero');
+
+            if bandKind == 0 {
+                assert(den == 0, 'hop band den must be zero');
+                assert(bandIndex < 4, 'hop band index out of range');
+                assert(num > 0, 'hop band price is zero');
+                let initialized = self.hop_bands_initialized.read();
+                assert(bandIndex <= initialized, 'previous hop band missing');
+                if bandIndex > 0 {
+                    let previous_limit = self.hop_price_tier_limit.read(bandIndex - 1);
+                    assert(previous_limit < upTo, 'hop bands not increasing');
+                }
+                if bandIndex == 3 {
+                    assert(upTo == OPEN_ENDED_BAND, 'last hop band not open');
+                }
+                self.hop_price_tier_limit.write(bandIndex, upTo);
+                self.hop_price_tier_price.write(bandIndex, num);
+                // Updating an earlier band invalidates every later band until
+                // the admin resubmits the tail in ascending order.
+                self.hop_bands_initialized.write(bandIndex + 1);
+            } else {
+                assert(bandIndex < 6, 'volume band out of range');
+                assert(den > 0, 'volume band den is zero');
+                assert(num <= den, 'volume band above 1x');
+                let initialized = self.volume_bands_initialized.read();
+                assert(bandIndex <= initialized, 'previous volume band missing');
+                if bandIndex > 0 {
+                    let previous_limit = self.volume_band_limit.read(bandIndex - 1);
+                    assert(previous_limit < upTo, 'volume bands not increasing');
+                }
+                if bandIndex == 5 {
+                    assert(upTo == OPEN_ENDED_BAND, 'last volume band not open');
+                }
+                self.volume_band_limit.write(bandIndex, upTo);
+                self.volume_band_num.write(bandIndex, num);
+                self.volume_band_den.write(bandIndex, den);
+                self.volume_bands_initialized.write(bandIndex + 1);
+            }
             return true;
         }
 
-        fn get_hop_price_band(self: @ContractState, bandIndex: u8) -> (u256, u256) {
-            return (
-                self.hop_price_tier_limit.read(bandIndex),
-                self.hop_price_tier_price.read(bandIndex),
-            );
-        }
-
-        // upToTreasures is the count the wallet has ALREADY created today,
-        // before the treasure being priced. So band 0 at 2 covers treasures 1-3.
-        fn update_volume_band(
-            ref self: ContractState, bandIndex: u8, upToTreasures: u256, num: u256, den: u256,
-        ) -> bool {
-            self._assert_admin();
-            assert(den > 0, 'volume band den is zero');
-            assert(num <= den, 'volume band above 1x');
-            self.volume_band_limit.write(bandIndex, upToTreasures);
-            self.volume_band_num.write(bandIndex, num);
-            self.volume_band_den.write(bandIndex, den);
-            return true;
-        }
-
-        fn get_volume_band(self: @ContractState, bandIndex: u8) -> (u256, u256, u256) {
+        fn get_price_band(self: @ContractState, bandKind: u8, bandIndex: u8) -> (u256, u256, u256) {
+            assert(bandKind < 2, 'band kind out of range');
+            if bandKind == 0 {
+                return (
+                    self.hop_price_tier_limit.read(bandIndex),
+                    self.hop_price_tier_price.read(bandIndex),
+                    0,
+                );
+            }
             return (
                 self.volume_band_limit.read(bandIndex),
                 self.volume_band_num.read(bandIndex),

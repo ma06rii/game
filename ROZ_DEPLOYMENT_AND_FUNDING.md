@@ -24,8 +24,7 @@ and how to run the tests, see `ROZ_IMPLEMENTATION_NOTES.md`.
 |---|---|
 | Deployment identity | class `0x051de976…e0aafb`, block `14484189` |
 | Minimum rollover readiness | `get_min_treasures_to_start()` = `2` |
-| Game is wired to the token | `get_game_reward_token()` → `0x03a5c876…5d445b` |
-| Game is wired to USDC | `get_game_token()` → `0x0512feac…eed8343` |
+| Game wiring | `get_contract_addresses()` → `(VRF, USDC, ROZ)` |
 | Token identity | `symbol()` = `"ROZ"`, `decimals()` = 18 |
 | Total supply | 5,000,000,000 ROZ |
 | Owner balance | 5,000,000,000 ROZ — the whole supply |
@@ -235,7 +234,7 @@ export SCARB_CACHE="$CLAUDE_JOB_DIR/tmp/scarb-cache"
 export CARGO_HOME="$CLAUDE_JOB_DIR/tmp/cargo-home"
 
 # 1. Build clean, and refuse to ship if anything is red.
-scarb build && snforge test || echo "STOP - do not declare"
+scarb --release build && snforge test || echo "STOP - do not declare"
 
 # 2. Declare. Prints the class hash; step 3 needs it.
 sncast --account=account_braavos declare \
@@ -264,9 +263,9 @@ every time.
 **The deployed contract is paused and holds no settings.** Go straight to
 "Post-deploy initialisation" below before doing anything else.
 
-**The owner is hardcoded**, not a constructor argument. Deploying from any
-account still produces a contract owned by `0x052a2b0b…023833`, which is
-`account_braavos`.
+The `admin` constructor argument becomes both the Ownable owner and the holder
+of the admin/upgrade roles. The separate `pauser` receives only `PAUSE_ROLE`;
+the constructor rejects using the same address for both responsibilities.
 
 ### The declare is the step that fails
 
@@ -293,9 +292,11 @@ estimation problem is specific to declaring a large class.
 **The class does not set its own defaults.** `_initialiseRewardSettings` used to
 write about ninety constants in the constructor; it cost **5,329 of the 81,920
 casm felts** Starknet allows a class, and it was removed to get the contract
-closer to that limit. A freshly deployed game therefore has every rate, limit,
-fee and band at **zero**, and **deploys paused** so that a half-initialised game
-cannot be played. Hiding, hopping and `start_next_round` all `assert_not_paused`.
+closer to that limit. A freshly deployed game therefore has all thirty-five
+configurable rates, limits and fees, plus both pricing schedules, at **zero**,
+and **deploys paused** so that a half-initialised game cannot be played. (The
+deprecated `currentGameTokenReward` storage slot is not configuration and has no
+public getter.) Hiding, hopping and `start_next_round` all `assert_not_paused`.
 
 Run this as the **admin**, then unpause as the **pauser**. The sequence is
 mirrored exactly by `initialise_game_settings` in `tests/test_contract.cairo`, so
@@ -306,14 +307,14 @@ setters used to do this; their compiler-generated wrappers alone cost 7,922 of
 the 81,920 casm felts Starknet allows a class, and removing them is part of what
 brings the contract under that limit.
 
-`set_params` applies the batch and then validates the **whole** configuration, so
-there is no ordering rule to remember any more - but there is a stronger one in
-its place:
+`set_params` applies the batch and then validates the **whole** configuration.
+There is also an explicit deployment guard:
 
-> **The first batch must carry all thirty-five settings.** Every setting on a
-> fresh contract is zero, so a partial first batch fails
-> `'free hops >= participation'` and writes nothing. That is deliberate: it is
-> what stops a half-configured game from running.
+> **The first batch must carry all thirty-five settings in the exact canonical
+> order printed below.** The contract checks their Poseidon hash, rejecting a
+> missing, duplicate, unknown or reordered key atomically. That is what stops a
+> partial batch that happens to satisfy relational invariants from looking
+> initialized.
 
 Later, a single setting can be changed on its own, because the rest of the
 configuration is already consistent.
@@ -352,27 +353,32 @@ sncast --account=account_braavos invoke --contract-address $GAME \
 characters and a `felt252` short string holds 31, so its key is
 `hideSurvivedBelowThreshold`. Every other key is the storage field name exactly.
 
-The two indexed schedules keep their own setters, because they are already
-parameterised by band index:
+The two indexed schedules share one entrypoint to save a compiler-generated ABI
+wrapper. `bandKind=0` means hop price (`num` is the price and `den=0`);
+`bandKind=1` means daily hide volume (`num/den` is the multiplier). Submit each
+schedule in ascending index order. Updating an earlier band invalidates its tail
+until every later band has been resubmitted; the last limit must be the open
+`u128::MAX` value shown below.
 
 ```bash
 A="sncast --account=account_braavos invoke --contract-address $GAME --network sepolia"
 
 # Progressive hop prices. Band 3 is open-ended.
-$A --function update_hop_price_band --arguments '0, 25, 5000'      # $0.005
-$A --function update_hop_price_band --arguments '1, 45, 10000'     # $0.010
-$A --function update_hop_price_band --arguments '2, 65, 20000'     # $0.020
-$A --function update_hop_price_band --arguments '3, 340282366920938463463374607431768211455, 40000'
+$A --function update_price_band --arguments '0, 0, 25, 5000, 0'      # $0.005
+$A --function update_price_band --arguments '0, 1, 45, 10000, 0'     # $0.010
+$A --function update_price_band --arguments '0, 2, 65, 20000, 0'     # $0.020
+$A --function update_price_band --arguments '0, 3, 340282366920938463463374607431768211455, 40000, 0'
 
 # Daily Volume Multiplier. Band 5 is the open-ended tail.
-$A --function update_volume_band --arguments '0, 2, 1, 1'          # 1.00x
-$A --function update_volume_band --arguments '1, 4, 7, 10'         # 0.70x
-$A --function update_volume_band --arguments '2, 6, 2, 5'          # 0.40x
-$A --function update_volume_band --arguments '3, 8, 1, 5'          # 0.20x
-$A --function update_volume_band --arguments '4, 10, 2, 25'        # 0.08x
-$A --function update_volume_band --arguments '5, 340282366920938463463374607431768211455, 3, 100'
+$A --function update_price_band --arguments '1, 0, 2, 1, 1'          # 1.00x
+$A --function update_price_band --arguments '1, 1, 4, 7, 10'         # 0.70x
+$A --function update_price_band --arguments '1, 2, 6, 2, 5'          # 0.40x
+$A --function update_price_band --arguments '1, 3, 8, 1, 5'          # 0.20x
+$A --function update_price_band --arguments '1, 4, 10, 2, 25'        # 0.08x
+$A --function update_price_band --arguments '1, 5, 340282366920938463463374607431768211455, 3, 100'
 
-# Finally, unpause AS THE PAUSER - not the admin.
+# Finally, unpause AS THE PAUSER - not the admin. This reverts unless the
+# canonical scalar batch and all ten schedule bands are complete.
 sncast --account=<pauser account> invoke --contract-address $GAME \
   --function unpause --network sepolia
 ```
@@ -381,7 +387,7 @@ sncast --account=<pauser account> invoke --contract-address $GAME \
 and a zero root fails every proof, which means nobody is whitelisted - the correct
 starting state. Publish one with `set_whitelist_merkle_root` when there is a list.
 
-**Verify before unpausing.** Every setting has a getter, so read them all back:
+**Verify before unpausing.** Read back every grouped setting and both schedules:
 
 ```bash
 for f in get_reward_rates get_below_threshold_rates get_new_wallet_rates \
@@ -390,11 +396,26 @@ for f in get_reward_rates get_below_threshold_rates get_new_wallet_rates \
   echo -n "$f: "
   sncast call --contract-address $GAME --function $f --network sepolia
 done
+
+for i in 0 1 2 3; do
+  sncast call --contract-address $GAME --function get_price_band \
+    --arguments "0,$i" --network sepolia
+done
+for i in 0 1 2 3 4 5; do
+  sncast call --contract-address $GAME --function get_price_band \
+    --arguments "1,$i" --network sepolia
+done
+sncast call --contract-address $GAME --function is_paused --network sepolia # true until the separate final transaction
 ```
 
-A zero anywhere means a step was missed. **An unset game is not inert** - it would
-hand out free hops that earn nothing, which is silent and wrong rather than loud
-and wrong. That is the whole reason the contract deploys paused.
+Compare the returned tuples with the exact values above; zero is intentional for
+`participationBelowThreshold` and every hop band's denominator. Do not use a
+blanket “no zeros” check. The on-chain readiness guard is the last line of
+defence, not a substitute for verifying the intended economic values. The three
+claim-deduction scalars (`gasFeeReservation`, `gameMasterFee` and
+`gameLandownerFee`) deliberately have no standalone read wrappers so the class
+fits Starknet's bytecode ceiling; verify them in the accepted `set_params`
+transaction calldata.
 
 ### Verify before trusting it
 
@@ -407,9 +428,7 @@ GAME=<address from step 3>
 sncast call --contract-address $GAME --function get_total_reward_token_missed \
   --network sepolia                                          # -> 0_u256
 
-sncast call --contract-address $GAME --function get_game_reward_token --network sepolia
-sncast call --contract-address $GAME --function get_game_token        --network sepolia
-sncast call --contract-address $GAME --function get_vrf_provider      --network sepolia
+sncast call --contract-address $GAME --function get_contract_addresses --network sepolia # -> (VRF, USDC, ROZ)
 sncast call --contract-address $GAME --function get_game_week         --network sepolia  # -> 0_u256
 sncast call --contract-address $GAME --function owner                 --network sepolia
 ```

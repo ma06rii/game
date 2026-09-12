@@ -274,20 +274,20 @@ fn test_volume_multiplier_bands() {
     initialise_game_settings(contract_address);
     let dispatcher = IHelloStarknetDispatcher { contract_address };
 
-    let (limit0, num0, den0) = dispatcher.get_volume_band(0);
+    let (limit0, num0, den0) = dispatcher.get_price_band(1, 0);
     assert(limit0 == 2, 'band0 limit != 2');
     assert(num0 == 1 && den0 == 1, 'band0 != 1.00x');
 
-    let (limit1, num1, den1) = dispatcher.get_volume_band(1);
+    let (limit1, num1, den1) = dispatcher.get_price_band(1, 1);
     assert(limit1 == 4, 'band1 limit != 4');
     assert(num1 == 7 && den1 == 10, 'band1 != 0.70x');
 
-    let (_, num4, den4) = dispatcher.get_volume_band(4);
+    let (_, num4, den4) = dispatcher.get_price_band(1, 4);
     assert(num4 == 2 && den4 == 25, 'band4 != 0.08x');
 
     // The tail, reachable only by a whitelisted address since dailyHideCap
     // stops everybody else at 10.
-    let (_, num5, den5) = dispatcher.get_volume_band(5);
+    let (_, num5, den5) = dispatcher.get_price_band(1, 5);
     assert(num5 == 3 && den5 == 100, 'band5 != 0.03x');
 }
 
@@ -341,7 +341,7 @@ fn test_reward_token_starts_unset() {
     let contract_address = deploy_contract("HelloStarknet");
     let dispatcher = IHelloStarknetDispatcher { contract_address };
 
-    let rewardToken = dispatcher.get_game_reward_token();
+    let (_, _, rewardToken) = dispatcher.get_contract_addresses();
     assert(rewardToken == contract_address_const::<0>(), 'reward token should be unset');
 }
 
@@ -458,14 +458,9 @@ fn deploy_wired_with_roz(
 // The values are the ones _initialiseRewardSettings used to write, so every
 // assertion in this file keeps its original meaning.
 //
-// THREE ORDERING RULES, all enforced by asserts in the setters:
-//
-//   1. update_gate_thresholds BEFORE update_hide_settings
-//      - the latter asserts feeTierBoundary * feeBase == dailySpendThreshold.
-//   2. update_hide_settings BEFORE update_whitelist_caps
-//      - the latter asserts collectiveCap <= maxTreasuresPerRound.
-//   3. unpause LAST, and as the pauser - the contract deploys paused so that a
-//      half-initialised game cannot be played.
+// The initial scalar key order is canonical and the two schedules must be
+// submitted from band zero through their open-ended tails. Unpause is last and
+// must be sent by the separate pauser.
 fn initialise_game_settings(game: ContractAddress) {
     let admin: ContractAddress = contract_address_const::<
         0x052a2b0b20d8796e57f0f00e99adfd61e0b40c4a49553d4197e4da6c1c023833,
@@ -477,38 +472,32 @@ fn initialise_game_settings(game: ContractAddress) {
     start_cheat_caller_address(game, admin);
 
     // ALL THIRTY-FIVE SCALAR SETTINGS IN ONE BATCH. set_params validates the
-    // whole configuration after applying it, so on a freshly deployed contract -
-    // where every setting is zero - the first batch has to carry all of them.
-    // Splitting this into two calls fails 'free hops >= participation' on the
-    // first, which is the behaviour that stops a half-configured game running.
+    // whole configuration after applying it. The first batch also has to carry
+    // the exact canonical key order; its Poseidon hash makes a missing,
+    // duplicated or mistyped deployment setting fail atomically.
     dispatcher
         .set_params(
             array![
                 // Full rates, raw 18-decimal ROZ.
                 'rewardHide', 'rewardHideSurvived', 'rewardFind', 'rewardParticipation',
-                'rewardPerHop',
-                // Below the daily spend threshold. Absolute values, never multipliers.
+                'rewardPerHop', // Below the daily spend threshold. Absolute values, never multipliers.
                 'hopRewardBelowThreshold', 'participationBelowThreshold',
-                'rewardHideBelowThreshold', 'hideSurvivedBelowThreshold',
-                // New wallet, under $3 of lifetime spend.
+                'rewardHideBelowThreshold',
+                'hideSurvivedBelowThreshold', // New wallet, under $3 of lifetime spend.
                 'hopRewardNewWallet', 'participationNewWallet', 'rewardHideNewWallet',
-                'rewardHideSurvivedNewWallet',
-                // Limits and allowances. Free hops stay strictly below the minimum.
+                'rewardHideSurvivedNewWallet', // Limits and allowances. Free hops stay strictly below the minimum.
                 'participationMinimumHops', 'hopRewardCap', 'dailyFreeHops',
-                'dailyFreeSpawns',
-                // Soft caps.
-                'dailySoftCapRoz', 'newWalletSoftCapRoz', 'softCapMultiplierNum',
-                'softCapMultiplierDen',
-                // The Lightweight Gate.
-                'dailySpendThreshold', 'lifetimeSpendThreshold',
-                // Hiding.
-                'hideFeeBase', 'hideFeeHigh', 'hideFeeTierBoundary', 'dailyHideCap',
-                'maxTreasuresPerRound',
-                // Whitelist.
-                'whitelistRoundCap', 'whitelistCollectiveCap', 'whitelistHourlyCap',
-                // Per-transaction fees.
-                'gasFeeReservation', 'gameMasterFee', 'gameLandownerFee',
-                'minimumAllowance',
+                'dailyFreeSpawns', // Soft caps.
+                'dailySoftCapRoz', 'newWalletSoftCapRoz',
+                'softCapMultiplierNum', 'softCapMultiplierDen', // The Lightweight Gate.
+                'dailySpendThreshold', 'lifetimeSpendThreshold', // Hiding.
+                'hideFeeBase',
+                'hideFeeHigh', 'hideFeeTierBoundary', 'dailyHideCap',
+                'maxTreasuresPerRound', // Whitelist.
+                'whitelistRoundCap', 'whitelistCollectiveCap',
+                'whitelistHourlyCap', // Per-transaction fees.
+                'gasFeeReservation', 'gameMasterFee',
+                'gameLandownerFee', 'minimumAllowance',
             ],
             array![
                 30000000000000000000, // rewardHide                       30
@@ -545,23 +534,23 @@ fn initialise_game_settings(game: ContractAddress) {
                 3333, // gasFeeReservation                               $0.0033
                 8333, // gameMasterFee                                   $0.0083
                 1167, // gameLandownerFee                                $0.0012
-                7000000, // minimumAllowance                             $7.00
+                7000000 // minimumAllowance                             $7.00
             ],
         );
 
     // Progressive hop prices. Band 3 is open-ended.
-    dispatcher.update_hop_price_band(0, 25, 5000); // $0.005
-    dispatcher.update_hop_price_band(1, 45, 10000); // $0.010
-    dispatcher.update_hop_price_band(2, 65, 20000); // $0.020
-    dispatcher.update_hop_price_band(3, 0xffffffffffffffffffffffffffffffff, 40000); // $0.040
+    dispatcher.update_price_band(0, 0, 25, 5000, 0); // $0.005
+    dispatcher.update_price_band(0, 1, 45, 10000, 0); // $0.010
+    dispatcher.update_price_band(0, 2, 65, 20000, 0); // $0.020
+    dispatcher.update_price_band(0, 3, 0xffffffffffffffffffffffffffffffff, 40000, 0); // $0.040
 
     // The Daily Volume Multiplier. Band 5 is the open-ended tail.
-    dispatcher.update_volume_band(0, 2, 1, 1); // 1.00x
-    dispatcher.update_volume_band(1, 4, 7, 10); // 0.70x
-    dispatcher.update_volume_band(2, 6, 2, 5); // 0.40x
-    dispatcher.update_volume_band(3, 8, 1, 5); // 0.20x
-    dispatcher.update_volume_band(4, 10, 2, 25); // 0.08x
-    dispatcher.update_volume_band(5, 0xffffffffffffffffffffffffffffffff, 3, 100); // 0.03x
+    dispatcher.update_price_band(1, 0, 2, 1, 1); // 1.00x
+    dispatcher.update_price_band(1, 1, 4, 7, 10); // 0.70x
+    dispatcher.update_price_band(1, 2, 6, 2, 5); // 0.40x
+    dispatcher.update_price_band(1, 3, 8, 1, 5); // 0.20x
+    dispatcher.update_price_band(1, 4, 10, 2, 25); // 0.08x
+    dispatcher.update_price_band(1, 5, 0xffffffffffffffffffffffffffffffff, 3, 100); // 0.03x
 
     stop_cheat_caller_address(game);
 
@@ -1210,7 +1199,7 @@ fn test_paid_hops_charge_the_tier_price_and_count_as_spend() {
     assert(hopsToday == 21, 'should have hopped 21');
 
     // The opening tier, $0.005. Band 0 runs to daily hop 25.
-    let (bandLimit, bandPrice) = dispatcher.get_hop_price_band(0);
+    let (bandLimit, bandPrice, _) = dispatcher.get_price_band(0, 0);
     assert(bandLimit == 25, 'band 0 should end at 25');
     assert(spendAfter == bandPrice, 'hop 21 should cost band 0');
     assert(spendAfter == 5000, 'band 0 should be 0.005');
@@ -1227,10 +1216,7 @@ fn test_lowering_free_hops_mid_day_is_not_retroactive() {
 
     // Model a live day that began under the former 22-hop allowance.
     start_cheat_caller_address(game, admin_address());
-    assert(
-        dispatcher.set_params(array!['dailyFreeHops'], array![22]),
-        'old allowance not set',
-    );
+    assert(dispatcher.set_params(array!['dailyFreeHops'], array![22]), 'old allowance not set');
     stop_cheat_caller_address(game);
 
     start_cheat_caller_address(game, player);
@@ -1252,10 +1238,7 @@ fn test_lowering_free_hops_mid_day_is_not_retroactive() {
     // Apply the new live setting. Remaining allowance floors at zero even
     // though the usage counter is greater than the new cap.
     start_cheat_caller_address(game, admin_address());
-    assert(
-        dispatcher.set_params(array!['dailyFreeHops'], array![20]),
-        'new allowance not set',
-    );
+    assert(dispatcher.set_params(array!['dailyFreeHops'], array![20]), 'new allowance not set');
     stop_cheat_caller_address(game);
     assert(dispatcher.get_free_hops_remaining(player) == 0, 'remaining must floor at zero');
     let (_, _, _, spend_after_update, _) = dispatcher.get_player_daily_state(player);
@@ -1757,7 +1740,7 @@ fn ensure_minimum_staged(game: ContractAddress) {
 
     let filler: ContractAddress = contract_address_const::<0xf111e>();
     let missing = dispatcher.get_min_treasures_to_start() - stagedCount;
-    let gameToken = dispatcher.get_game_token();
+    let (_, gameToken, _) = dispatcher.get_contract_addresses();
     fund_player(gameToken, game, filler, missing * (STAKE + FEE_HIGH));
 
     start_cheat_caller_address(game, filler);
@@ -2083,7 +2066,7 @@ fn test_start_next_round_preserves_the_live_staged_count() {
     assert(roundId == 1_u256, 'round increments');
     assert(stateAfter == 0_u8, 'new round must be open');
     assert(active == 2_u256 && initial == 2_u256, 'active count survives');
-    assert(dispatcher.get_total_number_of_hiders(1) == 2, 'find gate count must survive');
+    assert(dispatcher.get_claim_share_amounts(1, player) == 2, 'find gate count must survive');
 }
 
 // Round zero is the only deliberately empty round. Every keeper-opened round
@@ -2487,12 +2470,11 @@ fn test_pauser_is_separate_from_admin_and_can_be_replaced_by_role_grant() {
     let admin_safe = IGameAdministrationSafeDispatcher { contract_address: game };
     let access = IAccessControlDispatcher { contract_address: game };
 
-    // The class deploys PAUSED so a half-initialised game cannot be played, so
-    // lift that first - this test is about who may pause, not about the state
-    // a deployment starts in.
+    // The pauser cannot accidentally make a raw deployment playable.
     start_cheat_caller_address(game, pauser_address());
-    admin.unpause();
+    assert(admin_safe.unpause().is_err(), 'uninitialised game was unpaused');
     stop_cheat_caller_address(game);
+    initialise_game_settings(game);
 
     start_cheat_caller_address(game, admin_address());
     let refused = admin_safe.pause();
@@ -2510,6 +2492,80 @@ fn test_pauser_is_separate_from_admin_and_can_be_replaced_by_role_grant() {
     admin.pause();
     assert(admin.is_paused(), 'granted admin should pause');
     admin.unpause();
+    stop_cheat_caller_address(game);
+}
+
+#[test]
+#[feature("safe_dispatcher")]
+fn test_initial_settings_batch_must_be_complete_and_unique() {
+    let game = deploy_contract("HelloStarknet");
+    let gameplay = IHelloStarknetDispatcher { contract_address: game };
+    let gameplay_safe = IHelloStarknetSafeDispatcher { contract_address: game };
+
+    start_cheat_caller_address(game, admin_address());
+    assert(
+        gameplay_safe.set_params(array!['minimumAllowance'], array![7000000]).is_err(),
+        'partial batch accepted',
+    );
+    assert(gameplay.get_minimum_allowance_fee() == 0, 'failed batch wrote storage');
+
+    let mut duplicate_keys = array![];
+    let mut duplicate_values = array![];
+    let mut i: u32 = 0;
+    loop {
+        if i == 35 {
+            break;
+        }
+        duplicate_keys.append('rewardHide');
+        duplicate_values.append(1);
+        i = i + 1;
+    }
+    assert(
+        gameplay_safe.set_params(duplicate_keys, duplicate_values).is_err(),
+        'duplicate keys accepted',
+    );
+    stop_cheat_caller_address(game);
+}
+
+#[test]
+#[feature("safe_dispatcher")]
+fn test_band_updates_rebuild_the_tail_before_unpause() {
+    let player: ContractAddress = contract_address_const::<0x70b>();
+    let (game, _, _) = deploy_wired(player, 100000000);
+    let gameplay = IHelloStarknetDispatcher { contract_address: game };
+    let gameplay_safe = IHelloStarknetSafeDispatcher { contract_address: game };
+    let administration = IGameAdministrationDispatcher { contract_address: game };
+    let administration_safe = IGameAdministrationSafeDispatcher { contract_address: game };
+
+    start_cheat_caller_address(game, pauser_address());
+    administration.pause();
+    stop_cheat_caller_address(game);
+
+    start_cheat_caller_address(game, admin_address());
+    assert(gameplay.update_price_band(0, 0, 26, 5000, 0), 'band zero update failed');
+    assert(gameplay_safe.update_price_band(0, 2, 65, 20000, 0).is_err(), 'hop tail skipped a band');
+    assert(
+        gameplay_safe.update_price_band(0, 1, 26, 10000, 0).is_err(),
+        'equal hop limits were accepted',
+    );
+    stop_cheat_caller_address(game);
+
+    start_cheat_caller_address(game, pauser_address());
+    assert(administration_safe.unpause().is_err(), 'incomplete tail unpaused');
+    stop_cheat_caller_address(game);
+
+    start_cheat_caller_address(game, admin_address());
+    gameplay.update_price_band(0, 1, 45, 10000, 0);
+    gameplay.update_price_band(0, 2, 65, 20000, 0);
+    assert(
+        gameplay_safe.update_price_band(0, 3, 66, 40000, 0).is_err(), 'finite final band accepted',
+    );
+    gameplay.update_price_band(0, 3, 0xffffffffffffffffffffffffffffffff, 40000, 0);
+    assert(gameplay_safe.update_price_band(1, 6, 12, 1, 2).is_err(), 'volume index accepted');
+    stop_cheat_caller_address(game);
+
+    start_cheat_caller_address(game, pauser_address());
+    administration.unpause();
     stop_cheat_caller_address(game);
 }
 
@@ -2793,9 +2849,8 @@ fn test_full_sweep_requires_pause_for_proposal_and_execution() {
 fn test_admin_handoff_is_delayed_and_revokes_the_previous_admin() {
     let game = deploy_contract("HelloStarknet");
     // This test proves the handoff by having the new admin write a setting, and
-    // set_params validates the WHOLE configuration. On an uninitialised contract
-    // every setting is zero, so that write would fail on the invariants rather
-    // than on authorisation - which is not what is being tested here.
+    // set_params requires the canonical initial batch on an uninitialised
+    // contract, so initialise first; this test is about authorisation.
     initialise_game_settings(game);
     let new_admin: ContractAddress = contract_address_const::<0x709>();
     let gameplay = IHelloStarknetDispatcher { contract_address: game };
@@ -2825,8 +2880,7 @@ fn test_admin_handoff_is_delayed_and_revokes_the_previous_admin() {
     stop_cheat_caller_address(game);
     start_cheat_caller_address(game, new_admin);
     assert(
-        gameplay.set_params(array!['gasFeeReservation'], array![99]),
-        'new admin not authorized',
+        gameplay.set_params(array!['gasFeeReservation'], array![99]), 'new admin not authorized',
     );
     stop_cheat_caller_address(game);
 }
