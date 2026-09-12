@@ -152,6 +152,10 @@ fn test_spawn_then_hop_and_reject_duplicate_spawn() {
 #[test]
 fn test_reward_settings_defaults() {
     let contract_address = deploy_contract("HelloStarknet");
+    // These values no longer come from the constructor - the class does not
+    // set its own defaults any more. Run the documented post-deploy sequence,
+    // so this test now proves the RUNBOOK produces them.
+    initialise_game_settings(contract_address);
     let dispatcher = IHelloStarknetDispatcher { contract_address };
 
     // Full rates, raw 18-decimal ROZ.
@@ -182,6 +186,10 @@ fn test_reward_settings_defaults() {
 #[test]
 fn test_hop_limits_and_gate_thresholds() {
     let contract_address = deploy_contract("HelloStarknet");
+    // These values no longer come from the constructor - the class does not
+    // set its own defaults any more. Run the documented post-deploy sequence,
+    // so this test now proves the RUNBOOK produces them.
+    initialise_game_settings(contract_address);
     let dispatcher = IHelloStarknetDispatcher { contract_address };
 
     let (participationMin, roundCap, freeHops, freeSpawns) = dispatcher.get_hop_limits();
@@ -205,6 +213,10 @@ fn test_hop_limits_and_gate_thresholds() {
 #[test]
 fn test_hide_settings_and_gate_invariant() {
     let contract_address = deploy_contract("HelloStarknet");
+    // These values no longer come from the constructor - the class does not
+    // set its own defaults any more. Run the documented post-deploy sequence,
+    // so this test now proves the RUNBOOK produces them.
+    initialise_game_settings(contract_address);
     let dispatcher = IHelloStarknetDispatcher { contract_address };
 
     let (feeBase, feeHigh, tierBoundary, dailyCap, perRound) = dispatcher.get_hide_settings();
@@ -228,6 +240,10 @@ fn test_hide_settings_and_gate_invariant() {
 #[test]
 fn test_whitelist_caps_leave_a_floor() {
     let contract_address = deploy_contract("HelloStarknet");
+    // These values no longer come from the constructor - the class does not
+    // set its own defaults any more. Run the documented post-deploy sequence,
+    // so this test now proves the RUNBOOK produces them.
+    initialise_game_settings(contract_address);
     let dispatcher = IHelloStarknetDispatcher { contract_address };
 
     let (roundCap, collectiveCap, hourlyCap) = dispatcher.get_whitelist_caps();
@@ -252,6 +268,10 @@ fn test_whitelist_caps_leave_a_floor() {
 #[test]
 fn test_volume_multiplier_bands() {
     let contract_address = deploy_contract("HelloStarknet");
+    // These values no longer come from the constructor - the class does not
+    // set its own defaults any more. Run the documented post-deploy sequence,
+    // so this test now proves the RUNBOOK produces them.
+    initialise_game_settings(contract_address);
     let dispatcher = IHelloStarknetDispatcher { contract_address };
 
     let (limit0, num0, den0) = dispatcher.get_volume_band(0);
@@ -276,6 +296,10 @@ fn test_volume_multiplier_bands() {
 #[test]
 fn test_soft_caps() {
     let contract_address = deploy_contract("HelloStarknet");
+    // These values no longer come from the constructor - the class does not
+    // set its own defaults any more. Run the documented post-deploy sequence,
+    // so this test now proves the RUNBOOK produces them.
+    initialise_game_settings(contract_address);
     let dispatcher = IHelloStarknetDispatcher { contract_address };
 
     let (dailyCap, newWalletCap, num, den) = dispatcher.get_soft_caps();
@@ -288,6 +312,10 @@ fn test_soft_caps() {
 #[test]
 fn test_fresh_wallet_state() {
     let contract_address = deploy_contract("HelloStarknet");
+    // These values no longer come from the constructor - the class does not
+    // set its own defaults any more. Run the documented post-deploy sequence,
+    // so this test now proves the RUNBOOK produces them.
+    initialise_game_settings(contract_address);
     let dispatcher = IHelloStarknetDispatcher { contract_address };
 
     let player: ContractAddress = contract_address_const::<0x1234>();
@@ -414,7 +442,138 @@ fn deploy_wired_with_roz(
         IMockERC20Dispatcher { contract_address: rewardToken }.mint(game, rozFunding);
     }
 
+    // The class no longer sets its own defaults - see the constructor comment
+    // in lib.cairo. Run the documented post-deploy sequence so every test below
+    // starts from the same state the old _initialiseRewardSettings produced.
+    initialise_game_settings(game);
+
     (game, gameToken, rewardToken)
+}
+
+// The post-deploy initialisation sequence, exactly as
+// ROZ_DEPLOYMENT_AND_FUNDING.md specifies it for a real deployment. Keeping the
+// tests on the same path as the runbook means a mistake in the runbook shows up
+// here as a failing test rather than on mainnet.
+//
+// The values are the ones _initialiseRewardSettings used to write, so every
+// assertion in this file keeps its original meaning.
+//
+// THREE ORDERING RULES, all enforced by asserts in the setters:
+//
+//   1. update_gate_thresholds BEFORE update_hide_settings
+//      - the latter asserts feeTierBoundary * feeBase == dailySpendThreshold.
+//   2. update_hide_settings BEFORE update_whitelist_caps
+//      - the latter asserts collectiveCap <= maxTreasuresPerRound.
+//   3. unpause LAST, and as the pauser - the contract deploys paused so that a
+//      half-initialised game cannot be played.
+fn initialise_game_settings(game: ContractAddress) {
+    let admin: ContractAddress = contract_address_const::<
+        0x052a2b0b20d8796e57f0f00e99adfd61e0b40c4a49553d4197e4da6c1c023833,
+    >();
+    let pauser: ContractAddress = contract_address_const::<0x515e>();
+
+    let dispatcher = IHelloStarknetDispatcher { contract_address: game };
+
+    start_cheat_caller_address(game, admin);
+
+    // ALL THIRTY-FIVE SCALAR SETTINGS IN ONE BATCH. set_params validates the
+    // whole configuration after applying it, so on a freshly deployed contract -
+    // where every setting is zero - the first batch has to carry all of them.
+    // Splitting this into two calls fails 'free hops >= participation' on the
+    // first, which is the behaviour that stops a half-configured game running.
+    dispatcher
+        .set_params(
+            array![
+                // Full rates, raw 18-decimal ROZ.
+                'rewardHide', 'rewardHideSurvived', 'rewardFind', 'rewardParticipation',
+                'rewardPerHop',
+                // Below the daily spend threshold. Absolute values, never multipliers.
+                'hopRewardBelowThreshold', 'participationBelowThreshold',
+                'rewardHideBelowThreshold', 'hideSurvivedBelowThreshold',
+                // New wallet, under $3 of lifetime spend.
+                'hopRewardNewWallet', 'participationNewWallet', 'rewardHideNewWallet',
+                'rewardHideSurvivedNewWallet',
+                // Limits and allowances. Free hops stay strictly below the minimum.
+                'participationMinimumHops', 'hopRewardCap', 'dailyFreeHops',
+                'dailyFreeSpawns',
+                // Soft caps.
+                'dailySoftCapRoz', 'newWalletSoftCapRoz', 'softCapMultiplierNum',
+                'softCapMultiplierDen',
+                // The Lightweight Gate.
+                'dailySpendThreshold', 'lifetimeSpendThreshold',
+                // Hiding.
+                'hideFeeBase', 'hideFeeHigh', 'hideFeeTierBoundary', 'dailyHideCap',
+                'maxTreasuresPerRound',
+                // Whitelist.
+                'whitelistRoundCap', 'whitelistCollectiveCap', 'whitelistHourlyCap',
+                // Per-transaction fees.
+                'gasFeeReservation', 'gameMasterFee', 'gameLandownerFee',
+                'minimumAllowance',
+            ],
+            array![
+                30000000000000000000, // rewardHide                       30
+                50000000000000000000, // rewardHideSurvived               50
+                110000000000000000000, // rewardFind                      110
+                18000000000000000000, // rewardParticipation              18
+                1000000000000000000, // rewardPerHop                      1
+                150000000000000000, // hopRewardBelowThreshold            0.15
+                0, // participationBelowThreshold                         withdrawn
+                4500000000000000000, // rewardHideBelowThreshold          4.5
+                7500000000000000000, // hideSurvivedBelowThreshold        7.5
+                500000000000000000, // hopRewardNewWallet                 0.5
+                9000000000000000000, // participationNewWallet            9
+                15000000000000000000, // rewardHideNewWallet              15
+                25000000000000000000, // rewardHideSurvivedNewWallet      25
+                28, // participationMinimumHops
+                40, // hopRewardCap                                       per ROUND
+                20, // dailyFreeHops                                      below 28
+                1, // dailyFreeSpawns
+                136000000000000000000, // dailySoftCapRoz                 136
+                80000000000000000000, // newWalletSoftCapRoz              80
+                1, // softCapMultiplierNum                                0.2x
+                5, // softCapMultiplierDen
+                600000, // dailySpendThreshold                            $0.60
+                3000000, // lifetimeSpendThreshold                        $3.00
+                200000, // hideFeeBase                                    $0.20
+                250000, // hideFeeHigh                                    $0.25
+                3, // hideFeeTierBoundary          3 x 200000 == 600000
+                10, // dailyHideCap
+                2840, // maxTreasuresPerRound
+                250, // whitelistRoundCap
+                1200, // whitelistCollectiveCap     leaves 1,640 for others
+                80, // whitelistHourlyCap
+                3333, // gasFeeReservation                               $0.0033
+                8333, // gameMasterFee                                   $0.0083
+                1167, // gameLandownerFee                                $0.0012
+                7000000, // minimumAllowance                             $7.00
+            ],
+        );
+
+    // Progressive hop prices. Band 3 is open-ended.
+    dispatcher.update_hop_price_band(0, 25, 5000); // $0.005
+    dispatcher.update_hop_price_band(1, 45, 10000); // $0.010
+    dispatcher.update_hop_price_band(2, 65, 20000); // $0.020
+    dispatcher.update_hop_price_band(3, 0xffffffffffffffffffffffffffffffff, 40000); // $0.040
+
+    // The Daily Volume Multiplier. Band 5 is the open-ended tail.
+    dispatcher.update_volume_band(0, 2, 1, 1); // 1.00x
+    dispatcher.update_volume_band(1, 4, 7, 10); // 0.70x
+    dispatcher.update_volume_band(2, 6, 2, 5); // 0.40x
+    dispatcher.update_volume_band(3, 8, 1, 5); // 0.20x
+    dispatcher.update_volume_band(4, 10, 2, 25); // 0.08x
+    dispatcher.update_volume_band(5, 0xffffffffffffffffffffffffffffffff, 3, 100); // 0.03x
+
+    stop_cheat_caller_address(game);
+
+    // The whitelist merkle root is deliberately left at zero. Storage is
+    // zero-initialised, so no write is needed, and a zero root means every
+    // proof fails - nobody whitelisted, which is the correct starting state.
+
+    // Unpause last, and only as the pauser: PAUSE_ROLE is deliberately not
+    // held by the admin.
+    start_cheat_caller_address(game, pauser);
+    IGameAdministrationDispatcher { contract_address: game }.unpause();
+    stop_cheat_caller_address(game);
 }
 
 // TEST 5e - THE HIGHEST-VALUE ASSERTION IN THE SUITE.
@@ -1068,7 +1227,10 @@ fn test_lowering_free_hops_mid_day_is_not_retroactive() {
 
     // Model a live day that began under the former 22-hop allowance.
     start_cheat_caller_address(game, admin_address());
-    assert(dispatcher.update_hop_limits(28, 40, 22, 1), 'old allowance not set');
+    assert(
+        dispatcher.set_params(array!['dailyFreeHops'], array![22]),
+        'old allowance not set',
+    );
     stop_cheat_caller_address(game);
 
     start_cheat_caller_address(game, player);
@@ -1090,7 +1252,10 @@ fn test_lowering_free_hops_mid_day_is_not_retroactive() {
     // Apply the new live setting. Remaining allowance floors at zero even
     // though the usage counter is greater than the new cap.
     start_cheat_caller_address(game, admin_address());
-    assert(dispatcher.update_hop_limits(28, 40, 20, 1), 'new allowance not set');
+    assert(
+        dispatcher.set_params(array!['dailyFreeHops'], array![20]),
+        'new allowance not set',
+    );
     stop_cheat_caller_address(game);
     assert(dispatcher.get_free_hops_remaining(player) == 0, 'remaining must floor at zero');
     let (_, _, _, spend_after_update, _) = dispatcher.get_player_daily_state(player);
@@ -1372,7 +1537,11 @@ fn test_whitelist_group_cap_leaves_room_for_ordinary_players() {
     // The group bound now binds on the SECOND address rather than the fifth.
     start_cheat_caller_address(game, owner);
     dispatcher.set_whitelist_merkle_root(root);
-    dispatcher.update_whitelist_caps(20, 30, 20);
+    dispatcher
+        .set_params(
+            array!['whitelistRoundCap', 'whitelistCollectiveCap', 'whitelistHourlyCap'],
+            array![20, 30, 20],
+        );
     stop_cheat_caller_address(game);
 
     let h01 = poseidon_pair(alice.into(), bob.into());
@@ -1460,7 +1629,11 @@ fn test_whitelist_per_address_round_cap() {
     // what refuses her.
     start_cheat_caller_address(game, owner);
     dispatcher.set_whitelist_merkle_root(root);
-    dispatcher.update_whitelist_caps(12, 500, 100);
+    dispatcher
+        .set_params(
+            array!['whitelistRoundCap', 'whitelistCollectiveCap', 'whitelistHourlyCap'],
+            array![12, 500, 100],
+        );
     stop_cheat_caller_address(game);
 
     let h23 = poseidon_pair(carol.into(), dave.into());
@@ -2314,6 +2487,13 @@ fn test_pauser_is_separate_from_admin_and_can_be_replaced_by_role_grant() {
     let admin_safe = IGameAdministrationSafeDispatcher { contract_address: game };
     let access = IAccessControlDispatcher { contract_address: game };
 
+    // The class deploys PAUSED so a half-initialised game cannot be played, so
+    // lift that first - this test is about who may pause, not about the state
+    // a deployment starts in.
+    start_cheat_caller_address(game, pauser_address());
+    admin.unpause();
+    stop_cheat_caller_address(game);
+
     start_cheat_caller_address(game, admin_address());
     let refused = admin_safe.pause();
     stop_cheat_caller_address(game);
@@ -2612,6 +2792,11 @@ fn test_full_sweep_requires_pause_for_proposal_and_execution() {
 #[feature("safe_dispatcher")]
 fn test_admin_handoff_is_delayed_and_revokes_the_previous_admin() {
     let game = deploy_contract("HelloStarknet");
+    // This test proves the handoff by having the new admin write a setting, and
+    // set_params validates the WHOLE configuration. On an uninitialised contract
+    // every setting is zero, so that write would fail on the invariants rather
+    // than on authorisation - which is not what is being tested here.
+    initialise_game_settings(game);
     let new_admin: ContractAddress = contract_address_const::<0x709>();
     let gameplay = IHelloStarknetDispatcher { contract_address: game };
     let gameplay_safe = IHelloStarknetSafeDispatcher { contract_address: game };
@@ -2633,9 +2818,15 @@ fn test_admin_handoff_is_delayed_and_revokes_the_previous_admin() {
     assert(!access.has_role(selector!("ADMIN_ROLE"), admin_address()), 'old admin role remained');
 
     start_cheat_caller_address(game, admin_address());
-    assert(gameplay_safe.update_gas_fee_reservation(99).is_err(), 'old admin still authorized');
+    assert(
+        gameplay_safe.set_params(array!['gasFeeReservation'], array![99]).is_err(),
+        'old admin still authorized',
+    );
     stop_cheat_caller_address(game);
     start_cheat_caller_address(game, new_admin);
-    assert(gameplay.update_gas_fee_reservation(99), 'new admin not authorized');
+    assert(
+        gameplay.set_params(array!['gasFeeReservation'], array![99]),
+        'new admin not authorized',
+    );
     stop_cheat_caller_address(game);
 }

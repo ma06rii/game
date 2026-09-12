@@ -83,10 +83,6 @@ pub trait IHelloStarknet<TContractState> {
     fn get_finder_player_position(
         self: @TContractState, gamerWalletAddress: ContractAddress, gameWeek: u256,
     ) -> (u128, u128);
-    fn update_gas_fee_reservation(ref self: TContractState, feeAmount: u256) -> bool;
-    fn update_gamemaster_fee(ref self: TContractState, feeAmount: u256) -> bool;
-    fn update_game_landowner_fee(ref self: TContractState, feeAmount: u256) -> bool;
-    fn update_minimum_allowance_fee(ref self: TContractState, minimumAmount: u256) -> bool;
     fn get_minimum_allowance_fee(self: @TContractState) -> u256;
     fn claim_reward(ref self: TContractState, gameWeek: u256) -> bool;
     // The ROZ claim leg (4g, 4h, 4i)
@@ -122,67 +118,27 @@ pub trait IHelloStarknet<TContractState> {
         ref self: TContractState, rewardTokenAddress: ContractAddress,
     ) -> bool;
     fn get_game_reward_token(self: @TContractState) -> ContractAddress;
-    fn update_reward_rates(
-        ref self: TContractState,
-        hideReward: u256,
-        hideSurvivedReward: u256,
-        findReward: u256,
-        participationReward: u256,
-        perHopReward: u256,
-    ) -> bool;
     fn get_reward_rates(self: @TContractState) -> (u256, u256, u256, u256, u256);
-    fn update_below_threshold_rates(
-        ref self: TContractState,
-        perHopReward: u256,
-        participationReward: u256,
-        hideReward: u256,
-        hideSurvivedReward: u256,
-    ) -> bool;
     fn get_below_threshold_rates(self: @TContractState) -> (u256, u256, u256, u256);
-    fn update_new_wallet_rates(
-        ref self: TContractState,
-        perHopReward: u256,
-        participationReward: u256,
-        hideReward: u256,
-        hideSurvivedReward: u256,
-    ) -> bool;
     fn get_new_wallet_rates(self: @TContractState) -> (u256, u256, u256, u256);
     // Limits and allowances (2.2, 2.3)
-    fn update_hop_limits(
-        ref self: TContractState,
-        participationMinimum: u256,
-        roundRewardCap: u256,
-        freeHopsPerDay: u256,
-        freeSpawnsPerDay: u256,
-    ) -> bool;
     fn get_hop_limits(self: @TContractState) -> (u256, u256, u256, u256);
-    fn update_soft_caps(
-        ref self: TContractState, dailyCap: u256, newWalletCap: u256, num: u256, den: u256,
-    ) -> bool;
     fn get_soft_caps(self: @TContractState) -> (u256, u256, u256, u256);
     // The Lightweight Gate (2.6) and hiding (2.3). These four move together -
     // see the invariant asserted in update_hide_settings.
-    fn update_gate_thresholds(
-        ref self: TContractState, dailyThreshold: u256, lifetimeThreshold: u256,
-    ) -> bool;
     fn get_gate_thresholds(self: @TContractState) -> (u256, u256);
-    fn update_hide_settings(
-        ref self: TContractState,
-        feeBase: u256,
-        feeHigh: u256,
-        feeTierBoundary: u256,
-        dailyCap: u256,
-        treasuresPerRound: u256,
-    ) -> bool;
     fn get_hide_settings(self: @TContractState) -> (u256, u256, u256, u256, u256);
     // The bulk-hide whitelist (4m-iii)
     fn set_whitelist_merkle_root(ref self: TContractState, newRoot: felt252) -> bool;
     fn get_whitelist_merkle_root(self: @TContractState) -> felt252;
-    fn update_whitelist_caps(
-        ref self: TContractState, roundCap: u256, collectiveCap: u256, hourlyCap: u256,
-    ) -> bool;
     fn get_whitelist_caps(self: @TContractState) -> (u256, u256, u256);
     // Admin-settable schedules, one band at a time (2.3, 2.5)
+    // Thirty-five scalar settings through ONE entrypoint. Twelve separate
+    // setters used to do this, and their compiler-generated wrappers alone cost
+    // 7,922 casm felts against the 81,920 Starknet allows a whole class. The
+    // batch is applied and then validated as a whole - see the implementation.
+    fn set_params(ref self: TContractState, keys: Array<felt252>, values: Array<u256>) -> bool;
+
     fn update_hop_price_band(
         ref self: TContractState, bandIndex: u8, upToHop: u256, price: u256,
     ) -> bool;
@@ -1121,7 +1077,26 @@ mod HelloStarknet {
         // The ROZ token, deployed in phase 1 and passed in here.
         self.game_reward_token_contract_address.write(rewardTokenAddress);
 
-        self._initialiseRewardSettings();
+        // THE REWARD SETTINGS ARE NOT SET HERE. They used to be, in
+        // _initialiseRewardSettings - roughly ninety storage writes of
+        // constants that ran once and then sat in the class forever, costing
+        // 5,329 of the 81,920 casm felts Starknet allows a contract. Removing
+        // them is what brings this class under that limit.
+        //
+        // So a freshly deployed contract has EVERY rate, limit, fee and band at
+        // zero, and the admin must set them through the update_* entrypoints
+        // before the game can be played. See "Post-deploy initialisation" in
+        // ROZ_DEPLOYMENT_AND_FUNDING.md for the sequence and the one ordering
+        // rule it must obey.
+        //
+        // To make forgetting that impossible rather than merely unlikely, the
+        // contract DEPLOYS PAUSED. Hiding, hopping and start_next_round all
+        // assert_not_paused, so nothing can be played until the admin has run
+        // the sequence and called unpause. An unset contract would otherwise
+        // hand out free hops that earn nothing, which is silent and wrong
+        // rather than loud and wrong.
+        self.pausable.pause();
+
         self.round_keeper.write(roundKeeperAddress);
 
         // Round zero is deliberately empty. It stages the first real set of
@@ -1161,108 +1136,135 @@ mod HelloStarknet {
     // never replay this whole function over live settings and player state.
     #[generate_trait]
     impl RewardSettingsInit of RewardSettingsInitTrait {
-        fn _initialiseRewardSettings(ref self: ContractState) {
-            // --- Full rates, raw 18-decimal ROZ (2.2) ---
-            self.rewardHide.write(30000000000000000000); // 30
-            self.rewardHideSurvived.write(50000000000000000000); // 50
-            self.rewardFind.write(110000000000000000000); // 110
-            self.rewardParticipation.write(18000000000000000000); // 18
-            self.rewardPerHop.write(1000000000000000000); // 1
-
-            // --- Reduced rates (2.6). Absolute values, never multipliers. ---
-            // Below the daily spend threshold:
-            self.hopRewardBelowThreshold.write(150000000000000000); // 0.15
-            self.participationBelowThreshold.write(0); // withdrawn
-            self.rewardHideBelowThreshold.write(4500000000000000000); // 4.5
-            self.rewardHideSurvivedBelowThreshold.write(7500000000000000000); // 7.5
-            // New wallet, under $3 of lifetime spend:
-            self.hopRewardNewWallet.write(500000000000000000); // 0.5
-            self.participationNewWallet.write(9000000000000000000); // 9
-            self.rewardHideNewWallet.write(15000000000000000000); // 15
-            self.rewardHideSurvivedNewWallet.write(25000000000000000000); // 25
-            // 0.15, 0.5, 4.5, 7.5, 15 and 25 are all exact in 18 decimals, so
-            // no numerator/denominator pairs are needed and no rounding occurs.
-
-            // --- Limits and allowances (2.2, 2.3) ---
-            self.participationMinimumHops.write(28);
-            self.hopRewardCap.write(40); // per ROUND
-            self.dailyFreeHops.write(20); // strictly below 28
-            self.dailyFreeSpawns.write(1);
-            self.dailySoftCapRoz.write(136000000000000000000); // 136
-            self.softCapMultiplierNum.write(1); // 0.2x
-            self.softCapMultiplierDen.write(5);
-            self.newWalletSoftCapRoz.write(80000000000000000000); // 80
-
-            // --- Gate thresholds (2.6). Game-token units, 6 decimals. ---
-            self.dailySpendThreshold.write(600000); // $0.60
-            self.lifetimeSpendThreshold.write(3000000); // $3.00
-
-            // --- Hiding (2.3) ---
-            self.hideFeeBase.write(200000); // $0.20
-            self.hideFeeHigh.write(250000); // $0.25
-            self.hideFeeTierBoundary.write(3);
-            self.dailyHideCap.write(10);
-            self.maxTreasuresPerRound.write(2840);
-
-            // --- Whitelist (4m-iii) ---
-            self.whitelistRoundCap.write(250);
-            self.whitelistCollectiveCap.write(1200); // leaves 1,640 for others
-            self.whitelistHourlyCap.write(80);
-            // No root until the admin publishes one. Until then every proof
-            // fails, which simply means nobody is whitelisted - the correct
-            // starting state, not an error.
-            self.whitelist_merkle_root.write(0);
-
-            // --- Progressive hop prices (2.5) ---
-            // Band i covers hops up to hop_price_tier_limit[i] of the DAY. The
-            // free allowance is applied before this, so band 0 starts at hop 21.
-            self.hop_price_tier_limit.write(0, 25);
-            self.hop_price_tier_price.write(0, 5000); //  $0.005
-            self.hop_price_tier_limit.write(1, 45);
-            self.hop_price_tier_price.write(1, 10000); //  $0.010
-            self.hop_price_tier_limit.write(2, 65);
-            self.hop_price_tier_price.write(2, 20000); //  $0.020
-            // The last band is open-ended: anything past the previous limit.
-            self.hop_price_tier_limit.write(3, 0xffffffffffffffffffffffffffffffff);
-            self.hop_price_tier_price.write(3, 40000); //  $0.040
-
-            // --- Daily Volume Multiplier (2.3) ---
-            // Band i applies when the wallet has ALREADY created up to
-            // volume_band_limit[i] treasures today, before this one. So
-            // treasures 1-3 sit in band 0, treasures 4-5 in band 1, and so on.
-            //
-            // Band 0 covering three treasures is deliberate and lines up with
-            // two other settings: hideFeeTierBoundary is also 3, and 3 hides at
-            // the base fee is exactly dailySpendThreshold. Three hides is the
-            // designed shape of an ordinary hiding day - cheap fee, full rate,
-            // and it lands the player exactly on the gate.
-            self.volume_band_limit.write(0, 2);
-            self.volume_band_num.write(0, 1);
-            self.volume_band_den.write(0, 1); // 1.00x
-            self.volume_band_limit.write(1, 4);
-            self.volume_band_num.write(1, 7);
-            self.volume_band_den.write(1, 10); // 0.70x
-            self.volume_band_limit.write(2, 6);
-            self.volume_band_num.write(2, 2);
-            self.volume_band_den.write(2, 5); // 0.40x
-            self.volume_band_limit.write(3, 8);
-            self.volume_band_num.write(3, 1);
-            self.volume_band_den.write(3, 5); // 0.20x
-            self.volume_band_limit.write(4, 10);
-            self.volume_band_num.write(4, 2);
-            self.volume_band_den.write(4, 25); // 0.08x
-            // Open-ended tail. Only reachable by a whitelisted address, since
-            // dailyHideCap stops everyone else at 10.
-            self.volume_band_limit.write(5, 0xffffffffffffffffffffffffffffffff);
-            self.volume_band_num.write(5, 3);
-            self.volume_band_den.write(5, 100); // 0.03x
-        }
     }
 
     #[generate_trait]
     impl InternalFunctions of InternalFunctionsTrait {
+        // #[inline(never)] IS LOAD-BEARING, not a style choice. This is called
+        // from nineteen places, and the compiler inlines a body this small by
+        // default - which duplicated the whole role check nineteen times and
+        // cost roughly 2,500 of the 81,920 casm felts Starknet allows a class.
+        // Its two siblings below are large enough that the compiler outlines
+        // them on its own, which is why only this one needs the attribute.
+        #[inline(never)]
         fn _assert_admin(self: @ContractState) {
             self.access_control.assert_only_role(ADMIN_ROLE);
+        }
+
+        // The key-to-storage table behind set_params. One arm per setting, and
+        // this is the ONLY place a key maps to a storage field, so a renamed
+        // field is a compile error here rather than a silent no-op on chain.
+        fn _applyParam(ref self: ContractState, key: felt252, value: u256) {
+            if key == 'rewardHide' {
+                self.rewardHide.write(value);
+            } else if key == 'rewardHideSurvived' {
+                self.rewardHideSurvived.write(value);
+            } else if key == 'rewardFind' {
+                self.rewardFind.write(value);
+            } else if key == 'rewardParticipation' {
+                self.rewardParticipation.write(value);
+            } else if key == 'rewardPerHop' {
+                self.rewardPerHop.write(value);
+            } else if key == 'hopRewardBelowThreshold' {
+                self.hopRewardBelowThreshold.write(value);
+            } else if key == 'participationBelowThreshold' {
+                self.participationBelowThreshold.write(value);
+            } else if key == 'rewardHideBelowThreshold' {
+                self.rewardHideBelowThreshold.write(value);
+            } else if key == 'hideSurvivedBelowThreshold' {  // field name is 32 chars, one over the felt252 limit
+                self.rewardHideSurvivedBelowThreshold.write(value);
+            } else if key == 'hopRewardNewWallet' {
+                self.hopRewardNewWallet.write(value);
+            } else if key == 'participationNewWallet' {
+                self.participationNewWallet.write(value);
+            } else if key == 'rewardHideNewWallet' {
+                self.rewardHideNewWallet.write(value);
+            } else if key == 'rewardHideSurvivedNewWallet' {
+                self.rewardHideSurvivedNewWallet.write(value);
+            } else if key == 'participationMinimumHops' {
+                self.participationMinimumHops.write(value);
+            } else if key == 'hopRewardCap' {
+                self.hopRewardCap.write(value);
+            } else if key == 'dailyFreeHops' {
+                self.dailyFreeHops.write(value);
+            } else if key == 'dailyFreeSpawns' {
+                self.dailyFreeSpawns.write(value);
+            } else if key == 'dailySoftCapRoz' {
+                self.dailySoftCapRoz.write(value);
+            } else if key == 'softCapMultiplierNum' {
+                self.softCapMultiplierNum.write(value);
+            } else if key == 'softCapMultiplierDen' {
+                self.softCapMultiplierDen.write(value);
+            } else if key == 'newWalletSoftCapRoz' {
+                self.newWalletSoftCapRoz.write(value);
+            } else if key == 'dailySpendThreshold' {
+                self.dailySpendThreshold.write(value);
+            } else if key == 'lifetimeSpendThreshold' {
+                self.lifetimeSpendThreshold.write(value);
+            } else if key == 'hideFeeBase' {
+                self.hideFeeBase.write(value);
+            } else if key == 'hideFeeHigh' {
+                self.hideFeeHigh.write(value);
+            } else if key == 'hideFeeTierBoundary' {
+                self.hideFeeTierBoundary.write(value);
+            } else if key == 'dailyHideCap' {
+                self.dailyHideCap.write(value);
+            } else if key == 'maxTreasuresPerRound' {
+                self.maxTreasuresPerRound.write(value);
+            } else if key == 'whitelistRoundCap' {
+                self.whitelistRoundCap.write(value);
+            } else if key == 'whitelistCollectiveCap' {
+                self.whitelistCollectiveCap.write(value);
+            } else if key == 'whitelistHourlyCap' {
+                self.whitelistHourlyCap.write(value);
+            } else if key == 'gasFeeReservation' {
+                self.gasFeeReservation.write(value);
+            } else if key == 'gameMasterFee' {
+                self.gameMasterFee.write(value);
+            } else if key == 'gameLandownerFee' {
+                self.gameLandownerFee.write(value);
+            } else if key == 'minimumAllowance' {
+                self.minimumAllowance.write(value);
+            } else {
+                // An unknown key is a typo in a deployment script. Ignoring it
+                // silently would leave a setting at zero with nothing to show
+                // that anything had gone wrong.
+                panic!("unknown parameter key");
+            }
+        }
+
+        // Every cross-field rule the twelve removed setters used to assert,
+        // gathered in one place and checked over the whole configuration once a
+        // batch has been applied.
+        fn _assertSettingsInvariants(self: @ContractState) {
+            // Free hops must run out strictly before the participation bonus
+            // becomes reachable, or the bonus costs nothing to earn (2.3).
+            assert(
+                self.dailyFreeHops.read() < self.participationMinimumHops.read(),
+                'free hops >= participation',
+            );
+            assert(
+                self.participationMinimumHops.read() <= self.hopRewardCap.read(),
+                'participation > round cap',
+            );
+
+            // A zero denominator would divide by zero in the soft cap.
+            assert(self.softCapMultiplierDen.read() > 0, 'soft cap den is zero');
+
+            // The gate invariant: the cheap hide tier must land a wallet exactly
+            // on the daily spend threshold. 3 x 200000 == 600000.
+            assert(
+                self.hideFeeTierBoundary.read()
+                    * self.hideFeeBase.read() == self.dailySpendThreshold.read(),
+                'hide fee gate mismatch',
+            );
+            assert(self.hideFeeHigh.read() >= self.hideFeeBase.read(), 'high fee below base fee');
+
+            // The whitelist as a group must not be able to take a whole round.
+            assert(
+                self.whitelistCollectiveCap.read() <= self.maxTreasuresPerRound.read(),
+                'group cap above round cap',
+            );
         }
 
         fn _assert_admin_or_default(self: @ContractState) {
@@ -1281,12 +1283,14 @@ mod HelloStarknet {
 
         // Testnets may deliberately use zero delay. A class that can run on
         // mainnet must always retain at least a three-day public review window.
+        #[inline(never)]
         fn _assert_valid_upgrade_delay(self: @ContractState, delay: u64) {
             if get_tx_info().unbox().chain_id == 'SN_MAIN' {
                 assert(delay >= MAINNET_MIN_UPGRADE_DELAY, 'Mainnet delay below 3 days');
             }
         }
 
+        #[inline(never)]
         fn _admin_action_hash(
             self: @ContractState, action: felt252, first: felt252, second: felt252,
         ) -> felt252 {
@@ -1345,6 +1349,7 @@ mod HelloStarknet {
         // particular must reset daily and never per round - with per-round tiers
         // a farmer re-enters the cheap band four times a day, and 32 hops in
         // each of four rounds costs $0.34 instead of $3.135.
+        #[inline(never)]
         fn _currentDayIndex(self: @ContractState) -> u64 {
             return get_block_timestamp() / 86400;
         }
@@ -1948,6 +1953,7 @@ mod HelloStarknet {
             }
         }
 
+        #[inline(never)]
         fn _keccak256(self: @ContractState, a: u256, b: u256) -> u256 {
             let res: u256 = keccak::keccak_u256s_be_inputs(array![a, b].span());
             //reverse_endianness
@@ -2515,6 +2521,7 @@ mod HelloStarknet {
             Serde::<bool>::deserialize(ref res).unwrap()
         }
 
+        #[inline(never)]
         fn _playerRewardDue(
             self: @ContractState, gamerWalletAddress: ContractAddress, gameWeek: u256,
         ) -> u256 {
@@ -3003,36 +3010,12 @@ mod HelloStarknet {
 
     #[abi(embed_v0)]
     impl HelloStarknetImpl of super::IHelloStarknet<ContractState> {
-        fn update_gas_fee_reservation(ref self: ContractState, feeAmount: u256) -> bool {
-            self._assert_admin();
-            self.gasFeeReservation.write(feeAmount);
-            return true;
-        }
-
         fn get_gas_fee_reservation(self: @ContractState) -> u256 {
             return self.gasFeeReservation.read();
         }
 
-        fn update_gamemaster_fee(ref self: ContractState, feeAmount: u256) -> bool {
-            self._assert_admin();
-            self.gameMasterFee.write(feeAmount);
-            return true;
-        }
-
         fn get_gamemaster_fee(self: @ContractState) -> u256 {
             return self.gameMasterFee.read();
-        }
-
-        fn update_game_landowner_fee(ref self: ContractState, feeAmount: u256) -> bool {
-            self._assert_admin();
-            self.gameLandownerFee.write(feeAmount);
-            return true;
-        }
-
-        fn update_minimum_allowance_fee(ref self: ContractState, minimumAmount: u256) -> bool {
-            self._assert_admin();
-            self.minimumAllowance.write(minimumAmount);
-            return true;
         }
 
         fn get_minimum_allowance_fee(self: @ContractState) -> u256 {
@@ -3910,29 +3893,6 @@ mod HelloStarknet {
             return self.game_reward_token_contract_address.read();
         }
 
-        // The five full rates. Raw 18-decimal ROZ.
-        //
-        // These are reset every year as the supply schedule tapers - year 2 pays
-        // 630M/855M = 0.7368 of year 1, and so on. Send the year's tokens FIRST,
-        // then set the new rates: lowering the rates before the tokens arrive
-        // short-changes whoever plays in between.
-        fn update_reward_rates(
-            ref self: ContractState,
-            hideReward: u256,
-            hideSurvivedReward: u256,
-            findReward: u256,
-            participationReward: u256,
-            perHopReward: u256,
-        ) -> bool {
-            self._assert_admin();
-            self.rewardHide.write(hideReward);
-            self.rewardHideSurvived.write(hideSurvivedReward);
-            self.rewardFind.write(findReward);
-            self.rewardParticipation.write(participationReward);
-            self.rewardPerHop.write(perHopReward);
-            return true;
-        }
-
         fn get_reward_rates(self: @ContractState) -> (u256, u256, u256, u256, u256) {
             return (
                 self.rewardHide.read(),
@@ -3941,29 +3901,6 @@ mod HelloStarknet {
                 self.rewardParticipation.read(),
                 self.rewardPerHop.read(),
             );
-        }
-
-        // The rates a wallet earns before it has spent dailySpendThreshold today.
-        //
-        // hopRewardBelowThreshold is the most load-bearing value in the whole
-        // contract, and not only against farmers: every calendar day starts at
-        // zero spend, so this is the rate EVERY wallet earns on its opening
-        // stretch of hops - about 54 for a typical casual, 59 for an active
-        // player. Lowering it tightens the zero-cost sybil route and shortens
-        // every honest player's morning at the same time.
-        fn update_below_threshold_rates(
-            ref self: ContractState,
-            perHopReward: u256,
-            participationReward: u256,
-            hideReward: u256,
-            hideSurvivedReward: u256,
-        ) -> bool {
-            self._assert_admin();
-            self.hopRewardBelowThreshold.write(perHopReward);
-            self.participationBelowThreshold.write(participationReward);
-            self.rewardHideBelowThreshold.write(hideReward);
-            self.rewardHideSurvivedBelowThreshold.write(hideSurvivedReward);
-            return true;
         }
 
         fn get_below_threshold_rates(self: @ContractState) -> (u256, u256, u256, u256) {
@@ -3975,23 +3912,6 @@ mod HelloStarknet {
             );
         }
 
-        // The rates a wallet earns until it has spent lifetimeSpendThreshold in
-        // total. Left permanently once passed - the counter never resets.
-        fn update_new_wallet_rates(
-            ref self: ContractState,
-            perHopReward: u256,
-            participationReward: u256,
-            hideReward: u256,
-            hideSurvivedReward: u256,
-        ) -> bool {
-            self._assert_admin();
-            self.hopRewardNewWallet.write(perHopReward);
-            self.participationNewWallet.write(participationReward);
-            self.rewardHideNewWallet.write(hideReward);
-            self.rewardHideSurvivedNewWallet.write(hideSurvivedReward);
-            return true;
-        }
-
         fn get_new_wallet_rates(self: @ContractState) -> (u256, u256, u256, u256) {
             return (
                 self.hopRewardNewWallet.read(),
@@ -3999,35 +3919,6 @@ mod HelloStarknet {
                 self.rewardHideNewWallet.read(),
                 self.rewardHideSurvivedNewWallet.read(),
             );
-        }
-
-        // ------------------------------------------------------------------
-        // Limits and allowances (2.2, 2.3)
-        // ------------------------------------------------------------------
-
-        // Two orderings carry the design here and neither may be broken:
-        //
-        //   freeHopsPerDay (20) < participationMinimum (28)
-        //       so the 18-ROZ bonus can never be reached on free hops alone
-        //   participationMinimum (28) <= roundRewardCap (40)
-        //       so the bonus is demanding without needing a perfect round
-        //
-        // The asserts below make the first one impossible to break by accident.
-        fn update_hop_limits(
-            ref self: ContractState,
-            participationMinimum: u256,
-            roundRewardCap: u256,
-            freeHopsPerDay: u256,
-            freeSpawnsPerDay: u256,
-        ) -> bool {
-            self._assert_admin();
-            assert(freeHopsPerDay < participationMinimum, 'free hops >= participation');
-            assert(participationMinimum <= roundRewardCap, 'participation > round cap');
-            self.participationMinimumHops.write(participationMinimum);
-            self.hopRewardCap.write(roundRewardCap);
-            self.dailyFreeHops.write(freeHopsPerDay);
-            self.dailyFreeSpawns.write(freeSpawnsPerDay);
-            return true;
         }
 
         fn get_hop_limits(self: @ContractState) -> (u256, u256, u256, u256) {
@@ -4040,20 +3931,6 @@ mod HelloStarknet {
         }
 
         // The soft cap covers hops and participation ONLY. Hides take the Daily
-        // Volume Multiplier instead, and find/steal takes neither - so no reward
-        // line ever receives two multipliers. See _resolveGatedRate.
-        fn update_soft_caps(
-            ref self: ContractState, dailyCap: u256, newWalletCap: u256, num: u256, den: u256,
-        ) -> bool {
-            self._assert_admin();
-            assert(den > 0, 'soft cap den is zero');
-            self.dailySoftCapRoz.write(dailyCap);
-            self.newWalletSoftCapRoz.write(newWalletCap);
-            self.softCapMultiplierNum.write(num);
-            self.softCapMultiplierDen.write(den);
-            return true;
-        }
-
         fn get_soft_caps(self: @ContractState) -> (u256, u256, u256, u256) {
             return (
                 self.dailySoftCapRoz.read(),
@@ -4063,65 +3940,8 @@ mod HelloStarknet {
             );
         }
 
-        // ------------------------------------------------------------------
-        // The Lightweight Gate (2.6) and hiding (2.3)
-        // ------------------------------------------------------------------
-
-        // Both are game-token amounts, 6 decimals. Changing the daily threshold
-        // moves where the casual cliff falls; changing the lifetime one moves
-        // what wallet churn costs a farm.
-        //
-        // The daily threshold is coupled to the hide fee tier - see
-        // update_hide_settings, which asserts the relationship. Changing it here
-        // without changing the fee tier there will trip that assert on the next
-        // hide-settings write, which is the intended safety net.
-        fn update_gate_thresholds(
-            ref self: ContractState, dailyThreshold: u256, lifetimeThreshold: u256,
-        ) -> bool {
-            self._assert_admin();
-            self.dailySpendThreshold.write(dailyThreshold);
-            self.lifetimeSpendThreshold.write(lifetimeThreshold);
-            return true;
-        }
-
         fn get_gate_thresholds(self: @ContractState) -> (u256, u256) {
             return (self.dailySpendThreshold.read(), self.lifetimeSpendThreshold.read());
-        }
-
-        // THE INVARIANT THIS ASSERT PROTECTS, and it is easy to write the wrong
-        // one:
-        //
-        //     feeTierBoundary * feeBase == dailySpendThreshold
-        //     3               * 200000  == 600000
-        //
-        // The first three hides of a day cost the cheap fee and land a wallet
-        // exactly on the spend threshold - no shortfall, no overshoot. That
-        // gives a light player a clean route across the gate and gives a farmer
-        // no cheaper way over than anybody else has.
-        //
-        // It is NOT dailyCap * feeBase. The cap is 10, and 10 * 200000 is
-        // 2000000. dailyCap bounds VOLUME and has no part in clearing the gate,
-        // so changing it alone must never trip this assert.
-        fn update_hide_settings(
-            ref self: ContractState,
-            feeBase: u256,
-            feeHigh: u256,
-            feeTierBoundary: u256,
-            dailyCap: u256,
-            treasuresPerRound: u256,
-        ) -> bool {
-            self._assert_admin();
-            assert(
-                feeTierBoundary * feeBase == self.dailySpendThreshold.read(),
-                'hide fee gate mismatch',
-            );
-            assert(feeHigh >= feeBase, 'high fee below base fee');
-            self.hideFeeBase.write(feeBase);
-            self.hideFeeHigh.write(feeHigh);
-            self.hideFeeTierBoundary.write(feeTierBoundary);
-            self.dailyHideCap.write(dailyCap);
-            self.maxTreasuresPerRound.write(treasuresPerRound);
-            return true;
         }
 
         fn get_hide_settings(self: @ContractState) -> (u256, u256, u256, u256, u256) {
@@ -4156,23 +3976,6 @@ mod HelloStarknet {
         }
 
         // roundCap bounds ONE whitelisted address; collectiveCap bounds ALL of
-        // them together. Both are needed, because per-address limits do not
-        // compose - eleven addresses at 250 each would take 2,750 of 2,840 and
-        // leave 90 slots for everybody else.
-        //
-        // maxTreasuresPerRound - collectiveCap is what ordinary players always
-        // keep: 2,840 - 1,200 = 1,640.
-        fn update_whitelist_caps(
-            ref self: ContractState, roundCap: u256, collectiveCap: u256, hourlyCap: u256,
-        ) -> bool {
-            self._assert_admin();
-            assert(collectiveCap <= self.maxTreasuresPerRound.read(), 'group cap above round cap');
-            self.whitelistRoundCap.write(roundCap);
-            self.whitelistCollectiveCap.write(collectiveCap);
-            self.whitelistHourlyCap.write(hourlyCap);
-            return true;
-        }
-
         fn get_whitelist_caps(self: @ContractState) -> (u256, u256, u256) {
             return (
                 self.whitelistRoundCap.read(),
@@ -4187,6 +3990,60 @@ mod HelloStarknet {
 
         // Bands are indexed from 0 and read in order, so upToHop must increase
         // with bandIndex. The last band should be left open-ended.
+        // ------------------------------------------------------------------
+        // set_params - ONE entrypoint for thirty-five scalar settings
+        // ------------------------------------------------------------------
+        //
+        // WHY THIS REPLACED TWELVE SETTERS. Every #[external] function carries a
+        // compiler-generated wrapper that deserialises its arguments and
+        // serialises its result. Those wrappers were HALF the cost of the old
+        // setters - 7,922 casm felts of the 15,457 they occupied - and Starknet
+        // allows a class only 81,920 in total. Twelve wrappers became one.
+        //
+        // Two parallel arrays rather than one array of pairs: Cairo serialises a
+        // tuple element by element regardless, and two arrays keep the calldata
+        // readable in a block explorer.
+        //
+        // ATOMICITY IS THE POINT, not a side effect. The batch is applied and
+        // THEN validated, so settings that are only legal together - the hide
+        // fee tiers and the daily spend threshold, say - move in one transaction
+        // without passing through an illegal state. The old per-setter asserts
+        // could not express that: update_hide_settings checked itself against a
+        // dailySpendThreshold that update_gate_thresholds had already moved, so
+        // the two had to be called in a fixed order and could still be left
+        // inconsistent if only one of them was called at all.
+        //
+        // THE CONSEQUENCE, and it is deliberate: the invariants are checked over
+        // the WHOLE configuration on every call, not over the fields being
+        // written. Changing one setting therefore requires the settings it
+        // depends on to be consistent already, or to travel in the same batch.
+        // On a freshly deployed contract every setting is zero, so the FIRST
+        // batch must carry all of them - a partial first batch fails
+        // _assertSettingsInvariants and writes nothing. See "Post-deploy
+        // initialisation" in ROZ_DEPLOYMENT_AND_FUNDING.md.
+        fn set_params(
+            ref self: ContractState, keys: Array<felt252>, values: Array<u256>,
+        ) -> bool {
+            self._assert_admin();
+
+            assert(keys.len() == values.len(), 'keys and values differ');
+            assert(keys.len() > 0, 'no parameters given');
+
+            let mut i: u32 = 0;
+            loop {
+                if (i == keys.len()) {
+                    break;
+                }
+                self._applyParam(*keys.at(i), *values.at(i));
+                i = i + 1;
+            }
+
+            // Validate the RESULT, not the arguments. See the note above.
+            self._assertSettingsInvariants();
+
+            return true;
+        }
+
         fn update_hop_price_band(
             ref self: ContractState, bandIndex: u8, upToHop: u256, price: u256,
         ) -> bool {

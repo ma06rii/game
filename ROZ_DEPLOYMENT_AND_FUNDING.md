@@ -163,10 +163,13 @@ on Sepolia. A small transfer, a check, then a top-up costs one extra
 transaction — and that path is the reason the accrual design exists.
 
 **Order matters at every year boundary.** Transfer the tranche **first**, then
-apply the taper with the three rate setters — `update_reward_rates`,
-`update_new_wallet_rates` and `update_below_threshold_rates`. Lowering the rates
-first pays anyone claiming in between at the new, reduced rate out of the old
-balance.
+apply the taper with a single `set_params` batch carrying the thirteen rate keys
+(`rewardHide` … `rewardHideSurvivedNewWallet`). Lowering the rates first pays
+anyone claiming in between at the new, reduced rate out of the old balance.
+
+Doing all thirteen in **one** batch is not merely convenient: the full and
+reduced rates are only meaningful relative to each other, and a batch cannot be
+observed half-applied.
 
 ---
 
@@ -211,10 +214,18 @@ contradict the principle that gameplay never depends on reward plumbing.
 
 ## 8. Redeploying the game contract
 
-**The game contract has no upgrade path** — no `UpgradeableComponent`, no
-`replace_class_syscall`. The ROZ token has one; the game contract does not. So
-every contract change, however small, means declare → deploy → repoint. This
-sequence has now been needed three times.
+**The game contract is now upgradeable.** It carries `UpgradeableComponent`,
+`PausableComponent`, `AccessControlComponent` and `SRC5`, with `PAUSE_ROLE`,
+`ADMIN_ROLE` and `UPGRADE_ROLE` and a delayed-upgrade proposal flow — see
+`docs/UPGRADES_AND_PAUSE.md`, which is the runbook for it. A code change no
+longer requires a redeploy; it requires a declare and a proposed class
+replacement.
+
+**The currently published address predates that mechanism** and cannot call
+`replace_class_syscall`, so moving onto the upgradeable class needs one last
+declare → deploy → repoint. Every class from that one onward upgrades in place.
+This full sequence has been needed three times so far; it should not be needed
+again.
 
 ### Declare and deploy
 
@@ -231,20 +242,27 @@ sncast --account=account_braavos declare \
   --contract-name=HelloStarknet \
   --network=sepolia
 
-# 3. Deploy. Constructor order is (vrfProvider, gameToken, rewardToken,
-#    roundKeeper). The keeper is the only account allowed to validate finds,
-#    expire rounds and open the next round.
+# 3. Deploy. SEVEN constructor arguments, in this order:
+#      (vrfProvider, gameToken, rewardToken, roundKeeper,
+#       admin, pauser, upgradeDelay)
+#    The keeper is the only account allowed to validate finds, expire rounds
+#    and open the next round. admin and pauser MUST be different accounts -
+#    the constructor asserts it. upgradeDelay is in seconds.
 CLASS_HASH=<paste from step 2>
 
 sncast --account=account_braavos deploy \
   --class-hash "$CLASS_HASH" \
-  --arguments '0x01baad38bde8d3d60eebab5b96f72a297d52e6d1386bc3d4ec5344d9a30388bd, 0x0512feac6339ff7889822cb5aa2a86c848e9d392bb0e3e237c008674feed8343, 0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b, <round-keeper-address>' \
+  --arguments '0x01baad38bde8d3d60eebab5b96f72a297d52e6d1386bc3d4ec5344d9a30388bd, 0x0512feac6339ff7889822cb5aa2a86c848e9d392bb0e3e237c008674feed8343, 0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b, <round-keeper-address>, <admin-address>, <pauser-address>, <upgrade-delay-seconds>' \
   --network sepolia
 ```
 
-All four constructor arguments are plain `ContractAddress`, one felt each, so
-`--arguments` and `--constructor-calldata` are equivalent here. **The ROZ token
-does not change** — the same address is reused every time.
+The first six constructor arguments are plain `ContractAddress`, one felt each,
+and `upgradeDelay` is a `u64`, so `--arguments` and `--constructor-calldata` are
+equivalent here. **The ROZ token does not change** — the same address is reused
+every time.
+
+**The deployed contract is paused and holds no settings.** Go straight to
+"Post-deploy initialisation" below before doing anything else.
 
 **The owner is hardcoded**, not a constructor argument. Deploying from any
 account still produces a contract owned by `0x052a2b0b…023833`, which is
@@ -269,6 +287,114 @@ rotating and moving into the environment.
 
 `--network sepolia` is fine for the deploy and for every call below. The
 estimation problem is specific to declaring a large class.
+
+### Post-deploy initialisation - the contract deploys PAUSED and empty
+
+**The class does not set its own defaults.** `_initialiseRewardSettings` used to
+write about ninety constants in the constructor; it cost **5,329 of the 81,920
+casm felts** Starknet allows a class, and it was removed to get the contract
+closer to that limit. A freshly deployed game therefore has every rate, limit,
+fee and band at **zero**, and **deploys paused** so that a half-initialised game
+cannot be played. Hiding, hopping and `start_next_round` all `assert_not_paused`.
+
+Run this as the **admin**, then unpause as the **pauser**. The sequence is
+mirrored exactly by `initialise_game_settings` in `tests/test_contract.cairo`, so
+a mistake here shows up as a failing test rather than on chain.
+
+**All thirty-five scalar settings go in ONE `set_params` call.** Twelve separate
+setters used to do this; their compiler-generated wrappers alone cost 7,922 of
+the 81,920 casm felts Starknet allows a class, and removing them is part of what
+brings the contract under that limit.
+
+`set_params` applies the batch and then validates the **whole** configuration, so
+there is no ordering rule to remember any more - but there is a stronger one in
+its place:
+
+> **The first batch must carry all thirty-five settings.** Every setting on a
+> fresh contract is zero, so a partial first batch fails
+> `'free hops >= participation'` and writes nothing. That is deliberate: it is
+> what stops a half-configured game from running.
+
+Later, a single setting can be changed on its own, because the rest of the
+configuration is already consistent.
+
+```bash
+GAME=<address from step 3>
+
+sncast --account=account_braavos invoke --contract-address $GAME \
+  --network sepolia --function set_params --arguments \
+"array![
+ 'rewardHide','rewardHideSurvived','rewardFind','rewardParticipation','rewardPerHop',
+ 'hopRewardBelowThreshold','participationBelowThreshold','rewardHideBelowThreshold',
+ 'hideSurvivedBelowThreshold','hopRewardNewWallet','participationNewWallet',
+ 'rewardHideNewWallet','rewardHideSurvivedNewWallet','participationMinimumHops',
+ 'hopRewardCap','dailyFreeHops','dailyFreeSpawns','dailySoftCapRoz',
+ 'newWalletSoftCapRoz','softCapMultiplierNum','softCapMultiplierDen',
+ 'dailySpendThreshold','lifetimeSpendThreshold','hideFeeBase','hideFeeHigh',
+ 'hideFeeTierBoundary','dailyHideCap','maxTreasuresPerRound','whitelistRoundCap',
+ 'whitelistCollectiveCap','whitelistHourlyCap','gasFeeReservation','gameMasterFee',
+ 'gameLandownerFee','minimumAllowance'
+], array![
+ 30000000000000000000, 50000000000000000000, 110000000000000000000,
+ 18000000000000000000, 1000000000000000000,
+ 150000000000000000, 0, 4500000000000000000, 7500000000000000000,
+ 500000000000000000, 9000000000000000000, 15000000000000000000, 25000000000000000000,
+ 28, 40, 20, 1,
+ 136000000000000000000, 80000000000000000000, 1, 5,
+ 600000, 3000000,
+ 200000, 250000, 3, 10, 2840,
+ 250, 1200, 80,
+ 3333, 8333, 1167, 7000000
+]"
+```
+
+**One key is not its field name.** `rewardHideSurvivedBelowThreshold` is 32
+characters and a `felt252` short string holds 31, so its key is
+`hideSurvivedBelowThreshold`. Every other key is the storage field name exactly.
+
+The two indexed schedules keep their own setters, because they are already
+parameterised by band index:
+
+```bash
+A="sncast --account=account_braavos invoke --contract-address $GAME --network sepolia"
+
+# Progressive hop prices. Band 3 is open-ended.
+$A --function update_hop_price_band --arguments '0, 25, 5000'      # $0.005
+$A --function update_hop_price_band --arguments '1, 45, 10000'     # $0.010
+$A --function update_hop_price_band --arguments '2, 65, 20000'     # $0.020
+$A --function update_hop_price_band --arguments '3, 340282366920938463463374607431768211455, 40000'
+
+# Daily Volume Multiplier. Band 5 is the open-ended tail.
+$A --function update_volume_band --arguments '0, 2, 1, 1'          # 1.00x
+$A --function update_volume_band --arguments '1, 4, 7, 10'         # 0.70x
+$A --function update_volume_band --arguments '2, 6, 2, 5'          # 0.40x
+$A --function update_volume_band --arguments '3, 8, 1, 5'          # 0.20x
+$A --function update_volume_band --arguments '4, 10, 2, 25'        # 0.08x
+$A --function update_volume_band --arguments '5, 340282366920938463463374607431768211455, 3, 100'
+
+# Finally, unpause AS THE PAUSER - not the admin.
+sncast --account=<pauser account> invoke --contract-address $GAME \
+  --function unpause --network sepolia
+```
+
+**The whitelist merkle root is deliberately not set.** Storage is zero-initialised
+and a zero root fails every proof, which means nobody is whitelisted - the correct
+starting state. Publish one with `set_whitelist_merkle_root` when there is a list.
+
+**Verify before unpausing.** Every setting has a getter, so read them all back:
+
+```bash
+for f in get_reward_rates get_below_threshold_rates get_new_wallet_rates \
+         get_hop_limits get_soft_caps get_gate_thresholds get_hide_settings \
+         get_whitelist_caps; do
+  echo -n "$f: "
+  sncast call --contract-address $GAME --function $f --network sepolia
+done
+```
+
+A zero anywhere means a step was missed. **An unset game is not inert** - it would
+hand out free hops that earn nothing, which is silent and wrong rather than loud
+and wrong. That is the whole reason the contract deploys paused.
 
 ### Verify before trusting it
 
