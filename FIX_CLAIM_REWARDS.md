@@ -74,7 +74,7 @@
 
      sncast --account=account_braavos d
        --contract-name=HelloStarknet \
-       --url https://starknet-sepolia.g/rpc/v0_10/ffSkS9OBRrEUykmSI4ETP
+       --url "$STARKNET_RPC_URL"
 
      Add --dry-run first if you want topending.
 
@@ -100,7 +100,7 @@
        --constructor-calldata \
            0x01baad38bde8d3d60eebab5b969a30388bd \
            0x0512feAc6339Ff7889822cb5aA4feeD8343 \
-       --url https://starknet-sepolia.g/rpc/v0_10/ffSkS9OBRrEUykmSI4ETP
+       --url "$STARKNET_RPC_URL"
 
      Order is (vrfProviderAddress, gameprovider, not
      Cartridge's. The previous deploy pand needed a

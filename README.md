@@ -53,6 +53,8 @@ The currently tested toolchain is:
 
 - Scarb and Cairo `2.20.0`.
 - Starknet Foundry (`snforge` and `sncast`) `0.62.1`.
+- Node.js `22.3.0` or newer and npm (required by the pinned Varlock release).
+- The Doppler CLI, authenticated with `doppler login`.
 - A funded Starknet account configured in `sncast` for network deployment.
 
 The manifest pins the matching Cairo, OpenZeppelin, and `snforge_std`
@@ -63,12 +65,56 @@ scarb --version
 snforge --version
 sncast --version
 sncast account list
+npm ci
 ```
 
-No environment file is required for local compilation or tests. RPC URLs and
-account credentials used for deployment must stay in the `sncast` account
-configuration or the operator's environment; never commit private keys or RPC
-API keys.
+No environment file is required for local Cairo compilation or tests. Public
+constructor inputs and the masked RPC URL for Sepolia deployments live in
+Doppler project `roz-contract`, config `dev`, and are loaded according to
+[`.env.schema`](.env.schema). Signing keys remain exclusively in the local
+`sncast` account store; never add a private key or mnemonic to Doppler or this
+repository.
+
+## Varlock and Doppler deployment environment
+
+The schema exposes separate preflight targets for each deployable contract:
+
+| Target | Contract | Target-specific inputs |
+| --- | --- | --- |
+| `game` | `HelloStarknet` | VRF, USDC, ROZ, keeper, admin, pauser, pauser account alias, upgrade delay |
+| `roz` | `ROZToken` | initial recipient and owner |
+| `starterpack` | `TreasureGameStarterpack` | owner, Arcade registry, USDC, STRK, and ROZ |
+
+All targets also require the Sepolia network, masked RPC URL, local `sncast`
+account alias, and matching deployer address. Inspect the resolved setup and
+run the target-aware checks with:
+
+```bash
+DOPPLER_CONFIG=dev npm run env:load
+DOPPLER_CONFIG=dev npm run env:check -- roz --online
+DOPPLER_CONFIG=dev npm run env:check -- game --online
+DOPPLER_CONFIG=dev npm run env:check -- starterpack --online
+```
+
+The online check verifies the RPC chain ID and confirms that each configured
+account alias exists locally, targets Sepolia, and has the expected address. It
+never prints the RPC URL. The `game` check intentionally remains blocked until
+`PAUSER_ADDRESS` and `PAUSER_SNCAST_ACCOUNT` are added to `roz-contract/dev`;
+the starter-pack check similarly remains blocked until
+`ARCADE_REGISTRY_ADDRESS` is known. Admin and pauser must be distinct accounts.
+
+Use the repository safety checks before committing environment-related work:
+
+```bash
+npm test
+npm run env:audit
+npm run env:scan
+```
+
+Varlock uses an existing `DOPPLER_TOKEN` in CI or falls back to the local
+Doppler CLI login. Do not add `.doppler.yaml`: the project and config are fixed
+by the schema and `DOPPLER_CONFIG`, which prevents an unrelated directory-level
+Doppler setup from silently selecting the wrong project.
 
 ## Build and test
 
@@ -205,36 +251,30 @@ keeping the same address and storage. This is not an Ethereum proxy. Follow the
 complete [upgrade and pause runbook](docs/UPGRADES_AND_PAUSE.md), and inspect
 outstanding claims on any address being retired.
 
-Set public addresses and the keeper address in your shell. The keeper must be
-the account used by the deployed AWS lifecycle functions:
-
-```bash
-export VRF_PROVIDER_ADDRESS=0x...
-export GAME_TOKEN_ADDRESS=0x...
-export REWARD_TOKEN_ADDRESS=0x...
-export ROUND_KEEPER_ADDRESS=0x...
-export ADMIN_ADDRESS=0x...
-export PAUSER_ADDRESS=0x...
-export UPGRADE_DELAY=100 # Sepolia rehearsal; mainnet must be >= 259200
-export STARKNET_RPC_URL=https://...
-```
-
-Build, test, declare, and deploy:
+Populate the missing pauser values in `roz-contract/dev` first. The keeper must
+be the account used by the deployed AWS lifecycle functions. Then build, test,
+run the online preflight, declare, and deploy inside Varlock so constructor
+values do not need to be manually exported:
 
 ```bash
 scarb build
 snforge test
+DOPPLER_CONFIG=dev npm run env:check -- game --online
 
-sncast --account account_braavos --wait declare \
-  --contract-name HelloStarknet \
-  --url "$STARKNET_RPC_URL"
+DOPPLER_CONFIG=dev npm exec -- varlock run -- bash -c '
+  sncast --account "$SNCAST_ACCOUNT" --wait declare \
+    --contract-name HelloStarknet \
+    --url "$STARKNET_RPC_URL"
+'
 
 export CLASS_HASH=0x... # class hash printed by declare
 
-sncast --account account_braavos --wait deploy \
-  --class-hash "$CLASS_HASH" \
-  --arguments "$VRF_PROVIDER_ADDRESS,$GAME_TOKEN_ADDRESS,$REWARD_TOKEN_ADDRESS,$ROUND_KEEPER_ADDRESS,$ADMIN_ADDRESS,$PAUSER_ADDRESS,$UPGRADE_DELAY" \
-  --url "$STARKNET_RPC_URL"
+DOPPLER_CONFIG=dev CLASS_HASH="$CLASS_HASH" npm exec -- varlock run -- bash -c '
+  sncast --account "$SNCAST_ACCOUNT" --wait deploy \
+    --class-hash "$CLASS_HASH" \
+    --arguments "$VRF_PROVIDER_ADDRESS,$USDC_TOKEN_ADDRESS,$ROZ_TOKEN_ADDRESS,$ROUND_KEEPER_ADDRESS,$ADMIN_ADDRESS,$PAUSER_ADDRESS,$UPGRADE_DELAY" \
+    --url "$STARKNET_RPC_URL"
+'
 ```
 
 Constructor order is exactly `(vrfProvider, gameToken, rewardToken,

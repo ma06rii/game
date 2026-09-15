@@ -1,0 +1,19 @@
+{
+  "name": "roz-game-contracts",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.3.0"
+  },
+  "scripts": {
+    "test": "node --test tests/deployment-env.test.mjs",
+    "env:load": "varlock load --agent --show-all",
+    "env:audit": "varlock audit --ignore target --ignore .snfoundry_cache",
+    "env:scan": "varlock scan",
+    "env:check": "varlock run -- node scripts/check-contract-env.mjs"
+  },
+  "devDependencies": {
+    "@varlock/doppler-plugin": "2.0.1",
+    "varlock": "1.18.0"
+  }
+}
