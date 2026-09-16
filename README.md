@@ -54,7 +54,19 @@ The currently tested toolchain is:
 - Scarb and Cairo `2.20.0`.
 - Starknet Foundry (`snforge` and `sncast`) `0.62.1`.
 - Node.js `22.3.0` or newer and npm (required by the pinned Varlock release).
-- The Doppler CLI, authenticated with `doppler login`.
+- The Doppler CLI, authenticated **and scoped to this repository**:
+
+  ```bash
+  doppler login                                     # once per machine
+  doppler setup --project roz-contract --config dev # once per checkout
+  ```
+
+  Both steps are required. `doppler login` alone leaves
+  `doppler configure get token --plain` empty, and `.env.schema` resolves
+  `DOPPLER_TOKEN` from exactly that command — so without the scope, every
+  `varlock run` aborts during schema initialization with
+  `Referenced item "DOPPLER_TOKEN" is not valid` and no sncast command runs at
+  all. `npm run env:check` checks this first and names the fix.
 - A funded Starknet account configured in `sncast` for network deployment.
 
 The manifest pins the matching Cairo, OpenZeppelin, and `snforge_std`
@@ -267,15 +279,36 @@ DOPPLER_CONFIG=dev npm exec -- varlock run -- bash -c '
     --url "$STARKNET_RPC_URL"
 '
 
-export CLASS_HASH=0x... # class hash printed by declare
+export GAME_CLASS_HASH=0x... # class hash printed by declare
 
-DOPPLER_CONFIG=dev CLASS_HASH="$CLASS_HASH" npm exec -- varlock run -- bash -c '
+DOPPLER_CONFIG=dev GAME_CLASS_HASH="$GAME_CLASS_HASH" npm exec -- varlock run -- bash -c '
+  : "${GAME_CLASS_HASH:?set GAME_CLASS_HASH to the hash printed by declare}"
   sncast --account "$SNCAST_ACCOUNT" --wait deploy \
-    --class-hash "$CLASS_HASH" \
+    --class-hash "$GAME_CLASS_HASH" \
     --arguments "$VRF_PROVIDER_ADDRESS,$USDC_TOKEN_ADDRESS,$ROZ_TOKEN_ADDRESS,$ROUND_KEEPER_ADDRESS,$ADMIN_ADDRESS,$PAUSER_ADDRESS,$UPGRADE_DELAY" \
     --url "$STARKNET_RPC_URL"
 '
 ```
+
+`GAME_CLASS_HASH` is a shell variable, not a Doppler secret — a class hash
+changes with every build, so it does not belong in `.env.schema` alongside the
+stable addresses. Varlock does forward the ambient environment to the child, so
+an `export`ed value would reach sncast, but the explicit
+`GAME_CLASS_HASH="$GAME_CLASS_HASH"` prefix works whether or not it was
+exported. The `:?` line aborts with a named error when it is unset instead of
+passing sncast `--class-hash ""`.
+
+Class hashes are named per contract, so a runbook never has to guess which one
+a variable refers to:
+
+| Contract (Cairo module) | Variable |
+|---|---|
+| `HelloStarknet` (`src/lib.cairo`) | `GAME_CLASS_HASH` |
+| `ROZToken` (`src/game_reward_token.cairo`) | `ROZ_CLASS_HASH` |
+| `TreasureGameStarterpack` (`src/starterpack.cairo`) | `STARTERPACK_CLASS_HASH` |
+
+Only the game flow is documented today; the other two names are reserved for
+when those declare flows are written.
 
 Constructor order is exactly `(vrfProvider, gameToken, rewardToken,
 roundKeeper, admin, pauser, upgradeDelay)`. The historical hardcoded owner is

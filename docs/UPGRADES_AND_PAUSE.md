@@ -96,11 +96,23 @@ First-deployment checklist:
 Example deployment shape:
 
 ```bash
-sncast --account account_braavos --wait deploy \
-  --class-hash "$CLASS_HASH" \
-  --arguments "$VRF_PROVIDER_ADDRESS,$GAME_TOKEN_ADDRESS,$REWARD_TOKEN_ADDRESS,$ROUND_KEEPER_ADDRESS,$ADMIN_ADDRESS,$PAUSER_ADDRESS,$UPGRADE_DELAY" \
-  --url "$STARKNET_RPC_URL"
+DOPPLER_CONFIG=dev npm run env:check -- game --online
+
+DOPPLER_CONFIG=dev GAME_CLASS_HASH="$GAME_CLASS_HASH" npm exec -- varlock run -- bash -c '
+  : "${GAME_CLASS_HASH:?set GAME_CLASS_HASH to the hash printed by declare}"
+  sncast --account "$SNCAST_ACCOUNT" --wait deploy \
+    --class-hash "$GAME_CLASS_HASH" \
+    --arguments "$VRF_PROVIDER_ADDRESS,$USDC_TOKEN_ADDRESS,$ROZ_TOKEN_ADDRESS,$ROUND_KEEPER_ADDRESS,$ADMIN_ADDRESS,$PAUSER_ADDRESS,$UPGRADE_DELAY" \
+    --url "$STARKNET_RPC_URL"
+'
 ```
+
+`USDC_TOKEN_ADDRESS` is the game token and `ROZ_TOKEN_ADDRESS` the reward token,
+matching the constructor order above. The `varlock run -- bash -c '...'` wrapper
+is required: Varlock injects the Doppler values, and the single quotes defer
+`$VAR` expansion into the child process so the constructor does not receive
+empty addresses. [README.md](../README.md) holds the canonical invocation, and
+`npm run env:check -- game --online` is the mandatory preflight for it.
 
 ## Upgrade runbook
 

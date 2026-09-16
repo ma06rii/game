@@ -7,6 +7,10 @@ contract, AWS backend, Apibara indexers, and Vue frontend to Starknet Sepolia.
 It records the state observed on the assessment date. Recheck balances, fees,
 chain state, and deployed infrastructure immediately before making changes.
 
+[README.md](README.md) is the canonical source for the declare and deploy
+invocation, and `npm run env:check -- game --online` is the mandatory preflight
+for both. If a command here ever disagrees with the README, the README wins.
+
 ## Assessment
 
 The code is close to deployment-ready, but this is not a simple contract-address
@@ -110,18 +114,28 @@ game configuration, profiles, paymaster state, and whitelist membership.
 
 ### 1. Choose roles
 
-For the recommended separated setup:
+For the recommended separated setup, the `roz-contract/dev` Doppler config must
+resolve to these values. The listing below is a reference for what each variable
+must hold, not a set of commands to run: the deploy is driven entirely through
+Varlock, and manually exporting these into your shell is exactly how the wrong
+values end up in a constructor. See [README.md](README.md) for the canonical
+invocation.
 
 ```bash
-export VRF_PROVIDER_ADDRESS=0x01baad38bde8d3d60eebab5b96f72a297d52e6d1386bc3d4ec5344d9a30388bd
-export GAME_TOKEN_ADDRESS=0x0512feac6339ff7889822cb5aa2a86c848e9d392bb0e3e237c008674feed8343
-export REWARD_TOKEN_ADDRESS=0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b
-export ROUND_KEEPER_ADDRESS=0x052a2b0b20d8796e57f0f00e99adfd61e0b40c4a49553d4197e4da6c1c023833
-export ADMIN_ADDRESS=0x...
-export PAUSER_ADDRESS=0x...
-export UPGRADE_DELAY=100
-export STARKNET_RPC_URL=https://...
+VRF_PROVIDER_ADDRESS=0x01baad38bde8d3d60eebab5b96f72a297d52e6d1386bc3d4ec5344d9a30388bd
+USDC_TOKEN_ADDRESS=0x0512feac6339ff7889822cb5aa2a86c848e9d392bb0e3e237c008674feed8343
+ROZ_TOKEN_ADDRESS=0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b
+ROUND_KEEPER_ADDRESS=0x052a2b0b20d8796e57f0f00e99adfd61e0b40c4a49553d4197e4da6c1c023833
+ADMIN_ADDRESS=0x...
+PAUSER_ADDRESS=0x...
+UPGRADE_DELAY=100
+STARKNET_RPC_URL=https://...
 ```
+
+`USDC_TOKEN_ADDRESS` is the game token (constructor slot 2) and
+`ROZ_TOKEN_ADDRESS` is the reward token (slot 3). These are the names declared
+in `.env.schema` and enforced by `scripts/check-contract-env.mjs`; no other
+spelling is supplied by Doppler.
 
 Requirements:
 
@@ -163,23 +177,53 @@ otherwise.
 
 ### 4. Declare and deploy
 
+Run the online preflight first. It validates every required variable, confirms
+the RPC really is Sepolia, and checks that both sncast aliases resolve locally
+to their configured addresses:
+
 ```bash
-sncast --account account_braavos declare \
-  --contract-name HelloStarknet \
-  --url "$STARKNET_RPC_URL" \
-  --dry-run --detailed
-
-sncast --account account_braavos --wait declare \
-  --contract-name HelloStarknet \
-  --url "$STARKNET_RPC_URL"
-
-export CLASS_HASH=0x...
-
-sncast --account account_braavos --wait deploy \
-  --class-hash "$CLASS_HASH" \
-  --arguments "$VRF_PROVIDER_ADDRESS,$GAME_TOKEN_ADDRESS,$REWARD_TOKEN_ADDRESS,$ROUND_KEEPER_ADDRESS,$ADMIN_ADDRESS,$PAUSER_ADDRESS,$UPGRADE_DELAY" \
-  --url "$STARKNET_RPC_URL"
+DOPPLER_CONFIG=dev npm run env:check -- game --online
 ```
+
+Every `sncast` call below runs inside `varlock run -- bash -c '...'`. Both halves
+matter. Varlock injects the Doppler values, and the single-quoted `bash -c`
+defers `$VAR` expansion into the child process. Writing
+`varlock run -- sncast --arguments "$ADMIN_ADDRESS"` does not work: the outer
+shell expands the variable before Varlock ever runs, so sncast receives an empty
+string and the constructor silently takes a zero address.
+
+```bash
+DOPPLER_CONFIG=dev npm exec -- varlock run -- bash -c '
+  sncast --account "$SNCAST_ACCOUNT" declare \
+    --contract-name HelloStarknet \
+    --url "$STARKNET_RPC_URL" \
+    --dry-run --detailed
+'
+
+DOPPLER_CONFIG=dev npm exec -- varlock run -- bash -c '
+  sncast --account "$SNCAST_ACCOUNT" --wait declare \
+    --contract-name HelloStarknet \
+    --url "$STARKNET_RPC_URL"
+'
+
+export GAME_CLASS_HASH=0x... # class hash printed by declare
+
+DOPPLER_CONFIG=dev GAME_CLASS_HASH="$GAME_CLASS_HASH" npm exec -- varlock run -- bash -c '
+  : "${GAME_CLASS_HASH:?set GAME_CLASS_HASH to the hash printed by declare}"
+  sncast --account "$SNCAST_ACCOUNT" --wait deploy \
+    --class-hash "$GAME_CLASS_HASH" \
+    --arguments "$VRF_PROVIDER_ADDRESS,$USDC_TOKEN_ADDRESS,$ROZ_TOKEN_ADDRESS,$ROUND_KEEPER_ADDRESS,$ADMIN_ADDRESS,$PAUSER_ADDRESS,$UPGRADE_DELAY" \
+    --url "$STARKNET_RPC_URL"
+'
+```
+
+`GAME_CLASS_HASH` is a shell variable rather than a Doppler secret. Varlock does
+forward the ambient environment to the child, so an `export`ed value would reach
+sncast — but passing it explicitly on the command line as shown works whether or
+not it was exported, which is why every block does it that way. The `:?` line
+aborts with a named error if it is unset, rather than letting sncast receive
+`--class-hash ""`. Append `--dry-run --detailed` to the deploy to rehearse it as
+a fee estimate first.
 
 Official Starknet Foundry references:
 

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { readSncastAccount, validateEnvironment } from "../scripts/check-contract-env.mjs";
+import { checkDoppler, readDopplerScope } from "../scripts/check-doppler.mjs";
 
 const DEPLOYER = "0x52a2b0b20d8796e57f0f00e99adfd61e0b40c4a49553d4197e4da6c1c023833";
 
@@ -145,4 +146,55 @@ To show private keys too, use the explicit flag
     address: DEPLOYER,
     network: "alpha-sepolia",
   });
+});
+
+const SCOPED = JSON.stringify({
+  "/home/ii/development/personal/game-worktrees/bug-vrf-game": {
+    "enclave.config": "dev",
+    "enclave.project": "roz-contract",
+  },
+});
+
+test("parses a configured Doppler scope regardless of the directory key", () => {
+  assert.deepEqual(readDopplerScope(SCOPED), {
+    project: "roz-contract",
+    config: "dev",
+  });
+  assert.deepEqual(
+    readDopplerScope(JSON.stringify({ "/elsewhere": { project: "roz-contract", config: "dev" } })),
+    { project: "roz-contract", config: "dev" },
+  );
+});
+
+test("treats an unconfigured or unparseable Doppler CLI as no scope", () => {
+  assert.equal(readDopplerScope("{}"), null);
+  assert.equal(readDopplerScope(""), null);
+  assert.equal(readDopplerScope("not json"), null);
+});
+
+test("accepts a logged-in CLI scoped to roz-contract/dev", () => {
+  assert.deepEqual(checkDoppler({ token: "dp.ct.example", scopeOutput: SCOPED }), []);
+});
+
+test("reports the missing token and scope that break varlock resolution", () => {
+  const errors = checkDoppler({ token: "", scopeOutput: "{}" });
+  assert.equal(errors.length, 2);
+  assert.match(errors[0], /no Doppler token/);
+  assert.match(errors[1], /no project scope/);
+});
+
+test("reports a Doppler scope pointing at the wrong project or config", () => {
+  const wrong = JSON.stringify({ "/x": { "enclave.project": "other", "enclave.config": "prd" } });
+  const errors = checkDoppler({ token: "dp.ct.example", scopeOutput: wrong });
+  assert.match(errors[0], /project is other, expected roz-contract/);
+  assert.match(errors[1], /config is prd, expected dev/);
+});
+
+test("accepts the CI path where DOPPLER_TOKEN is supplied without a local login", () => {
+  assert.deepEqual(
+    checkDoppler({ token: "", scopeOutput: "{}", serviceToken: "dp.st.example" }),
+    [],
+  );
+  // an empty/whitespace service token is not a CI path and must still be caught
+  assert.equal(checkDoppler({ token: "", scopeOutput: "{}", serviceToken: "  " }).length, 2);
 });

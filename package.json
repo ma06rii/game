@@ -10,7 +10,7 @@
     "env:load": "varlock load --agent --show-all",
     "env:audit": "varlock audit --ignore target --ignore .snfoundry_cache",
     "env:scan": "varlock scan",
-    "env:check": "varlock run -- node scripts/check-contract-env.mjs"
+    "env:check": "node scripts/check-doppler.mjs && varlock run -- node scripts/check-contract-env.mjs"
   },
   "devDependencies": {
     "@varlock/doppler-plugin": "2.0.1",

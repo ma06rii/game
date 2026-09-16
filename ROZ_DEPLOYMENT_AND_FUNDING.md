@@ -6,6 +6,40 @@ below was **read from the chain**, not copied from a note.
 For what the contract does, see `ROZ_REWARD_TOKEN_PLAN.md`. For what was built
 and how to run the tests, see `ROZ_IMPLEMENTATION_NOTES.md`.
 
+## Command convention
+
+Every `sncast` command in this document follows the same shape as
+[README.md](README.md), which is the canonical source:
+
+```bash
+DOPPLER_CONFIG=dev npm exec -- varlock run -- bash -c '
+  sncast --account "$SNCAST_ACCOUNT" ... --url "$STARKNET_RPC_URL"
+'
+```
+
+Two rules, both load-bearing:
+
+- **Varlock injects the Doppler values.** Nothing else does. `DOPPLER_CONFIG=dev`
+  on its own sets one variable for the `sncast` process, and sncast does not read
+  Doppler.
+- **The single-quoted `bash -c` defers `$VAR` expansion into the child.** Writing
+  `varlock run -- sncast --arguments "$ADMIN_ADDRESS"` does not work — the outer
+  shell expands it before Varlock runs, so sncast receives an empty string and
+  the call silently uses a zero address.
+
+Shell variables that are not Doppler secrets (`GAME_CLASS_HASH`, `GAME`) are
+passed through on the command line, as shown at each use below. Varlock does
+forward the ambient environment, so an `export`ed value would also arrive — but
+the explicit prefix works whether or not it was exported, so every block uses it.
+
+Class-hash variables are named per contract: `GAME_CLASS_HASH` for
+`HelloStarknet`, and `ROZ_CLASS_HASH` / `STARTERPACK_CLASS_HASH` when those
+declare flows are written. See [README.md](README.md) for the table.
+
+Run `DOPPLER_CONFIG=dev npm run env:check -- game --online` before any signing
+command. It validates every required variable, confirms the RPC is Sepolia, and
+checks that both sncast aliases resolve locally to their configured addresses.
+
 ---
 
 ## 1. Live addresses
@@ -94,20 +128,26 @@ Year 1 is 17.1% of supply.
 `transfer` moves from the caller, and the owner account holds the whole supply.
 
 ```bash
+GAME=0x01aff92bfd50b4953f8b53a95dee15065e89c44e1d98ab4f27d57b6587f1472b
+
 # Dry run first - estimates the fee without sending.
-sncast --account=account_braavos invoke \
-  --contract-address 0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b \
-  --function transfer \
-  --arguments '0x01aff92bfd50b4953f8b53a95dee15065e89c44e1d98ab4f27d57b6587f1472b, 855000000000000000000000000' \
-  --network sepolia \
-  --dry-run
+DOPPLER_CONFIG=dev GAME="$GAME" npm exec -- varlock run -- bash -c '
+  sncast --account "$SNCAST_ACCOUNT" invoke \
+    --contract-address "$ROZ_TOKEN_ADDRESS" \
+    --function transfer \
+    --arguments "$GAME, 855000000000000000000000000" \
+    --url "$STARKNET_RPC_URL" \
+    --dry-run
+'
 
 # Then for real - same command, without --dry-run.
-sncast --account=account_braavos invoke \
-  --contract-address 0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b \
-  --function transfer \
-  --arguments '0x01aff92bfd50b4953f8b53a95dee15065e89c44e1d98ab4f27d57b6587f1472b, 855000000000000000000000000' \
-  --network sepolia
+DOPPLER_CONFIG=dev GAME="$GAME" npm exec -- varlock run -- bash -c '
+  sncast --account "$SNCAST_ACCOUNT" --wait invoke \
+    --contract-address "$ROZ_TOKEN_ADDRESS" \
+    --function transfer \
+    --arguments "$GAME, 855000000000000000000000000" \
+    --url "$STARKNET_RPC_URL"
+'
 ```
 
 **On the u256.** 855,000,000 × 10¹⁸ = `855000000000000000000000000`, which is
@@ -119,32 +159,34 @@ With `--calldata` you must pass both limbs yourself:
              855000000000000000000000000 0
 ```
 
-**On `--network sepolia`.** `FIX_CLAIM_REWARDS.md` records it failing with
-`-32603` for a *declare* — estimating a 550 KB class broke the public provider.
-That does not apply to an invoke, and every read-only call against these
-contracts worked over `--network sepolia`. If it does fail, substitute
-`--url "$STARKNET_RPC_V0_10"` with the spec-0.10 Alchemy endpoint.
+**On the RPC endpoint.** These commands use `--url "$STARKNET_RPC_URL"` rather
+than `--network sepolia`. `--network` resolves to a public provider that rate
+limits and, per `FIX_CLAIM_REWARDS.md`, returned `-32603` on a *declare* when
+estimating a 550 KB class. Invokes and reads did work over it historically, but
+standardising on the Doppler-supplied endpoint removes the failure mode
+everywhere at once and keeps one spelling across all the runbooks.
 
 ---
 
 ## 4. Verify
 
 ```bash
-ROZ=0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b
 GAME=0x01aff92bfd50b4953f8b53a95dee15065e89c44e1d98ab4f27d57b6587f1472b
 OWNER=0x052a2b0b20d8796e57f0f00e99adfd61e0b40c4a49553d4197e4da6c1c023833
 
-# Game contract holds the tranche
-sncast call --contract-address $ROZ --function balance_of \
-  --arguments "$GAME" --network sepolia      # -> 855000000000000000000000000
+DOPPLER_CONFIG=dev GAME="$GAME" OWNER="$OWNER" npm exec -- varlock run -- bash -c '
+  # Game contract holds the tranche             -> 855000000000000000000000000
+  sncast call --contract-address "$ROZ_TOKEN_ADDRESS" --function balance_of \
+    --arguments "$GAME" --url "$STARKNET_RPC_URL"
 
-# Owner drops to 4,145,000,000
-sncast call --contract-address $ROZ --function balance_of \
-  --arguments "$OWNER" --network sepolia     # -> 4145000000000000000000000000
+  # Owner drops to 4,145,000,000               -> 4145000000000000000000000000
+  sncast call --contract-address "$ROZ_TOKEN_ADDRESS" --function balance_of \
+    --arguments "$OWNER" --url "$STARKNET_RPC_URL"
 
-# Nothing owed to players yet, so the whole balance is still recoverable
-sncast call --contract-address $GAME --function get_sweepable_balance \
-  --arguments "$ROZ" --network sepolia       # -> 855000000000000000000000000
+  # Nothing owed to players yet, so the whole balance is still recoverable
+  sncast call --contract-address "$GAME" --function get_sweepable_balance \
+    --arguments "$ROZ_TOKEN_ADDRESS" --url "$STARKNET_RPC_URL"
+'
 ```
 
 **Then take one gameplay action** and confirm
@@ -236,10 +278,14 @@ export CARGO_HOME="$CLAUDE_JOB_DIR/tmp/cargo-home"
 # 1. Build clean, and refuse to ship if anything is red.
 scarb --release build && snforge test || echo "STOP - do not declare"
 
-# 2. Declare. Prints the class hash; step 3 needs it.
-sncast --account=account_braavos declare \
-  --contract-name=HelloStarknet \
-  --network=sepolia
+# 2. Preflight, then declare. Prints the class hash; step 3 needs it.
+DOPPLER_CONFIG=dev npm run env:check -- game --online
+
+DOPPLER_CONFIG=dev npm exec -- varlock run -- bash -c '
+  sncast --account "$SNCAST_ACCOUNT" --wait declare \
+    --contract-name HelloStarknet \
+    --url "$STARKNET_RPC_URL"
+'
 
 # 3. Deploy. SEVEN constructor arguments, in this order:
 #      (vrfProvider, gameToken, rewardToken, roundKeeper,
@@ -247,18 +293,26 @@ sncast --account=account_braavos declare \
 #    The keeper is the only account allowed to validate finds, expire rounds
 #    and open the next round. admin and pauser MUST be different accounts -
 #    the constructor asserts it. upgradeDelay is in seconds.
-CLASS_HASH=<paste from step 2>
+export GAME_CLASS_HASH=0x... # class hash printed by step 2
 
-sncast --account=account_braavos deploy \
-  --class-hash "$CLASS_HASH" \
-  --arguments '0x01baad38bde8d3d60eebab5b96f72a297d52e6d1386bc3d4ec5344d9a30388bd, 0x0512feac6339ff7889822cb5aa2a86c848e9d392bb0e3e237c008674feed8343, 0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b, <round-keeper-address>, <admin-address>, <pauser-address>, <upgrade-delay-seconds>' \
-  --network sepolia
+DOPPLER_CONFIG=dev GAME_CLASS_HASH="$GAME_CLASS_HASH" npm exec -- varlock run -- bash -c '
+  : "${GAME_CLASS_HASH:?set GAME_CLASS_HASH to the hash printed by declare}"
+  sncast --account "$SNCAST_ACCOUNT" --wait deploy \
+    --class-hash "$GAME_CLASS_HASH" \
+    --arguments "$VRF_PROVIDER_ADDRESS,$USDC_TOKEN_ADDRESS,$ROZ_TOKEN_ADDRESS,$ROUND_KEEPER_ADDRESS,$ADMIN_ADDRESS,$PAUSER_ADDRESS,$UPGRADE_DELAY" \
+    --url "$STARKNET_RPC_URL"
+'
 ```
+
+`USDC_TOKEN_ADDRESS` is the game token (slot 2) and `ROZ_TOKEN_ADDRESS` the
+reward token (slot 3). Those are the names `.env.schema` declares and
+`scripts/check-contract-env.mjs` enforces; `GAME_TOKEN_ADDRESS` and
+`REWARD_TOKEN_ADDRESS` are not supplied by Doppler and expand to empty.
 
 The first six constructor arguments are plain `ContractAddress`, one felt each,
 and `upgradeDelay` is a `u64`, so `--arguments` and `--constructor-calldata` are
 equivalent here. **The ROZ token does not change** — the same address is reused
-every time.
+every time, which is why it comes from Doppler rather than being pasted in.
 
 **The deployed contract is paused and holds no settings.** Go straight to
 "Post-deploy initialisation" below before doing anything else.
@@ -272,20 +326,17 @@ the constructor rejects using the same address for both responsibilities.
 `FIX_CLAIM_REWARDS.md` records `--network sepolia` returning **`-32603`** on a
 declare — estimating a large class broke the public provider. That was a 550 KB
 class and they have only grown since, so treat this as likely rather than
-possible:
+possible.
 
-```bash
-sncast --account=account_braavos declare \
-  --contract-name=HelloStarknet \
-  --url "$STARKNET_RPC_V0_10"
-```
+The command in step 2 above already avoids it: `--url "$STARKNET_RPC_URL"` uses
+the dedicated endpoint from Doppler rather than the public provider, which is
+the reason this document no longer uses `--network sepolia` anywhere. If a
+declare still fails there, the endpoint itself is the thing to check — confirm
+it is the spec-0.10 URL and that `npm run env:check -- game --online` passes.
 
-Set `STARKNET_RPC_V0_10` to the spec-0.10 endpoint first. **The API key is
-currently in plaintext in `FIX_CLAIM_REWARDS.md:77`, which is committed** — worth
-rotating and moving into the environment.
-
-`--network sepolia` is fine for the deploy and for every call below. The
-estimation problem is specific to declaring a large class.
+**The API key is currently in plaintext in `FIX_CLAIM_REWARDS.md:77`, which is
+committed** — worth rotating, and the replacement belongs in Doppler as
+`STARKNET_RPC_URL`, not in a document.
 
 ### Post-deploy initialisation - the contract deploys PAUSED and empty
 
@@ -320,10 +371,11 @@ Later, a single setting can be changed on its own, because the rest of the
 configuration is already consistent.
 
 ```bash
-GAME=<address from step 3>
+export GAME=0x... # address from step 3
 
-sncast --account=account_braavos invoke --contract-address $GAME \
-  --network sepolia --function set_params --arguments \
+DOPPLER_CONFIG=dev GAME="$GAME" npm exec -- varlock run -- bash -s <<'SH'
+sncast --account "$SNCAST_ACCOUNT" --wait invoke --contract-address "$GAME" \
+  --url "$STARKNET_RPC_URL" --function set_params --arguments \
 "array![
  'rewardHide','rewardHideSurvived','rewardFind','rewardParticipation','rewardPerHop',
  'hopRewardBelowThreshold','participationBelowThreshold','rewardHideBelowThreshold',
@@ -347,7 +399,14 @@ sncast --account=account_braavos invoke --contract-address $GAME \
  250, 1200, 80,
  3333, 8333, 1167, 7000000
 ]"
+SH
 ```
+
+This block uses `bash -s` with a quoted `<<'SH'` heredoc rather than
+`bash -c '...'`. The payload contains Cairo short-string literals in single
+quotes (`'rewardHide'`), which would terminate a single-quoted `bash -c`. The
+quoted heredoc passes them through untouched while still deferring `$VAR`
+expansion to the child, so both rules from the command convention still hold.
 
 **One key is not its field name.** `rewardHideSurvivedBelowThreshold` is 32
 characters and a `felt252` short string holds 31, so its key is
@@ -361,27 +420,38 @@ until every later band has been resubmitted; the last limit must be the open
 `u128::MAX` value shown below.
 
 ```bash
-A="sncast --account=account_braavos invoke --contract-address $GAME --network sepolia"
+DOPPLER_CONFIG=dev GAME="$GAME" npm exec -- varlock run -- bash -s <<'SH'
+A=(sncast --account "$SNCAST_ACCOUNT" --wait invoke
+   --contract-address "$GAME" --url "$STARKNET_RPC_URL")
 
 # Progressive hop prices. Band 3 is open-ended.
-$A --function update_price_band --arguments '0, 0, 25, 5000, 0'      # $0.005
-$A --function update_price_band --arguments '0, 1, 45, 10000, 0'     # $0.010
-$A --function update_price_band --arguments '0, 2, 65, 20000, 0'     # $0.020
-$A --function update_price_band --arguments '0, 3, 340282366920938463463374607431768211455, 40000, 0'
+"${A[@]}" --function update_price_band --arguments '0, 0, 25, 5000, 0'      # $0.005
+"${A[@]}" --function update_price_band --arguments '0, 1, 45, 10000, 0'     # $0.010
+"${A[@]}" --function update_price_band --arguments '0, 2, 65, 20000, 0'     # $0.020
+"${A[@]}" --function update_price_band --arguments '0, 3, 340282366920938463463374607431768211455, 40000, 0'
 
 # Daily Volume Multiplier. Band 5 is the open-ended tail.
-$A --function update_price_band --arguments '1, 0, 2, 1, 1'          # 1.00x
-$A --function update_price_band --arguments '1, 1, 4, 7, 10'         # 0.70x
-$A --function update_price_band --arguments '1, 2, 6, 2, 5'          # 0.40x
-$A --function update_price_band --arguments '1, 3, 8, 1, 5'          # 0.20x
-$A --function update_price_band --arguments '1, 4, 10, 2, 25'        # 0.08x
-$A --function update_price_band --arguments '1, 5, 340282366920938463463374607431768211455, 3, 100'
+"${A[@]}" --function update_price_band --arguments '1, 0, 2, 1, 1'          # 1.00x
+"${A[@]}" --function update_price_band --arguments '1, 1, 4, 7, 10'         # 0.70x
+"${A[@]}" --function update_price_band --arguments '1, 2, 6, 2, 5'          # 0.40x
+"${A[@]}" --function update_price_band --arguments '1, 3, 8, 1, 5'          # 0.20x
+"${A[@]}" --function update_price_band --arguments '1, 4, 10, 2, 25'        # 0.08x
+"${A[@]}" --function update_price_band --arguments '1, 5, 340282366920938463463374607431768211455, 3, 100'
+SH
 
 # Finally, unpause AS THE PAUSER - not the admin. This reverts unless the
 # canonical scalar batch and all ten schedule bands are complete.
-sncast --account=<pauser account> invoke --contract-address $GAME \
-  --function unpause --network sepolia
+DOPPLER_CONFIG=dev GAME="$GAME" npm exec -- varlock run -- bash -c '
+  sncast --account "$PAUSER_SNCAST_ACCOUNT" --wait invoke \
+    --contract-address "$GAME" --function unpause \
+    --url "$STARKNET_RPC_URL"
+'
 ```
+
+The repeated prefix is a bash **array**, not a string. A plain `A="sncast ..."`
+re-split by word would mangle any argument containing a space; `"${A[@]}"`
+expands one element per argument. The unpause runs separately because it signs
+with `$PAUSER_SNCAST_ACCOUNT` — a different account, by constructor assertion.
 
 **The whitelist merkle root is deliberately not set.** Storage is zero-initialised
 and a zero root fails every proof, which means nobody is whitelisted - the correct
@@ -390,22 +460,26 @@ starting state. Publish one with `set_whitelist_merkle_root` when there is a lis
 **Verify before unpausing.** Read back every grouped setting and both schedules:
 
 ```bash
+DOPPLER_CONFIG=dev GAME="$GAME" npm exec -- varlock run -- bash -s <<'SH'
 for f in get_reward_rates get_below_threshold_rates get_new_wallet_rates \
          get_hop_limits get_soft_caps get_gate_thresholds get_hide_settings \
          get_whitelist_caps; do
   echo -n "$f: "
-  sncast call --contract-address $GAME --function $f --network sepolia
+  sncast call --contract-address "$GAME" --function "$f" --url "$STARKNET_RPC_URL"
 done
 
 for i in 0 1 2 3; do
-  sncast call --contract-address $GAME --function get_price_band \
-    --arguments "0,$i" --network sepolia
+  sncast call --contract-address "$GAME" --function get_price_band \
+    --arguments "0,$i" --url "$STARKNET_RPC_URL"
 done
 for i in 0 1 2 3 4 5; do
-  sncast call --contract-address $GAME --function get_price_band \
-    --arguments "1,$i" --network sepolia
+  sncast call --contract-address "$GAME" --function get_price_band \
+    --arguments "1,$i" --url "$STARKNET_RPC_URL"
 done
-sncast call --contract-address $GAME --function is_paused --network sepolia # true until the separate final transaction
+
+# true until the separate final transaction
+sncast call --contract-address "$GAME" --function is_paused --url "$STARKNET_RPC_URL"
+SH
 ```
 
 Compare the returned tuples with the exact values above; zero is intentional for
@@ -420,17 +494,19 @@ transaction calldata.
 ### Verify before trusting it
 
 ```bash
-GAME=<address from step 3>
+export GAME=0x... # address from step 3
 
+DOPPLER_CONFIG=dev GAME="$GAME" npm exec -- varlock run -- bash -s <<'SH'
 # Proves this is the intended build - pick an entrypoint no earlier
 # deployment has. get_total_reward_token_missed for the missed-ROZ build,
 # get_claimable_weeks for the claim-view build before it.
-sncast call --contract-address $GAME --function get_total_reward_token_missed \
-  --network sepolia                                          # -> 0_u256
+sncast call --contract-address "$GAME" --function get_total_reward_token_missed \
+  --url "$STARKNET_RPC_URL"                                  # -> 0_u256
 
-sncast call --contract-address $GAME --function get_contract_addresses --network sepolia # -> (VRF, USDC, ROZ)
-sncast call --contract-address $GAME --function get_game_week         --network sepolia  # -> 0_u256
-sncast call --contract-address $GAME --function owner                 --network sepolia
+sncast call --contract-address "$GAME" --function get_contract_addresses --url "$STARKNET_RPC_URL" # -> (VRF, USDC, ROZ)
+sncast call --contract-address "$GAME" --function get_game_week          --url "$STARKNET_RPC_URL" # -> 0_u256
+sncast call --contract-address "$GAME" --function owner                  --url "$STARKNET_RPC_URL"
+SH
 ```
 
 ### Then, in this order
