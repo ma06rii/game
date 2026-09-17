@@ -268,27 +268,58 @@ be the account used by the deployed AWS lifecycle functions. Then build, test,
 run the online preflight, declare, and deploy inside Varlock so constructor
 values do not need to be manually exported:
 
+As checked on 2026-09-16, the Doppler `STARKNET_RPC_URL` serves Starknet RPC
+0.9.0 while `sncast 0.62.1` expects 0.10.0; a declaration dry-run with
+`--url "$STARKNET_RPC_URL"` fails. The predefined `--network sepolia`
+provider succeeds, so use that provider consistently for the declare, deploy,
+and verification commands below. The online environment preflight still
+checks the Doppler URL and constructor inputs. Upgrade the Doppler RPC
+endpoint to a compatible version before switching these commands back to
+`--url`.
+
 ```bash
 scarb build
 snforge test
 DOPPLER_CONFIG=dev npm run env:check -- game --online
+sncast utils class-hash --contract-name HelloStarknet
+
+DOPPLER_CONFIG=dev npm exec -- varlock run -- bash -c '
+  sncast --account "$SNCAST_ACCOUNT" declare \
+    --contract-name HelloStarknet \
+    --network sepolia \
+    --dry-run --detailed
+'
 
 DOPPLER_CONFIG=dev npm exec -- varlock run -- bash -c '
   sncast --account "$SNCAST_ACCOUNT" --wait declare \
     --contract-name HelloStarknet \
-    --url "$STARKNET_RPC_URL"
+    --network sepolia
 '
 
-export GAME_CLASS_HASH=0x... # class hash printed by declare
+export GAME_CLASS_HASH=0x... # exact class hash printed by the accepted declaration
+
+DOPPLER_CONFIG=dev GAME_CLASS_HASH="$GAME_CLASS_HASH" npm exec -- varlock run -- bash -c '
+  : "${GAME_CLASS_HASH:?set GAME_CLASS_HASH to the hash printed by declare}"
+  sncast --account "$SNCAST_ACCOUNT" deploy \
+    --class-hash "$GAME_CLASS_HASH" \
+    --arguments "$VRF_PROVIDER_ADDRESS,$USDC_TOKEN_ADDRESS,$ROZ_TOKEN_ADDRESS,$ROUND_KEEPER_ADDRESS,$ADMIN_ADDRESS,$PAUSER_ADDRESS,$UPGRADE_DELAY" \
+    --network sepolia \
+    --dry-run --detailed
+'
 
 DOPPLER_CONFIG=dev GAME_CLASS_HASH="$GAME_CLASS_HASH" npm exec -- varlock run -- bash -c '
   : "${GAME_CLASS_HASH:?set GAME_CLASS_HASH to the hash printed by declare}"
   sncast --account "$SNCAST_ACCOUNT" --wait deploy \
     --class-hash "$GAME_CLASS_HASH" \
     --arguments "$VRF_PROVIDER_ADDRESS,$USDC_TOKEN_ADDRESS,$ROZ_TOKEN_ADDRESS,$ROUND_KEEPER_ADDRESS,$ADMIN_ADDRESS,$PAUSER_ADDRESS,$UPGRADE_DELAY" \
-    --url "$STARKNET_RPC_URL"
+    --network sepolia
 '
 ```
+
+`deploy --class-hash` does not declare a missing class. Wait for the declare
+transaction to be accepted, then use its reported class hash; if it differs
+from the local hash, stop and inspect the build before deploying. Do not
+retry a failed deployment until the declaration is confirmed on Sepolia.
 
 `GAME_CLASS_HASH` is a shell variable, not a Doppler secret — a class hash
 changes with every build, so it does not belong in `.env.schema` alongside the
@@ -323,22 +354,21 @@ block, and class hash. Verify the deployment before repointing anything:
 ```bash
 export GAME_CONTRACT_ADDRESS=0x...
 
-sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function owner --url "$STARKNET_RPC_URL"
-sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function get_admin --url "$STARKNET_RPC_URL"
-sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function get_upgrade_delay --url "$STARKNET_RPC_URL"
-sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function is_paused --url "$STARKNET_RPC_URL"
-sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function get_game_token --url "$STARKNET_RPC_URL"
-sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function get_game_reward_token --url "$STARKNET_RPC_URL"
-sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function get_vrf_provider --url "$STARKNET_RPC_URL"
-sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function get_round_keeper --url "$STARKNET_RPC_URL"
-sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function get_game_week --url "$STARKNET_RPC_URL"
-sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function get_min_treasures_to_start --url "$STARKNET_RPC_URL"
+sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function owner --network sepolia
+sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function get_admin --network sepolia
+sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function get_upgrade_delay --network sepolia
+sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function is_paused --network sepolia
+sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function get_contract_addresses --network sepolia
+sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function get_round_keeper --network sepolia
+sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function get_game_week --network sepolia
+sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function get_min_treasures_to_start --network sepolia
 ```
 
-Expected initial state is round `0`, minimum staged treasures `2`, not paused,
-and all configured addresses returned unchanged. Verify role membership with
-`has_role`: admin has the default-admin, admin, and upgrade selectors; pauser
-has only the pause selector.
+Expected initial state is round `0` and paused; configurable gameplay values
+must be initialized before unpausing. `get_contract_addresses` returns VRF,
+game token, and reward token addresses in that order. Verify role membership
+with `has_role`: admin has the default-admin, admin, and upgrade selectors;
+pauser has only the pause selector.
 
 ## Coordinated deployment checklist
 

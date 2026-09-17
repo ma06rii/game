@@ -178,15 +178,23 @@ otherwise.
 ### 4. Declare and deploy
 
 Run the online preflight first. It validates every required variable, confirms
-the RPC really is Sepolia, and checks that both sncast aliases resolve locally
-to their configured addresses:
+the configured Doppler RPC really is Sepolia, and checks that both sncast
+aliases resolve locally to their configured addresses:
 
 ```bash
 DOPPLER_CONFIG=dev npm run env:check -- game --online
 ```
 
-Every `sncast` call below runs inside `varlock run -- bash -c '...'`. Both halves
-matter. Varlock injects the Doppler values, and the single-quoted `bash -c`
+As checked on 2026-09-16, the Doppler `STARKNET_RPC_URL` serves RPC 0.9.0,
+but `sncast 0.62.1` expects 0.10.0. A declaration dry-run through that URL
+failed; the predefined `--network sepolia` provider succeeded. Use
+`--network sepolia` consistently for this declaration, deployment, and
+post-deploy reads. The online preflight checks the Doppler RPC, not the
+provider selected by `--network`. Upgrade the Doppler URL before using it
+with `sncast` again.
+
+Every `sncast` transaction call below runs inside `varlock run -- bash -c '...'`.
+Both halves matter. Varlock injects the Doppler values, and the single-quoted `bash -c`
 defers `$VAR` expansion into the child process. Writing
 `varlock run -- sncast --arguments "$ADMIN_ADDRESS"` does not work: the outer
 shell expands the variable before Varlock ever runs, so sncast receives an empty
@@ -196,34 +204,48 @@ string and the constructor silently takes a zero address.
 DOPPLER_CONFIG=dev npm exec -- varlock run -- bash -c '
   sncast --account "$SNCAST_ACCOUNT" declare \
     --contract-name HelloStarknet \
-    --url "$STARKNET_RPC_URL" \
+    --network sepolia \
     --dry-run --detailed
 '
 
 DOPPLER_CONFIG=dev npm exec -- varlock run -- bash -c '
   sncast --account "$SNCAST_ACCOUNT" --wait declare \
     --contract-name HelloStarknet \
-    --url "$STARKNET_RPC_URL"
+    --network sepolia
 '
 
-export GAME_CLASS_HASH=0x... # class hash printed by declare
+export GAME_CLASS_HASH=0x... # exact class hash printed by the accepted declaration
+
+DOPPLER_CONFIG=dev GAME_CLASS_HASH="$GAME_CLASS_HASH" npm exec -- varlock run -- bash -c '
+  : "${GAME_CLASS_HASH:?set GAME_CLASS_HASH to the hash printed by declare}"
+  sncast --account "$SNCAST_ACCOUNT" deploy \
+    --class-hash "$GAME_CLASS_HASH" \
+    --arguments "$VRF_PROVIDER_ADDRESS,$USDC_TOKEN_ADDRESS,$ROZ_TOKEN_ADDRESS,$ROUND_KEEPER_ADDRESS,$ADMIN_ADDRESS,$PAUSER_ADDRESS,$UPGRADE_DELAY" \
+    --network sepolia \
+    --dry-run --detailed
+'
 
 DOPPLER_CONFIG=dev GAME_CLASS_HASH="$GAME_CLASS_HASH" npm exec -- varlock run -- bash -c '
   : "${GAME_CLASS_HASH:?set GAME_CLASS_HASH to the hash printed by declare}"
   sncast --account "$SNCAST_ACCOUNT" --wait deploy \
     --class-hash "$GAME_CLASS_HASH" \
     --arguments "$VRF_PROVIDER_ADDRESS,$USDC_TOKEN_ADDRESS,$ROZ_TOKEN_ADDRESS,$ROUND_KEEPER_ADDRESS,$ADMIN_ADDRESS,$PAUSER_ADDRESS,$UPGRADE_DELAY" \
-    --url "$STARKNET_RPC_URL"
+    --network sepolia
 '
 ```
+
+`deploy --class-hash` does not declare a missing class. Wait for the declare
+transaction to be accepted, then compare its reported hash with the local
+`sncast utils class-hash --contract-name HelloStarknet` result. If they
+differ, stop and inspect the build before deploying. Do not retry a failed
+deployment until declaration is confirmed on Sepolia.
 
 `GAME_CLASS_HASH` is a shell variable rather than a Doppler secret. Varlock does
 forward the ambient environment to the child, so an `export`ed value would reach
 sncast — but passing it explicitly on the command line as shown works whether or
 not it was exported, which is why every block does it that way. The `:?` line
 aborts with a named error if it is unset, rather than letting sncast receive
-`--class-hash ""`. Append `--dry-run --detailed` to the deploy to rehearse it as
-a fee estimate first.
+`--class-hash ""`.
 
 Official Starknet Foundry references:
 
@@ -250,17 +272,18 @@ The constructor deliberately pauses the contract. As the admin:
 Use the exact commands in the `Post-deploy initialisation` section of
 `ROZ_DEPLOYMENT_AND_FUNDING.md`.
 
-Do not follow the contradictory contract README section that says the initial
-deployment is unpaused or calls `get_game_token`, `get_game_reward_token`, and
-`get_vrf_provider`. Those getters were removed to meet the class-size ceiling.
-Use:
+The contract deploys paused. Use the grouped `get_contract_addresses` getter
+instead of the removed `get_game_token`, `get_game_reward_token`, and
+`get_vrf_provider` getters. After recording the address printed by deploy, use:
 
 ```bash
-sncast call --contract-address "$GAME" \
-  --function get_contract_addresses --url "$STARKNET_RPC_URL"
+export GAME=0x... # contract address printed by deploy
 
 sncast call --contract-address "$GAME" \
-  --function is_paused --url "$STARKNET_RPC_URL"
+  --function get_contract_addresses --network sepolia
+
+sncast call --contract-address "$GAME" \
+  --function is_paused --network sepolia
 ```
 
 Keep the contract paused until the backend, indexers, and frontend are ready.
@@ -457,9 +480,9 @@ ended early because it contains no treasures.
 
 - Rotate or restrict the exposed Alchemy key committed in
   `contractAddresses.js`, `standardWallet.js`, and historical documentation.
-- Correct the stale contract README deployment checks.
+- Keep the contract README deployment checks aligned with the deployed ABI
+  and paused initial state.
 - Correct frontend documentation that says Sepolia ETH is required; the current
   transaction flow uses STRK.
 - Keep starterpack/Controller disabled until its contract, Arcade IDs,
   inventory, and Neon variables are genuinely configured.
-

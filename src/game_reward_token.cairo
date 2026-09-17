@@ -56,7 +56,7 @@ mod ROZToken {
 
     #[constructor]
     fn constructor(ref self: ContractState, recipient: ContractAddress, owner: ContractAddress) {
-        self.erc20.initializer("ROZToken", "ROZ");
+        self.erc20.initializer("Zee Bucks", "RZBX");
         self.ownable.initializer(owner);
 
         self.erc20.mint(recipient, 5000000000000000000000000000);
