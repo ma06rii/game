@@ -6,12 +6,12 @@ edition = "2023_11"
 # See more keys and their definitions at https://docs.swmansion.com/scarb/docs/reference/manifest.html
 
 [dependencies]
-starknet = "2.20.0"
+starknet = "2.19.0"
 openzeppelin = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v2.0.0" }
 
 [dev-dependencies]
 # Must match the installed snforge binary. v0.24.0 was pinned against a much
-# older toolchain and no longer compiles under Cairo 2.20.0 - its cheatcodes
+# older toolchain and no longer compiles under the current Cairo toolchain - its cheatcodes
 # derive `Display`, which that Cairo release does not provide.
 snforge_std = { git = "https://github.com/foundry-rs/starknet-foundry", tag = "v0.62.1" }
 
@@ -32,6 +32,20 @@ source-path = "tests/test_contract.cairo"
 test-type = "integration"
 build-external-contracts = [
     "project_name::HelloStarknet",
+    "project_name::game_roundactions_facet::GameRoundActionsFacet",
+    "project_name::game_roundviews_facet::GameRoundViewsFacet",
+    "project_name::game_hideactions_facet::GameHideActionsFacet",
+    "project_name::game_hideviews_facet::GameHideViewsFacet",
+    "project_name::game_findervalidation_facet::GameFinderValidationFacet",
+    "project_name::game_finderactions_facet::GameFinderActionsFacet",
+    "project_name::game_finderviews_facet::GameFinderViewsFacet",
+    "project_name::game_usdcclaims_facet::GameUsdcClaimsFacet",
+    "project_name::game_rozclaims_facet::GameRozClaimsFacet",
+    "project_name::game_settingsactions_facet::GameSettingsActionsFacet",
+    "project_name::game_settingsviews_facet::GameSettingsViewsFacet",
+    "project_name::game_treasury_facet::GameTreasuryFacet",
+    "project_name::game_adminupgrade_facet::GameAdminUpgradeFacet",
+    "project_name::game_adminactions_facet::GameAdminActionsFacet",
     "project_name::mock_erc20::MockERC20",
     "project_name::mock_vrf_provider::MockVrfProvider",
 ]

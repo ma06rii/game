@@ -1,0 +1,1646 @@
+{
+  "version": 1,
+  "facetNames": [
+    "GameRoundActionsFacet",
+    "GameRoundViewsFacet",
+    "GameHideActionsFacet",
+    "GameHideViewsFacet",
+    "GameFinderValidationFacet",
+    "GameFinderActionsFacet",
+    "GameFinderViewsFacet",
+    "GameUsdcClaimsFacet",
+    "GameRozClaimsFacet",
+    "GameSettingsActionsFacet",
+    "GameSettingsViewsFacet",
+    "GameTreasuryFacet",
+    "GameAdminUpgradeFacet",
+    "GameAdminActionsFacet"
+  ],
+  "methods": {
+    "start_next_round": {
+      "facet": 0,
+      "view": false
+    },
+    "expire_round": {
+      "facet": 0,
+      "view": false
+    },
+    "get_game_week": {
+      "facet": 1,
+      "view": true
+    },
+    "get_round_status": {
+      "facet": 1,
+      "view": true
+    },
+    "get_next_round_totals": {
+      "facet": 1,
+      "view": true
+    },
+    "get_min_treasures_to_start": {
+      "facet": 1,
+      "view": true
+    },
+    "get_round_keeper": {
+      "facet": 1,
+      "view": true
+    },
+    "update_round_keeper": {
+      "facet": 1,
+      "view": false
+    },
+    "get_game_week_treasure_total": {
+      "facet": 1,
+      "view": true
+    },
+    "get_game_grid_size": {
+      "facet": 1,
+      "view": true
+    },
+    "hide_treasure": {
+      "facet": 2,
+      "view": false
+    },
+    "hide_treasure_bulk": {
+      "facet": 2,
+      "view": false
+    },
+    "get_hider_player_fee": {
+      "facet": 3,
+      "view": true
+    },
+    "set_whitelist_merkle_root": {
+      "facet": 3,
+      "view": false
+    },
+    "get_whitelist_merkle_root": {
+      "facet": 3,
+      "view": true
+    },
+    "get_whitelist_caps": {
+      "facet": 3,
+      "view": true
+    },
+    "get_hide_settings": {
+      "facet": 3,
+      "view": true
+    },
+    "validate_treasure_coordinates": {
+      "facet": 4,
+      "view": false
+    },
+    "finder_player_move_position": {
+      "facet": 5,
+      "view": false
+    },
+    "finder_player_generate_position": {
+      "facet": 5,
+      "view": false
+    },
+    "get_finder_player_position": {
+      "facet": 6,
+      "view": true
+    },
+    "get_free_hops_remaining": {
+      "facet": 6,
+      "view": true
+    },
+    "get_player_daily_state": {
+      "facet": 6,
+      "view": true
+    },
+    "get_player_lifetime_spend": {
+      "facet": 6,
+      "view": true
+    },
+    "get_minimum_allowance_fee": {
+      "facet": 6,
+      "view": true
+    },
+    "claim_reward": {
+      "facet": 7,
+      "view": false
+    },
+    "get_reward_claimed": {
+      "facet": 7,
+      "view": true
+    },
+    "get_claimable_weeks": {
+      "facet": 7,
+      "view": true
+    },
+    "get_claim_share_amounts": {
+      "facet": 7,
+      "view": true
+    },
+    "get_player_reward_due": {
+      "facet": 7,
+      "view": true
+    },
+    "claim_reward_tokens": {
+      "facet": 8,
+      "view": false
+    },
+    "claim_reward_token_for_week": {
+      "facet": 8,
+      "view": false
+    },
+    "get_reward_token_pending": {
+      "facet": 8,
+      "view": true
+    },
+    "get_total_reward_token_pending": {
+      "facet": 8,
+      "view": true
+    },
+    "get_reward_token_missed": {
+      "facet": 8,
+      "view": true
+    },
+    "get_total_reward_token_missed": {
+      "facet": 8,
+      "view": true
+    },
+    "claim_missed_reward_token": {
+      "facet": 8,
+      "view": false
+    },
+    "get_reward_token_claimed": {
+      "facet": 8,
+      "view": true
+    },
+    "get_reward_token_due": {
+      "facet": 8,
+      "view": true
+    },
+    "set_params": {
+      "facet": 9,
+      "view": false
+    },
+    "update_price_band": {
+      "facet": 9,
+      "view": false
+    },
+    "get_reward_rates": {
+      "facet": 10,
+      "view": true
+    },
+    "get_below_threshold_rates": {
+      "facet": 10,
+      "view": true
+    },
+    "get_new_wallet_rates": {
+      "facet": 10,
+      "view": true
+    },
+    "get_hop_limits": {
+      "facet": 10,
+      "view": true
+    },
+    "get_soft_caps": {
+      "facet": 10,
+      "view": true
+    },
+    "get_gate_thresholds": {
+      "facet": 10,
+      "view": true
+    },
+    "get_price_band": {
+      "facet": 10,
+      "view": true
+    },
+    "withdraw_token_balance": {
+      "facet": 11,
+      "view": false
+    },
+    "get_sweepable_balance": {
+      "facet": 11,
+      "view": true
+    },
+    "update_vrf_provider": {
+      "facet": 11,
+      "view": false
+    },
+    "update_game_token": {
+      "facet": 11,
+      "view": false
+    },
+    "update_game_reward_token": {
+      "facet": 11,
+      "view": false
+    },
+    "get_contract_addresses": {
+      "facet": 11,
+      "view": true
+    },
+    "pause": {
+      "facet": 12,
+      "view": false
+    },
+    "unpause": {
+      "facet": 12,
+      "view": false
+    },
+    "is_paused": {
+      "facet": 12,
+      "view": true
+    },
+    "propose_upgrade": {
+      "facet": 12,
+      "view": false
+    },
+    "execute_upgrade": {
+      "facet": 12,
+      "view": false
+    },
+    "execute_upgrade_and_migrate": {
+      "facet": 12,
+      "view": false
+    },
+    "cancel_upgrade": {
+      "facet": 12,
+      "view": false
+    },
+    "get_pending_upgrade": {
+      "facet": 12,
+      "view": true
+    },
+    "get_upgrade_delay": {
+      "facet": 12,
+      "view": true
+    },
+    "propose_upgrade_delay": {
+      "facet": 12,
+      "view": false
+    },
+    "set_upgrade_delay": {
+      "facet": 12,
+      "view": false
+    },
+    "cancel_upgrade_delay_change": {
+      "facet": 12,
+      "view": false
+    },
+    "get_pending_upgrade_delay": {
+      "facet": 12,
+      "view": true
+    },
+    "migrate_v2": {
+      "facet": 12,
+      "view": false
+    },
+    "get_upgrade_initialized_version": {
+      "facet": 12,
+      "view": true
+    },
+    "propose_vrf_provider_update": {
+      "facet": 13,
+      "view": false
+    },
+    "propose_game_token_update": {
+      "facet": 13,
+      "view": false
+    },
+    "propose_game_reward_token_update": {
+      "facet": 13,
+      "view": false
+    },
+    "propose_admin_update": {
+      "facet": 13,
+      "view": false
+    },
+    "propose_token_withdrawal": {
+      "facet": 13,
+      "view": false
+    },
+    "propose_full_token_withdrawal": {
+      "facet": 13,
+      "view": false
+    },
+    "cancel_admin_action": {
+      "facet": 13,
+      "view": false
+    },
+    "get_pending_admin_action": {
+      "facet": 13,
+      "view": true
+    },
+    "set_admin": {
+      "facet": 13,
+      "view": false
+    },
+    "get_admin": {
+      "facet": 13,
+      "view": true
+    }
+  },
+  "abi": [
+    {
+      "type": "struct",
+      "name": "core::integer::u256",
+      "members": [
+        {
+          "name": "low",
+          "type": "core::integer::u128"
+        },
+        {
+          "name": "high",
+          "type": "core::integer::u128"
+        }
+      ]
+    },
+    {
+      "type": "struct",
+      "name": "project_name::NextRoundParams",
+      "members": [
+        {
+          "name": "merkle_root",
+          "type": "core::integer::u256"
+        },
+        {
+          "name": "grid_size_x",
+          "type": "core::integer::u128"
+        },
+        {
+          "name": "grid_size_y",
+          "type": "core::integer::u128"
+        },
+        {
+          "name": "expected_active_treasure_count",
+          "type": "core::integer::u256"
+        },
+        {
+          "name": "expected_total_hidden_value",
+          "type": "core::integer::u256"
+        },
+        {
+          "name": "hider_stake",
+          "type": "core::integer::u256"
+        },
+        {
+          "name": "hide_fee_base",
+          "type": "core::integer::u256"
+        },
+        {
+          "name": "hide_fee_high",
+          "type": "core::integer::u256"
+        },
+        {
+          "name": "hop_price_0",
+          "type": "core::integer::u256"
+        },
+        {
+          "name": "hop_price_1",
+          "type": "core::integer::u256"
+        },
+        {
+          "name": "hop_price_2",
+          "type": "core::integer::u256"
+        },
+        {
+          "name": "hop_price_3",
+          "type": "core::integer::u256"
+        },
+        {
+          "name": "spawn_fee",
+          "type": "core::integer::u256"
+        },
+        {
+          "name": "round_duration",
+          "type": "core::integer::u64"
+        },
+        {
+          "name": "min_duration",
+          "type": "core::integer::u64"
+        },
+        {
+          "name": "near_end_blackout",
+          "type": "core::integer::u64"
+        },
+        {
+          "name": "end_buffer",
+          "type": "core::integer::u64"
+        }
+      ]
+    },
+    {
+      "type": "enum",
+      "name": "core::bool",
+      "variants": [
+        {
+          "name": "False",
+          "type": "()"
+        },
+        {
+          "name": "True",
+          "type": "()"
+        }
+      ]
+    },
+    {
+      "type": "struct",
+      "name": "core::array::Span::<core::felt252>",
+      "members": [
+        {
+          "name": "snapshot",
+          "type": "@core::array::Array::<core::felt252>"
+        }
+      ]
+    },
+    {
+      "type": "interface",
+      "name": "project_name::game_roundactions_facet::IGameRoundActionsFacet",
+      "items": [
+        {
+          "type": "function",
+          "name": "start_next_round",
+          "inputs": [
+            {
+              "name": "params",
+              "type": "project_name::NextRoundParams"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "core::bool"
+            }
+          ],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "expire_round",
+          "inputs": [
+            {
+              "name": "expectedRound",
+              "type": "core::integer::u256"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "core::bool"
+            }
+          ],
+          "state_mutability": "external"
+        }
+      ]
+    },
+    {
+      "type": "interface",
+      "name": "project_name::game_roundviews_facet::IGameRoundViewsFacet",
+      "items": [
+        {
+          "type": "function",
+          "name": "get_game_week",
+          "inputs": [],
+          "outputs": [
+            {
+              "type": "core::integer::u256"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "get_round_status",
+          "inputs": [],
+          "outputs": [
+            {
+              "type": "(core::integer::u256, core::integer::u8, core::integer::u64, core::integer::u64, core::integer::u64, core::integer::u256, core::integer::u256, core::integer::u64)"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "get_next_round_totals",
+          "inputs": [],
+          "outputs": [
+            {
+              "type": "(core::integer::u256, core::integer::u256)"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "get_min_treasures_to_start",
+          "inputs": [],
+          "outputs": [
+            {
+              "type": "core::integer::u256"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "get_round_keeper",
+          "inputs": [],
+          "outputs": [
+            {
+              "type": "core::starknet::contract_address::ContractAddress"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "update_round_keeper",
+          "inputs": [
+            {
+              "name": "keeper",
+              "type": "core::starknet::contract_address::ContractAddress"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "core::bool"
+            }
+          ],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "get_game_week_treasure_total",
+          "inputs": [
+            {
+              "name": "gameWeek",
+              "type": "core::integer::u256"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "core::integer::u256"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "get_game_grid_size",
+          "inputs": [
+            {
+              "name": "gameWeek",
+              "type": "core::integer::u256"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "(core::integer::u128, core::integer::u128)"
+            }
+          ],
+          "state_mutability": "view"
+        }
+      ]
+    },
+    {
+      "type": "interface",
+      "name": "project_name::game_hideactions_facet::IGameHideActionsFacet",
+      "items": [
+        {
+          "type": "function",
+          "name": "hide_treasure",
+          "inputs": [],
+          "outputs": [
+            {
+              "type": "core::bool"
+            }
+          ],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "hide_treasure_bulk",
+          "inputs": [
+            {
+              "name": "bulkAmount",
+              "type": "core::integer::u256"
+            },
+            {
+              "name": "merkleProof",
+              "type": "core::array::Array::<core::felt252>"
+            },
+            {
+              "name": "leafIndex",
+              "type": "core::integer::u32"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "core::bool"
+            }
+          ],
+          "state_mutability": "external"
+        }
+      ]
+    },
+    {
+      "type": "interface",
+      "name": "project_name::game_hideviews_facet::IGameHideViewsFacet",
+      "items": [
+        {
+          "type": "function",
+          "name": "get_hider_player_fee",
+          "inputs": [],
+          "outputs": [
+            {
+              "type": "core::integer::u256"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "set_whitelist_merkle_root",
+          "inputs": [
+            {
+              "name": "newRoot",
+              "type": "core::felt252"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "core::bool"
+            }
+          ],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "get_whitelist_merkle_root",
+          "inputs": [],
+          "outputs": [
+            {
+              "type": "core::felt252"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "get_whitelist_caps",
+          "inputs": [],
+          "outputs": [
+            {
+              "type": "(core::integer::u256, core::integer::u256, core::integer::u256)"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "get_hide_settings",
+          "inputs": [],
+          "outputs": [
+            {
+              "type": "(core::integer::u256, core::integer::u256, core::integer::u256, core::integer::u256, core::integer::u256)"
+            }
+          ],
+          "state_mutability": "view"
+        }
+      ]
+    },
+    {
+      "type": "interface",
+      "name": "project_name::game_findervalidation_facet::IGameFinderValidationFacet",
+      "items": [
+        {
+          "type": "function",
+          "name": "validate_treasure_coordinates",
+          "inputs": [
+            {
+              "name": "finderGamerWalletAddress",
+              "type": "core::starknet::contract_address::ContractAddress"
+            },
+            {
+              "name": "hiderGamerWalletAddress",
+              "type": "core::starknet::contract_address::ContractAddress"
+            },
+            {
+              "name": "leaf",
+              "type": "core::integer::u256"
+            },
+            {
+              "name": "proof",
+              "type": "core::array::Array::<core::integer::u256>"
+            },
+            {
+              "name": "checkHopCount",
+              "type": "core::integer::u256"
+            },
+            {
+              "name": "checkTimestamp",
+              "type": "core::integer::u64"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "core::bool"
+            }
+          ],
+          "state_mutability": "external"
+        }
+      ]
+    },
+    {
+      "type": "interface",
+      "name": "project_name::game_finderactions_facet::IGameFinderActionsFacet",
+      "items": [
+        {
+          "type": "function",
+          "name": "finder_player_move_position",
+          "inputs": [
+            {
+              "name": "direction",
+              "type": "core::integer::u128"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "(core::integer::u128, core::integer::u128)"
+            }
+          ],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "finder_player_generate_position",
+          "inputs": [],
+          "outputs": [
+            {
+              "type": "core::bool"
+            }
+          ],
+          "state_mutability": "external"
+        }
+      ]
+    },
+    {
+      "type": "interface",
+      "name": "project_name::game_finderviews_facet::IGameFinderViewsFacet",
+      "items": [
+        {
+          "type": "function",
+          "name": "get_finder_player_position",
+          "inputs": [
+            {
+              "name": "gamerWalletAddress",
+              "type": "core::starknet::contract_address::ContractAddress"
+            },
+            {
+              "name": "gameWeek",
+              "type": "core::integer::u256"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "(core::integer::u128, core::integer::u128)"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "get_free_hops_remaining",
+          "inputs": [
+            {
+              "name": "gamerWalletAddress",
+              "type": "core::starknet::contract_address::ContractAddress"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "core::integer::u256"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "get_player_daily_state",
+          "inputs": [
+            {
+              "name": "gamerWalletAddress",
+              "type": "core::starknet::contract_address::ContractAddress"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "(core::integer::u256, core::integer::u256, core::integer::u256, core::integer::u256, core::integer::u256)"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "get_player_lifetime_spend",
+          "inputs": [
+            {
+              "name": "gamerWalletAddress",
+              "type": "core::starknet::contract_address::ContractAddress"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "core::integer::u256"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "get_minimum_allowance_fee",
+          "inputs": [],
+          "outputs": [
+            {
+              "type": "core::integer::u256"
+            }
+          ],
+          "state_mutability": "view"
+        }
+      ]
+    },
+    {
+      "type": "interface",
+      "name": "project_name::game_usdcclaims_facet::IGameUsdcClaimsFacet",
+      "items": [
+        {
+          "type": "function",
+          "name": "claim_reward",
+          "inputs": [
+            {
+              "name": "gameWeek",
+              "type": "core::integer::u256"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "core::bool"
+            }
+          ],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "get_reward_claimed",
+          "inputs": [
+            {
+              "name": "gamerWalletAddress",
+              "type": "core::starknet::contract_address::ContractAddress"
+            },
+            {
+              "name": "gameWeek",
+              "type": "core::integer::u256"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "core::bool"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "get_claimable_weeks",
+          "inputs": [
+            {
+              "name": "gamerWalletAddress",
+              "type": "core::starknet::contract_address::ContractAddress"
+            },
+            {
+              "name": "fromWeek",
+              "type": "core::integer::u256"
+            },
+            {
+              "name": "toWeek",
+              "type": "core::integer::u256"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "core::array::Array::<core::integer::u256>"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "get_claim_share_amounts",
+          "inputs": [
+            {
+              "name": "gameWeek",
+              "type": "core::integer::u256"
+            },
+            {
+              "name": "gamerWalletAddress",
+              "type": "core::starknet::contract_address::ContractAddress"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "core::integer::u256"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "get_player_reward_due",
+          "inputs": [
+            {
+              "name": "gameWeek",
+              "type": "core::integer::u256"
+            },
+            {
+              "name": "gamerWalletAddress",
+              "type": "core::starknet::contract_address::ContractAddress"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "core::integer::u256"
+            }
+          ],
+          "state_mutability": "view"
+        }
+      ]
+    },
+    {
+      "type": "interface",
+      "name": "project_name::game_rozclaims_facet::IGameRozClaimsFacet",
+      "items": [
+        {
+          "type": "function",
+          "name": "claim_reward_tokens",
+          "inputs": [],
+          "outputs": [
+            {
+              "type": "core::bool"
+            }
+          ],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "claim_reward_token_for_week",
+          "inputs": [
+            {
+              "name": "gameWeek",
+              "type": "core::integer::u256"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "core::bool"
+            }
+          ],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "get_reward_token_pending",
+          "inputs": [
+            {
+              "name": "gamerWalletAddress",
+              "type": "core::starknet::contract_address::ContractAddress"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "core::integer::u256"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "get_total_reward_token_pending",
+          "inputs": [],
+          "outputs": [
+            {
+              "type": "core::integer::u256"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "get_reward_token_missed",
+          "inputs": [
+            {
+              "name": "gamerWalletAddress",
+              "type": "core::starknet::contract_address::ContractAddress"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "core::integer::u256"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "get_total_reward_token_missed",
+          "inputs": [],
+          "outputs": [
+            {
+              "type": "core::integer::u256"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "claim_missed_reward_token",
+          "inputs": [],
+          "outputs": [
+            {
+              "type": "core::integer::u256"
+            }
+          ],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "get_reward_token_claimed",
+          "inputs": [
+            {
+              "name": "gamerWalletAddress",
+              "type": "core::starknet::contract_address::ContractAddress"
+            },
+            {
+              "name": "gameWeek",
+              "type": "core::integer::u256"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "core::bool"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "get_reward_token_due",
+          "inputs": [
+            {
+              "name": "gamerWalletAddress",
+              "type": "core::starknet::contract_address::ContractAddress"
+            },
+            {
+              "name": "gameWeek",
+              "type": "core::integer::u256"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "(core::integer::u256, core::integer::u256, core::integer::u256)"
+            }
+          ],
+          "state_mutability": "view"
+        }
+      ]
+    },
+    {
+      "type": "interface",
+      "name": "project_name::game_settingsactions_facet::IGameSettingsActionsFacet",
+      "items": [
+        {
+          "type": "function",
+          "name": "set_params",
+          "inputs": [
+            {
+              "name": "keys",
+              "type": "core::array::Array::<core::felt252>"
+            },
+            {
+              "name": "values",
+              "type": "core::array::Array::<core::integer::u256>"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "core::bool"
+            }
+          ],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "update_price_band",
+          "inputs": [
+            {
+              "name": "bandKind",
+              "type": "core::integer::u8"
+            },
+            {
+              "name": "bandIndex",
+              "type": "core::integer::u8"
+            },
+            {
+              "name": "upTo",
+              "type": "core::integer::u256"
+            },
+            {
+              "name": "num",
+              "type": "core::integer::u256"
+            },
+            {
+              "name": "den",
+              "type": "core::integer::u256"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "core::bool"
+            }
+          ],
+          "state_mutability": "external"
+        }
+      ]
+    },
+    {
+      "type": "interface",
+      "name": "project_name::game_settingsviews_facet::IGameSettingsViewsFacet",
+      "items": [
+        {
+          "type": "function",
+          "name": "get_reward_rates",
+          "inputs": [],
+          "outputs": [
+            {
+              "type": "(core::integer::u256, core::integer::u256, core::integer::u256, core::integer::u256, core::integer::u256)"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "get_below_threshold_rates",
+          "inputs": [],
+          "outputs": [
+            {
+              "type": "(core::integer::u256, core::integer::u256, core::integer::u256, core::integer::u256)"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "get_new_wallet_rates",
+          "inputs": [],
+          "outputs": [
+            {
+              "type": "(core::integer::u256, core::integer::u256, core::integer::u256, core::integer::u256)"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "get_hop_limits",
+          "inputs": [],
+          "outputs": [
+            {
+              "type": "(core::integer::u256, core::integer::u256, core::integer::u256, core::integer::u256)"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "get_soft_caps",
+          "inputs": [],
+          "outputs": [
+            {
+              "type": "(core::integer::u256, core::integer::u256, core::integer::u256, core::integer::u256)"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "get_gate_thresholds",
+          "inputs": [],
+          "outputs": [
+            {
+              "type": "(core::integer::u256, core::integer::u256)"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "get_price_band",
+          "inputs": [
+            {
+              "name": "bandKind",
+              "type": "core::integer::u8"
+            },
+            {
+              "name": "bandIndex",
+              "type": "core::integer::u8"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "(core::integer::u256, core::integer::u256, core::integer::u256)"
+            }
+          ],
+          "state_mutability": "view"
+        }
+      ]
+    },
+    {
+      "type": "interface",
+      "name": "project_name::game_treasury_facet::IGameTreasuryFacet",
+      "items": [
+        {
+          "type": "function",
+          "name": "withdraw_token_balance",
+          "inputs": [
+            {
+              "name": "tokenAddress",
+              "type": "core::starknet::contract_address::ContractAddress"
+            },
+            {
+              "name": "receiver",
+              "type": "core::starknet::contract_address::ContractAddress"
+            }
+          ],
+          "outputs": [],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "get_sweepable_balance",
+          "inputs": [
+            {
+              "name": "tokenAddress",
+              "type": "core::starknet::contract_address::ContractAddress"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "core::integer::u256"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "update_vrf_provider",
+          "inputs": [
+            {
+              "name": "vrfProviderAddress",
+              "type": "core::starknet::contract_address::ContractAddress"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "core::bool"
+            }
+          ],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "update_game_token",
+          "inputs": [
+            {
+              "name": "gameTokenAddress",
+              "type": "core::starknet::contract_address::ContractAddress"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "core::bool"
+            }
+          ],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "update_game_reward_token",
+          "inputs": [
+            {
+              "name": "rewardTokenAddress",
+              "type": "core::starknet::contract_address::ContractAddress"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "core::bool"
+            }
+          ],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "get_contract_addresses",
+          "inputs": [],
+          "outputs": [
+            {
+              "type": "(core::starknet::contract_address::ContractAddress, core::starknet::contract_address::ContractAddress, core::starknet::contract_address::ContractAddress)"
+            }
+          ],
+          "state_mutability": "view"
+        }
+      ]
+    },
+    {
+      "type": "interface",
+      "name": "project_name::game_adminupgrade_facet::IGameAdminUpgradeFacet",
+      "items": [
+        {
+          "type": "function",
+          "name": "pause",
+          "inputs": [],
+          "outputs": [],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "unpause",
+          "inputs": [],
+          "outputs": [],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "is_paused",
+          "inputs": [],
+          "outputs": [
+            {
+              "type": "core::bool"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "propose_upgrade",
+          "inputs": [
+            {
+              "name": "new_class_hash",
+              "type": "core::starknet::class_hash::ClassHash"
+            }
+          ],
+          "outputs": [],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "execute_upgrade",
+          "inputs": [],
+          "outputs": [],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "execute_upgrade_and_migrate",
+          "inputs": [
+            {
+              "name": "selector",
+              "type": "core::felt252"
+            },
+            {
+              "name": "calldata",
+              "type": "core::array::Span::<core::felt252>"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "core::array::Span::<core::felt252>"
+            }
+          ],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "cancel_upgrade",
+          "inputs": [],
+          "outputs": [],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "get_pending_upgrade",
+          "inputs": [],
+          "outputs": [
+            {
+              "type": "(core::starknet::class_hash::ClassHash, core::integer::u64)"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "get_upgrade_delay",
+          "inputs": [],
+          "outputs": [
+            {
+              "type": "core::integer::u64"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "propose_upgrade_delay",
+          "inputs": [
+            {
+              "name": "new_delay",
+              "type": "core::integer::u64"
+            }
+          ],
+          "outputs": [],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "set_upgrade_delay",
+          "inputs": [
+            {
+              "name": "new_delay",
+              "type": "core::integer::u64"
+            }
+          ],
+          "outputs": [],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "cancel_upgrade_delay_change",
+          "inputs": [],
+          "outputs": [],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "get_pending_upgrade_delay",
+          "inputs": [],
+          "outputs": [
+            {
+              "type": "(core::bool, core::integer::u64, core::integer::u64)"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "migrate_v2",
+          "inputs": [],
+          "outputs": [
+            {
+              "type": "core::bool"
+            }
+          ],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "get_upgrade_initialized_version",
+          "inputs": [],
+          "outputs": [
+            {
+              "type": "core::integer::u256"
+            }
+          ],
+          "state_mutability": "view"
+        }
+      ]
+    },
+    {
+      "type": "interface",
+      "name": "project_name::game_adminactions_facet::IGameAdminActionsFacet",
+      "items": [
+        {
+          "type": "function",
+          "name": "propose_vrf_provider_update",
+          "inputs": [
+            {
+              "name": "vrf_provider_address",
+              "type": "core::starknet::contract_address::ContractAddress"
+            }
+          ],
+          "outputs": [],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "propose_game_token_update",
+          "inputs": [
+            {
+              "name": "game_token_address",
+              "type": "core::starknet::contract_address::ContractAddress"
+            }
+          ],
+          "outputs": [],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "propose_game_reward_token_update",
+          "inputs": [
+            {
+              "name": "reward_token_address",
+              "type": "core::starknet::contract_address::ContractAddress"
+            }
+          ],
+          "outputs": [],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "propose_admin_update",
+          "inputs": [
+            {
+              "name": "new_admin",
+              "type": "core::starknet::contract_address::ContractAddress"
+            }
+          ],
+          "outputs": [],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "propose_token_withdrawal",
+          "inputs": [
+            {
+              "name": "token_address",
+              "type": "core::starknet::contract_address::ContractAddress"
+            },
+            {
+              "name": "receiver",
+              "type": "core::starknet::contract_address::ContractAddress"
+            }
+          ],
+          "outputs": [],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "propose_full_token_withdrawal",
+          "inputs": [
+            {
+              "name": "token_address",
+              "type": "core::starknet::contract_address::ContractAddress"
+            },
+            {
+              "name": "receiver",
+              "type": "core::starknet::contract_address::ContractAddress"
+            }
+          ],
+          "outputs": [],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "cancel_admin_action",
+          "inputs": [],
+          "outputs": [],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "get_pending_admin_action",
+          "inputs": [],
+          "outputs": [
+            {
+              "type": "(core::felt252, core::felt252, core::integer::u64)"
+            }
+          ],
+          "state_mutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "set_admin",
+          "inputs": [
+            {
+              "name": "new_admin",
+              "type": "core::starknet::contract_address::ContractAddress"
+            }
+          ],
+          "outputs": [],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "get_admin",
+          "inputs": [],
+          "outputs": [
+            {
+              "type": "core::starknet::contract_address::ContractAddress"
+            }
+          ],
+          "state_mutability": "view"
+        }
+      ]
+    }
+  ]
+}

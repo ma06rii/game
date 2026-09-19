@@ -3,6 +3,14 @@
 Operational notes for the live Sepolia deployment. Every address and balance
 below was **read from the chain**, not copied from a note.
 
+> **Routed-game ABI warning (2026-09-18):** The game declare, deploy,
+> initialization, and verification commands below describe the older
+> single-class ABI. Do not use them for the current 15-class routed release.
+> Follow [the routed Sepolia deployment runbook](docs/SEPOLIA_ROUTED_GAME_DEPLOYMENT.md)
+> for class declarations, deployment, and paused-instance verification. Its
+> route-aware initialization and service cutover remain separate work. The
+> token funding notes in this document are historical operational context.
+
 For what the contract does, see `ROZ_REWARD_TOKEN_PLAN.md`. For what was built
 and how to run the tests, see `ROZ_IMPLEMENTATION_NOTES.md`.
 

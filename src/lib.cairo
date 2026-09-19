@@ -23,7 +23,158 @@ mod mock_vrf_provider;
 // collected payment for a registered starter pack. The contract distributes
 // pre-funded USDC, STRK and ROZ; it never charges the buyer itself.
 pub mod starterpack;
+pub mod game_roundactions_facet;
+pub mod game_roundviews_facet;
+pub mod game_hideactions_facet;
+pub mod game_hideviews_facet;
+pub mod game_findervalidation_facet;
+pub mod game_finderactions_facet;
+pub mod game_finderviews_facet;
+pub mod game_usdcclaims_facet;
+pub mod game_rozclaims_facet;
+pub mod game_settingsactions_facet;
+pub mod game_settingsviews_facet;
+pub mod game_treasury_facet;
+pub mod game_adminupgrade_facet;
+pub mod game_adminactions_facet;
 use starknet::{ClassHash, ContractAddress};
+
+#[starknet::interface]
+pub trait IRoutedGame<TContractState> {
+    fn route(
+        ref self: TContractState, facet: u8, selector: felt252, calldata: Span<felt252>,
+    ) -> Span<felt252>;
+    fn get_facet_hash(self: @TContractState, facet: u8) -> ClassHash;
+}
+
+pub trait MainGameLogic<TContractState> {
+    fn logic_start_next_round(ref self: TContractState, params: NextRoundParams) -> bool;
+    fn logic_expire_round(ref self: TContractState, expectedRound: u256) -> bool;
+    fn logic_hide_treasure(ref self: TContractState) -> bool;
+    fn logic_hide_treasure_bulk(
+        ref self: TContractState, bulkAmount: u256, merkleProof: Array<felt252>, leafIndex: u32,
+    ) -> bool;
+    fn logic_validate_treasure_coordinates(
+        ref self: TContractState,
+        finderGamerWalletAddress: ContractAddress,
+        hiderGamerWalletAddress: ContractAddress,
+        leaf: u256,
+        proof: Array<u256>,
+        checkHopCount: u256,
+        checkTimestamp: u64,
+    ) -> bool;
+    fn logic_finder_player_move_position(ref self: TContractState, direction: u128) -> (u128, u128);
+    fn logic_get_finder_player_position(
+        self: @TContractState, gamerWalletAddress: ContractAddress, gameWeek: u256,
+    ) -> (u128, u128);
+    fn logic_get_minimum_allowance_fee(self: @TContractState) -> u256;
+    fn logic_claim_reward(ref self: TContractState, gameWeek: u256) -> bool;
+    fn logic_claim_reward_tokens(ref self: TContractState) -> bool;
+    fn logic_claim_reward_token_for_week(ref self: TContractState, gameWeek: u256) -> bool;
+    fn logic_get_reward_token_pending(self: @TContractState, gamerWalletAddress: ContractAddress) -> u256;
+    fn logic_get_total_reward_token_pending(self: @TContractState) -> u256;
+    fn logic_get_reward_token_missed(self: @TContractState, gamerWalletAddress: ContractAddress) -> u256;
+    fn logic_get_total_reward_token_missed(self: @TContractState) -> u256;
+    fn logic_claim_missed_reward_token(ref self: TContractState) -> u256;
+    fn logic_get_reward_token_claimed(
+        self: @TContractState, gamerWalletAddress: ContractAddress, gameWeek: u256,
+    ) -> bool;
+    fn logic_get_reward_claimed(
+        self: @TContractState, gamerWalletAddress: ContractAddress, gameWeek: u256,
+    ) -> bool;
+    fn logic_get_claimable_weeks(
+        self: @TContractState, gamerWalletAddress: ContractAddress, fromWeek: u256, toWeek: u256,
+    ) -> Array<u256>;
+    fn logic_get_reward_token_due(
+        self: @TContractState, gamerWalletAddress: ContractAddress, gameWeek: u256,
+    ) -> (u256, u256, u256);
+    fn logic_update_vrf_provider(ref self: TContractState, vrfProviderAddress: ContractAddress) -> bool;
+    fn logic_update_game_token(ref self: TContractState, gameTokenAddress: ContractAddress) -> bool;
+    fn logic_update_game_reward_token(
+        ref self: TContractState, rewardTokenAddress: ContractAddress,
+    ) -> bool;
+    fn logic_get_contract_addresses(
+        self: @TContractState,
+    ) -> (ContractAddress, ContractAddress, ContractAddress);
+    fn logic_get_reward_rates(self: @TContractState) -> (u256, u256, u256, u256, u256);
+    fn logic_get_below_threshold_rates(self: @TContractState) -> (u256, u256, u256, u256);
+    fn logic_get_new_wallet_rates(self: @TContractState) -> (u256, u256, u256, u256);
+    fn logic_get_hop_limits(self: @TContractState) -> (u256, u256, u256, u256);
+    fn logic_get_soft_caps(self: @TContractState) -> (u256, u256, u256, u256);
+    fn logic_get_gate_thresholds(self: @TContractState) -> (u256, u256);
+    fn logic_get_hide_settings(self: @TContractState) -> (u256, u256, u256, u256, u256);
+    fn logic_set_whitelist_merkle_root(ref self: TContractState, newRoot: felt252) -> bool;
+    fn logic_get_whitelist_merkle_root(self: @TContractState) -> felt252;
+    fn logic_get_whitelist_caps(self: @TContractState) -> (u256, u256, u256);
+    fn logic_set_params(ref self: TContractState, keys: Array<felt252>, values: Array<u256>) -> bool;
+    fn logic_update_price_band(
+        ref self: TContractState, bandKind: u8, bandIndex: u8, upTo: u256, num: u256, den: u256,
+    ) -> bool;
+    fn logic_get_price_band(self: @TContractState, bandKind: u8, bandIndex: u8) -> (u256, u256, u256);
+    fn logic_get_player_daily_state(
+        self: @TContractState, gamerWalletAddress: ContractAddress,
+    ) -> (u256, u256, u256, u256, u256);
+    fn logic_get_player_lifetime_spend(
+        self: @TContractState, gamerWalletAddress: ContractAddress,
+    ) -> u256;
+    fn logic_get_free_hops_remaining(self: @TContractState, gamerWalletAddress: ContractAddress) -> u256;
+    fn logic_finder_player_generate_position(ref self: TContractState) -> bool;
+    fn logic_withdraw_token_balance(
+        ref self: TContractState, tokenAddress: ContractAddress, receiver: ContractAddress,
+    );
+    fn logic_get_sweepable_balance(self: @TContractState, tokenAddress: ContractAddress) -> u256;
+    fn logic_get_game_week(self: @TContractState) -> u256;
+    fn logic_get_round_status(self: @TContractState) -> (u256, u8, u64, u64, u64, u256, u256, u64);
+    fn logic_get_next_round_totals(self: @TContractState) -> (u256, u256);
+    fn logic_get_min_treasures_to_start(self: @TContractState) -> u256;
+    fn logic_get_round_keeper(self: @TContractState) -> ContractAddress;
+    fn logic_update_round_keeper(ref self: TContractState, keeper: ContractAddress) -> bool;
+    fn logic_get_game_week_treasure_total(self: @TContractState, gameWeek: u256) -> u256;
+    fn logic_get_game_grid_size(self: @TContractState, gameWeek: u256) -> (u128, u128);
+    fn logic_get_hider_player_fee(self: @TContractState) -> u256;
+    fn logic_get_claim_share_amounts(
+        self: @TContractState, gameWeek: u256, gamerWalletAddress: ContractAddress,
+    ) -> u256;
+    fn logic_get_player_reward_due(
+        self: @TContractState, gameWeek: u256, gamerWalletAddress: ContractAddress,
+    ) -> u256;
+}
+
+pub trait AdminGameLogic<TContractState> {
+    fn logic_pause(ref self: TContractState);
+    fn logic_unpause(ref self: TContractState);
+    fn logic_is_paused(self: @TContractState) -> bool;
+    fn logic_propose_upgrade(ref self: TContractState, new_class_hash: ClassHash);
+    fn logic_execute_upgrade(ref self: TContractState);
+    fn logic_execute_upgrade_and_migrate(
+        ref self: TContractState, selector: felt252, calldata: Span<felt252>,
+    ) -> Span<felt252>;
+    fn logic_cancel_upgrade(ref self: TContractState);
+    fn logic_get_pending_upgrade(self: @TContractState) -> (ClassHash, u64);
+    fn logic_get_upgrade_delay(self: @TContractState) -> u64;
+    fn logic_propose_upgrade_delay(ref self: TContractState, new_delay: u64);
+    fn logic_set_upgrade_delay(ref self: TContractState, new_delay: u64);
+    fn logic_cancel_upgrade_delay_change(ref self: TContractState);
+    fn logic_get_pending_upgrade_delay(self: @TContractState) -> (bool, u64, u64);
+    fn logic_propose_vrf_provider_update(ref self: TContractState, vrf_provider_address: ContractAddress);
+    fn logic_propose_game_token_update(ref self: TContractState, game_token_address: ContractAddress);
+    fn logic_propose_game_reward_token_update(
+        ref self: TContractState, reward_token_address: ContractAddress,
+    );
+    fn logic_propose_admin_update(ref self: TContractState, new_admin: ContractAddress);
+    fn logic_propose_token_withdrawal(
+        ref self: TContractState, token_address: ContractAddress, receiver: ContractAddress,
+    );
+    fn logic_propose_full_token_withdrawal(
+        ref self: TContractState, token_address: ContractAddress, receiver: ContractAddress,
+    );
+    fn logic_cancel_admin_action(ref self: TContractState);
+    fn logic_get_pending_admin_action(self: @TContractState) -> (felt252, felt252, u64);
+    fn logic_set_admin(ref self: TContractState, new_admin: ContractAddress);
+    fn logic_get_admin(self: @TContractState) -> ContractAddress;
+    fn logic_migrate_v2(ref self: TContractState) -> bool;
+    fn logic_get_upgrade_initialized_version(self: @TContractState) -> u256;
+}
 
 #[derive(Drop, Copy, Clone, Serde)]
 pub struct NextRoundParams {
@@ -299,7 +450,7 @@ trait InternalFunctionsTrait<TContractState> {
 }
 
 #[starknet::contract]
-mod HelloStarknet {
+pub mod HelloStarknet {
     use core::array::ArrayTrait;
     use core::hash::HashStateTrait;
     use core::integer::{BoundedInt, u128_byte_reverse};
@@ -987,6 +1138,13 @@ mod HelloStarknet {
         settings_initialized: bool,
         hop_bands_initialized: u8,
         volume_bands_initialized: u8,
+        // Class hashes for stateless logic facets. Index order is documented below.
+        module_hashes: LegacyMap<u8, ClassHash>,
+    }
+
+    // A library call retains the game address, caller and storage context.
+    pub fn game_contract_state() -> ContractState {
+        unsafe_new_contract_state()
     }
 
     // vrfProviderAddress is the contract this game will ask for random numbers
@@ -1024,6 +1182,27 @@ mod HelloStarknet {
     //
     // ROZ HAS 18 DECIMALS AND THE GAME TOKEN HAS 6. Every reward literal below
     // is 1e18-scaled; every fee literal is 1e6-scaled. They are never mixed.
+    // The selector must exist in the selected declared facet. The facet index
+    // is a fixed allowlist; callers cannot supply an arbitrary class hash.
+    // A library call preserves this game's storage, address, caller and events.
+    #[abi(embed_v0)]
+    impl RoutedGameImpl of super::IRoutedGame<ContractState> {
+        fn route(
+            ref self: ContractState, facet: u8, selector: felt252, calldata: Span<felt252>,
+        ) -> Span<felt252> {
+            assert(facet < 14, 'invalid facet');
+            starknet::syscalls::library_call_syscall(
+                self.module_hashes.read(facet), selector, calldata,
+            )
+                .unwrap_syscall()
+        }
+
+        fn get_facet_hash(self: @ContractState, facet: u8) -> ClassHash {
+            assert(facet < 14, 'invalid facet');
+            self.module_hashes.read(facet)
+        }
+    }
+
     #[constructor]
     fn constructor(
         ref self: ContractState,
@@ -1034,6 +1213,7 @@ mod HelloStarknet {
         adminAddress: ContractAddress,
         pauserAddress: ContractAddress,
         upgradeDelay: u64,
+        facetClassHashes: Array<ClassHash>,
     ) {
         assert(adminAddress.is_non_zero(), 'Admin address is zero');
         assert(pauserAddress.is_non_zero(), 'Pauser address is zero');
@@ -1053,6 +1233,21 @@ mod HelloStarknet {
         self.admin_address.write(adminAddress);
         self.upgrade_delay.write(upgradeDelay);
         self.upgrade_initialized_version.write(MIGRATION_VERSION);
+        assert(facetClassHashes.len() == 14, 'wrong facet count');
+        self.module_hashes.write(0, *facetClassHashes.at(0));
+        self.module_hashes.write(1, *facetClassHashes.at(1));
+        self.module_hashes.write(2, *facetClassHashes.at(2));
+        self.module_hashes.write(3, *facetClassHashes.at(3));
+        self.module_hashes.write(4, *facetClassHashes.at(4));
+        self.module_hashes.write(5, *facetClassHashes.at(5));
+        self.module_hashes.write(6, *facetClassHashes.at(6));
+        self.module_hashes.write(7, *facetClassHashes.at(7));
+        self.module_hashes.write(8, *facetClassHashes.at(8));
+        self.module_hashes.write(9, *facetClassHashes.at(9));
+        self.module_hashes.write(10, *facetClassHashes.at(10));
+        self.module_hashes.write(11, *facetClassHashes.at(11));
+        self.module_hashes.write(12, *facetClassHashes.at(12));
+        self.module_hashes.write(13, *facetClassHashes.at(13));
 
         // Previously hardcoded here. Now supplied by whoever deploys the class,
         // so testnet and mainnet can point at different providers. See the
@@ -2731,16 +2926,15 @@ mod HelloStarknet {
         }
     }
 
-    #[abi(embed_v0)]
-    impl GameAdministrationImpl of IGameAdministration<ContractState> {
+    impl AdminGameLogicImpl of crate::AdminGameLogic<ContractState> {
         // Emergency play freeze. Claims, settlement, expiry and administration
         // deliberately do not depend on this flag.
-        fn pause(ref self: ContractState) {
+        fn logic_pause(ref self: ContractState) {
             self.access_control.assert_only_role(PAUSE_ROLE);
             self.pausable.pause();
         }
 
-        fn unpause(ref self: ContractState) {
+        fn logic_unpause(ref self: ContractState) {
             self.access_control.assert_only_role(PAUSE_ROLE);
             assert(self.settings_initialized.read(), 'settings not initialized');
             assert(self.hop_bands_initialized.read() == 4, 'hop bands incomplete');
@@ -2756,13 +2950,13 @@ mod HelloStarknet {
             self.pausable.unpause();
         }
 
-        fn is_paused(self: @ContractState) -> bool {
+        fn logic_is_paused(self: @ContractState) -> bool {
             self.pausable.is_paused()
         }
 
         // Publishing a class hash starts the mandatory review window. It never
         // changes the class by itself, even when a testnet delay is zero.
-        fn propose_upgrade(ref self: ContractState, new_class_hash: ClassHash) {
+        fn logic_propose_upgrade(ref self: ContractState, new_class_hash: ClassHash) {
             self.access_control.assert_only_role(UPGRADE_ROLE);
             assert(new_class_hash.is_non_zero(), 'Class hash is zero');
             assert(self.pending_class_hash.read().is_zero(), 'Upgrade already pending');
@@ -2772,7 +2966,7 @@ mod HelloStarknet {
             self.emit(UpgradeProposed { class_hash: new_class_hash, eta });
         }
 
-        fn execute_upgrade(ref self: ContractState) {
+        fn logic_execute_upgrade(ref self: ContractState) {
             self.access_control.assert_only_role(UPGRADE_ROLE);
             let class_hash = self.pending_class_hash.read();
             assert(class_hash.is_non_zero(), 'No pending upgrade');
@@ -2788,7 +2982,7 @@ mod HelloStarknet {
 
         // The replacement happens first, then Starknet calls this contract with
         // the supplied selector using the new class in the same transaction.
-        fn execute_upgrade_and_migrate(
+        fn logic_execute_upgrade_and_migrate(
             ref self: ContractState, selector: felt252, calldata: Span<felt252>,
         ) -> Span<felt252> {
             self.access_control.assert_only_role(UPGRADE_ROLE);
@@ -2804,7 +2998,7 @@ mod HelloStarknet {
             self.upgradeable.upgrade_and_call(class_hash, selector, calldata)
         }
 
-        fn cancel_upgrade(ref self: ContractState) {
+        fn logic_cancel_upgrade(ref self: ContractState) {
             self.access_control.assert_only_role(UPGRADE_ROLE);
             let class_hash = self.pending_class_hash.read();
             assert(class_hash.is_non_zero(), 'No pending upgrade');
@@ -2813,17 +3007,17 @@ mod HelloStarknet {
             self.emit(UpgradeCancelled { class_hash });
         }
 
-        fn get_pending_upgrade(self: @ContractState) -> (ClassHash, u64) {
+        fn logic_get_pending_upgrade(self: @ContractState) -> (ClassHash, u64) {
             (self.pending_class_hash.read(), self.pending_upgrade_eta.read())
         }
 
-        fn get_upgrade_delay(self: @ContractState) -> u64 {
+        fn logic_get_upgrade_delay(self: @ContractState) -> u64 {
             self.upgrade_delay.read()
         }
 
         // A decrease is scheduled against the OLD delay. It cannot be followed
         // by an immediate zero-delay upgrade from the same compromised key.
-        fn propose_upgrade_delay(ref self: ContractState, new_delay: u64) {
+        fn logic_propose_upgrade_delay(ref self: ContractState, new_delay: u64) {
             self._assert_admin_or_upgrader();
             self._assert_valid_upgrade_delay(new_delay);
             let old_delay = self.upgrade_delay.read();
@@ -2836,7 +3030,7 @@ mod HelloStarknet {
             self.emit(UpgradeDelayChangeProposed { new_delay, eta });
         }
 
-        fn set_upgrade_delay(ref self: ContractState, new_delay: u64) {
+        fn logic_set_upgrade_delay(ref self: ContractState, new_delay: u64) {
             self._assert_admin_or_upgrader();
             self._assert_valid_upgrade_delay(new_delay);
             let old_delay = self.upgrade_delay.read();
@@ -2855,7 +3049,7 @@ mod HelloStarknet {
             self.emit(UpgradeDelayChanged { old_delay, new_delay });
         }
 
-        fn cancel_upgrade_delay_change(ref self: ContractState) {
+        fn logic_cancel_upgrade_delay_change(ref self: ContractState) {
             self._assert_admin_or_upgrader();
             assert(self.pending_delay_exists.read(), 'No pending delay change');
             let proposed_delay = self.pending_delay_value.read();
@@ -2865,7 +3059,7 @@ mod HelloStarknet {
             self.emit(UpgradeDelayChangeCancelled { proposed_delay });
         }
 
-        fn get_pending_upgrade_delay(self: @ContractState) -> (bool, u64, u64) {
+        fn logic_get_pending_upgrade_delay(self: @ContractState) -> (bool, u64, u64) {
             (
                 self.pending_delay_exists.read(),
                 self.pending_delay_value.read(),
@@ -2873,7 +3067,7 @@ mod HelloStarknet {
             )
         }
 
-        fn propose_vrf_provider_update(
+        fn logic_propose_vrf_provider_update(
             ref self: ContractState, vrf_provider_address: ContractAddress,
         ) {
             assert(vrf_provider_address.is_non_zero(), 'VRF provider is zero');
@@ -2882,14 +3076,14 @@ mod HelloStarknet {
             self._schedule_admin_action(ACTION_VRF_PROVIDER, action_hash, false);
         }
 
-        fn propose_game_token_update(ref self: ContractState, game_token_address: ContractAddress) {
+        fn logic_propose_game_token_update(ref self: ContractState, game_token_address: ContractAddress) {
             assert(game_token_address.is_non_zero(), 'Game token is zero');
             let action_hash = self
                 ._admin_action_hash(ACTION_GAME_TOKEN, game_token_address.into(), 0);
             self._schedule_admin_action(ACTION_GAME_TOKEN, action_hash, false);
         }
 
-        fn propose_game_reward_token_update(
+        fn logic_propose_game_reward_token_update(
             ref self: ContractState, reward_token_address: ContractAddress,
         ) {
             assert(reward_token_address.is_non_zero(), 'Reward token is zero');
@@ -2898,14 +3092,14 @@ mod HelloStarknet {
             self._schedule_admin_action(ACTION_REWARD_TOKEN, action_hash, false);
         }
 
-        fn propose_admin_update(ref self: ContractState, new_admin: ContractAddress) {
+        fn logic_propose_admin_update(ref self: ContractState, new_admin: ContractAddress) {
             assert(new_admin.is_non_zero(), 'Admin address is zero');
             assert(new_admin != self.admin_address.read(), 'Admin is unchanged');
             let action_hash = self._admin_action_hash(ACTION_SET_ADMIN, new_admin.into(), 0);
             self._schedule_admin_action(ACTION_SET_ADMIN, action_hash, false);
         }
 
-        fn propose_token_withdrawal(
+        fn logic_propose_token_withdrawal(
             ref self: ContractState, token_address: ContractAddress, receiver: ContractAddress,
         ) {
             assert(token_address.is_non_zero(), 'Token address is zero');
@@ -2917,7 +3111,7 @@ mod HelloStarknet {
 
         // A full sweep explicitly overrides player-liability reservations and
         // is therefore legal only while paused both now and at execution.
-        fn propose_full_token_withdrawal(
+        fn logic_propose_full_token_withdrawal(
             ref self: ContractState, token_address: ContractAddress, receiver: ContractAddress,
         ) {
             assert(token_address.is_non_zero(), 'Token address is zero');
@@ -2927,7 +3121,7 @@ mod HelloStarknet {
             self._schedule_admin_action(ACTION_FULL_SWEEP, action_hash, true);
         }
 
-        fn cancel_admin_action(ref self: ContractState) {
+        fn logic_cancel_admin_action(ref self: ContractState) {
             self._assert_admin();
             let action = self.pending_admin_action.read();
             assert(action != 0, 'No pending admin action');
@@ -2936,7 +3130,7 @@ mod HelloStarknet {
             self.emit(AdminActionCancelled { action, action_hash });
         }
 
-        fn get_pending_admin_action(self: @ContractState) -> (felt252, felt252, u64) {
+        fn logic_get_pending_admin_action(self: @ContractState) -> (felt252, felt252, u64) {
             (
                 self.pending_admin_action.read(),
                 self.pending_admin_action_hash.read(),
@@ -2944,7 +3138,7 @@ mod HelloStarknet {
             )
         }
 
-        fn set_admin(ref self: ContractState, new_admin: ContractAddress) {
+        fn logic_set_admin(ref self: ContractState, new_admin: ContractAddress) {
             assert(new_admin.is_non_zero(), 'Admin address is zero');
             let action_hash = self._admin_action_hash(ACTION_SET_ADMIN, new_admin.into(), 0);
             self._consume_admin_action(ACTION_SET_ADMIN, action_hash, false);
@@ -2960,13 +3154,13 @@ mod HelloStarknet {
             self.emit(AdminChanged { previous_admin, new_admin });
         }
 
-        fn get_admin(self: @ContractState) -> ContractAddress {
+        fn logic_get_admin(self: @ContractState) -> ContractAddress {
             self.admin_address.read()
         }
 
         // This migration is intentionally narrow. Constructor defaults are not
         // replayed because that would overwrite live rates, caps, maps and IOUs.
-        fn migrate_v2(ref self: ContractState) -> bool {
+        fn logic_migrate_v2(ref self: ContractState) -> bool {
             let caller = get_caller_address();
             let via_upgrade_and_call = caller == get_contract_address();
             let is_upgrader = self.access_control.is_role_effective(UPGRADE_ROLE, caller);
@@ -2984,34 +3178,35 @@ mod HelloStarknet {
             true
         }
 
-        fn get_upgrade_initialized_version(self: @ContractState) -> u256 {
+        fn logic_get_upgrade_initialized_version(self: @ContractState) -> u256 {
             self.upgrade_initialized_version.read()
         }
     }
 
-    #[abi(embed_v0)]
-    impl HelloStarknetImpl of super::IHelloStarknet<ContractState> {
-        fn get_minimum_allowance_fee(self: @ContractState) -> u256 {
+
+
+    impl MainGameLogicImpl of crate::MainGameLogic<ContractState> {
+        fn logic_get_minimum_allowance_fee(self: @ContractState) -> u256 {
             return self.minimumAllowance.read();
         }
 
-        fn get_hider_player_fee(self: @ContractState) -> u256 {
+        fn logic_get_hider_player_fee(self: @ContractState) -> u256 {
             return self.currentHiderFee.read();
         }
 
-        fn get_game_grid_size(self: @ContractState, gameWeek: u256) -> (u128, u128) {
+        fn logic_get_game_grid_size(self: @ContractState, gameWeek: u256) -> (u128, u128) {
             return self.main_game_grid_size.read(gameWeek);
         }
 
-        fn get_game_week_treasure_total(self: @ContractState, gameWeek: u256) -> u256 {
+        fn logic_get_game_week_treasure_total(self: @ContractState, gameWeek: u256) -> u256 {
             return self.game_totals.read(gameWeek);
         }
 
-        fn get_game_week(self: @ContractState) -> u256 {
+        fn logic_get_game_week(self: @ContractState) -> u256 {
             return self.currentGameWeek.read();
         }
 
-        fn get_round_status(self: @ContractState) -> (u256, u8, u64, u64, u64, u256, u256, u64) {
+        fn logic_get_round_status(self: @ContractState) -> (u256, u8, u64, u64, u64, u256, u256, u64) {
             let startTs: u64 = self.round_start_ts.read();
             return (
                 self.currentGameWeek.read(),
@@ -3025,7 +3220,7 @@ mod HelloStarknet {
             );
         }
 
-        fn get_next_round_totals(self: @ContractState) -> (u256, u256) {
+        fn logic_get_next_round_totals(self: @ContractState) -> (u256, u256) {
             let nextRound: u256 = self.currentGameWeek.read() + 1;
             return (
                 self.total_reward_shares_for_hiders.read(nextRound),
@@ -3033,22 +3228,22 @@ mod HelloStarknet {
             );
         }
 
-        fn get_min_treasures_to_start(self: @ContractState) -> u256 {
+        fn logic_get_min_treasures_to_start(self: @ContractState) -> u256 {
             MIN_TREASURES_TO_START
         }
 
-        fn get_round_keeper(self: @ContractState) -> ContractAddress {
+        fn logic_get_round_keeper(self: @ContractState) -> ContractAddress {
             self.round_keeper.read()
         }
 
-        fn update_round_keeper(ref self: ContractState, keeper: ContractAddress) -> bool {
+        fn logic_update_round_keeper(ref self: ContractState, keeper: ContractAddress) -> bool {
             self._assert_admin();
             assert(!keeper.is_zero(), 'keeper is zero');
             self.round_keeper.write(keeper);
             true
         }
 
-        fn get_claim_share_amounts(
+        fn logic_get_claim_share_amounts(
             self: @ContractState, gameWeek: u256, gamerWalletAddress: ContractAddress,
         ) -> u256 {
             return self.claim_share_amounts.read((gameWeek, gamerWalletAddress));
@@ -3066,13 +3261,13 @@ mod HelloStarknet {
         // Note this mirrors the claim completely, including its assertions - so it
         // reverts with 'Reward is less than fees' in the case where the shares are
         // worth less than the deductions. Treat a revert as "nothing to claim".
-        fn get_player_reward_due(
+        fn logic_get_player_reward_due(
             self: @ContractState, gameWeek: u256, gamerWalletAddress: ContractAddress,
         ) -> u256 {
             return self._playerRewardDue(gamerWalletAddress, gameWeek);
         }
 
-        fn start_next_round(ref self: ContractState, params: NextRoundParams) -> bool {
+        fn logic_start_next_round(ref self: ContractState, params: NextRoundParams) -> bool {
             self.pausable.assert_not_paused();
             assert(get_caller_address() == self.round_keeper.read(), 'caller is not keeper');
             assert(self.round_state.read() == ROUND_ENDING, 'round not ending');
@@ -3093,7 +3288,7 @@ mod HelloStarknet {
             self._createNewGame(params, nextRound)
         }
 
-        fn expire_round(ref self: ContractState, expectedRound: u256) -> bool {
+        fn logic_expire_round(ref self: ContractState, expectedRound: u256) -> bool {
             assert(get_caller_address() == self.round_keeper.read(), 'caller is not keeper');
 
             // A stale one-time schedule is harmless and must not end whatever
@@ -3127,7 +3322,7 @@ mod HelloStarknet {
 
         // Hide a single treasure. Costs the $5 stake plus the tiered fee, and is
         // bounded by dailyHideCap for anyone not on the whitelist.
-        fn hide_treasure(ref self: ContractState) -> bool {
+        fn logic_hide_treasure(ref self: ContractState) -> bool {
             let caller = get_caller_address();
 
             // An empty proof, so _verifyWhitelist returns false and the ordinary
@@ -3148,7 +3343,7 @@ mod HelloStarknet {
         //
         // bulkAmount is the total STAKE, and must be an exact multiple of the
         // hider fee. The per-treasure fees are charged on top.
-        fn hide_treasure_bulk(
+        fn logic_hide_treasure_bulk(
             ref self: ContractState, bulkAmount: u256, merkleProof: Array<felt252>, leafIndex: u32,
         ) -> bool {
             let caller = get_caller_address();
@@ -3173,7 +3368,7 @@ mod HelloStarknet {
         // takes a wallet past $0.60 is itself paid at the full rate. Reading the
         // rate first would pay that hop 0.15 and only start paying 1.0 from the
         // next one.
-        fn finder_player_move_position( // ref self: ContractState, xDirection: u128, yDirection: u128
+        fn logic_finder_player_move_position( // ref self: ContractState, xDirection: u128, yDirection: u128
             ref self: ContractState, direction: u128,
         ) -> (u128, u128) {
             self._assertRoundAcceptsActions();
@@ -3255,7 +3450,7 @@ mod HelloStarknet {
             return self._finderPlayerMovePosition(direction, gamerWalletAddress, gameWeek);
         }
 
-        fn get_finder_player_position(
+        fn logic_get_finder_player_position(
             self: @ContractState, gamerWalletAddress: ContractAddress, gameWeek: u256,
         ) -> (u128, u128) {
             //get x,y coordinates from player_position mapping
@@ -3264,7 +3459,7 @@ mod HelloStarknet {
             return (x, y);
         }
 
-        fn validate_treasure_coordinates(
+        fn logic_validate_treasure_coordinates(
             ref self: ContractState,
             finderGamerWalletAddress: ContractAddress,
             hiderGamerWalletAddress: ContractAddress,
@@ -3372,7 +3567,7 @@ mod HelloStarknet {
             }
         }
 
-        fn finder_player_generate_position(ref self: ContractState) -> bool {
+        fn logic_finder_player_generate_position(ref self: ContractState) -> bool {
             self._assertRoundAcceptsActions();
             let gamerWalletAddress = get_caller_address();
             let gameWeek = self.currentGameWeek.read();
@@ -3429,7 +3624,7 @@ mod HelloStarknet {
             return true;
         }
 
-        fn claim_reward(ref self: ContractState, gameWeek: u256) -> bool {
+        fn logic_claim_reward(ref self: ContractState, gameWeek: u256) -> bool {
             let gamerWalletAddress = get_caller_address();
 
             return self._claimReward(gamerWalletAddress, gameWeek);
@@ -3445,7 +3640,7 @@ mod HelloStarknet {
         //
         // A zero balance is a NO-OP, not a revert - somebody polling this
         // should not get a failed transaction for being early.
-        fn claim_reward_tokens(ref self: ContractState) -> bool {
+        fn logic_claim_reward_tokens(ref self: ContractState) -> bool {
             let gamerWalletAddress = get_caller_address();
             let owed: u256 = self.reward_token_pending.read(gamerWalletAddress);
 
@@ -3499,7 +3694,7 @@ mod HelloStarknet {
         //
         // Safe to call repeatedly: once the credit lands the flag is set and
         // every later call is a no-op.
-        fn claim_reward_token_for_week(ref self: ContractState, gameWeek: u256) -> bool {
+        fn logic_claim_reward_token_for_week(ref self: ContractState, gameWeek: u256) -> bool {
             let gamerWalletAddress = get_caller_address();
 
             // The USDC leg must have happened first - this only ever retries a
@@ -3513,7 +3708,7 @@ mod HelloStarknet {
         }
 
         // How much ROZ this wallet can withdraw right now.
-        fn get_reward_token_pending(
+        fn logic_get_reward_token_pending(
             self: @ContractState, gamerWalletAddress: ContractAddress,
         ) -> u256 {
             return self.reward_token_pending.read(gamerWalletAddress);
@@ -3523,7 +3718,7 @@ mod HelloStarknet {
         // balance to see how much headroom the coverage rule has left - when
         // these meet, rewards stop accruing and RewardTokenAccrualSkipped starts
         // firing.
-        fn get_total_reward_token_pending(self: @ContractState) -> u256 {
+        fn logic_get_total_reward_token_pending(self: @ContractState) -> u256 {
             return self.total_reward_token_pending.read();
         }
 
@@ -3535,7 +3730,7 @@ mod HelloStarknet {
         // "waiting on funding" display - before it existed the only source was
         // the RewardTokenAccrualSkipped log, which the contract cannot read and
         // a client has to total up by hand.
-        fn get_reward_token_missed(
+        fn logic_get_reward_token_missed(
             self: @ContractState, gamerWalletAddress: ContractAddress,
         ) -> u256 {
             return self.reward_token_missed.read(gamerWalletAddress);
@@ -3545,7 +3740,7 @@ mod HelloStarknet {
         // get_total_reward_token_pending this is the full liability: what would
         // have to be funded for every player to be paid everything they have
         // earned.
-        fn get_total_reward_token_missed(self: @ContractState) -> u256 {
+        fn logic_get_total_reward_token_missed(self: @ContractState) -> u256 {
             return self.total_reward_token_missed.read();
         }
 
@@ -3574,7 +3769,7 @@ mod HelloStarknet {
         // Safe to call at any time. Nothing missed, or no headroom, returns 0
         // rather than reverting - "there is nothing to move yet" is a normal
         // answer, not an error.
-        fn claim_missed_reward_token(ref self: ContractState) -> u256 {
+        fn logic_claim_missed_reward_token(ref self: ContractState) -> u256 {
             let gamerWalletAddress: ContractAddress = get_caller_address();
 
             let missed: u256 = self.reward_token_missed.read(gamerWalletAddress);
@@ -3646,7 +3841,7 @@ mod HelloStarknet {
         // Whether the ROZ leg of a given week has settled. False after a claim
         // made while the contract was unfunded, which is the signal to call
         // claim_reward_token_for_week.
-        fn get_reward_token_claimed(
+        fn logic_get_reward_token_claimed(
             self: @ContractState, gamerWalletAddress: ContractAddress, gameWeek: u256,
         ) -> bool {
             return self.reward_token_claimed.read((gameWeek, gamerWalletAddress));
@@ -3670,7 +3865,7 @@ mod HelloStarknet {
         // Note the parameters read (address, week) while the storage key is
         // (week, address). That inversion is the convention every getter here
         // already follows.
-        fn get_reward_claimed(
+        fn logic_get_reward_claimed(
             self: @ContractState, gamerWalletAddress: ContractAddress, gameWeek: u256,
         ) -> bool {
             return self.claimed_rewards.read((gameWeek, gamerWalletAddress));
@@ -3685,7 +3880,7 @@ mod HelloStarknet {
         // get_player_reward_due, which is safe on exactly these weeks.
         //
         // Both bounds are INCLUSIVE.
-        fn get_claimable_weeks(
+        fn logic_get_claimable_weeks(
             self: @ContractState, gamerWalletAddress: ContractAddress, fromWeek: u256, toWeek: u256,
         ) -> Array<u256> {
             assert(fromWeek <= toWeek, 'bad week range');
@@ -3739,7 +3934,7 @@ mod HelloStarknet {
 
         // The typed share counts behind a week's ROZ, and the survival reward
         // stored at hide time.
-        fn get_reward_token_due(
+        fn logic_get_reward_token_due(
             self: @ContractState, gamerWalletAddress: ContractAddress, gameWeek: u256,
         ) -> (u256, u256, u256) {
             return (
@@ -3766,7 +3961,7 @@ mod HelloStarknet {
         // A player cannot redirect the game at a provider of their own that
         // returns coordinates they picked; the exact address must have been
         // published through propose_vrf_provider_update first.
-        fn update_vrf_provider(
+        fn logic_update_vrf_provider(
             ref self: ContractState, vrfProviderAddress: ContractAddress,
         ) -> bool {
             let action_hash = self
@@ -3797,7 +3992,7 @@ mod HelloStarknet {
         // Doing this mid-round also means players who approved a spend budget on
         // the old token have not approved anything on the new one, so their next
         // action reverts on 'token spend approval req' until they re-approve.
-        fn update_game_token(ref self: ContractState, gameTokenAddress: ContractAddress) -> bool {
+        fn logic_update_game_token(ref self: ContractState, gameTokenAddress: ContractAddress) -> bool {
             let action_hash = self
                 ._admin_action_hash(ACTION_GAME_TOKEN, gameTokenAddress.into(), 0);
             self._consume_admin_action(ACTION_GAME_TOKEN, action_hash, false);
@@ -3816,7 +4011,7 @@ mod HelloStarknet {
         // pending ROZ strands them: total_reward_token_pending still counts IOUs
         // denominated in the OLD token, while the coverage check in 4c-i reads
         // the balance of the new one. Treat it exactly like update_game_token.
-        fn update_game_reward_token(
+        fn logic_update_game_reward_token(
             ref self: ContractState, rewardTokenAddress: ContractAddress,
         ) -> bool {
             let action_hash = self
@@ -3828,7 +4023,7 @@ mod HelloStarknet {
 
         // One wrapper returns all immutable-at-deploy wiring. Each address can
         // still be changed only through its delayed administration action.
-        fn get_contract_addresses(
+        fn logic_get_contract_addresses(
             self: @ContractState,
         ) -> (ContractAddress, ContractAddress, ContractAddress) {
             return (
@@ -3838,7 +4033,7 @@ mod HelloStarknet {
             );
         }
 
-        fn get_reward_rates(self: @ContractState) -> (u256, u256, u256, u256, u256) {
+        fn logic_get_reward_rates(self: @ContractState) -> (u256, u256, u256, u256, u256) {
             return (
                 self.rewardHide.read(),
                 self.rewardHideSurvived.read(),
@@ -3848,7 +4043,7 @@ mod HelloStarknet {
             );
         }
 
-        fn get_below_threshold_rates(self: @ContractState) -> (u256, u256, u256, u256) {
+        fn logic_get_below_threshold_rates(self: @ContractState) -> (u256, u256, u256, u256) {
             return (
                 self.hopRewardBelowThreshold.read(),
                 self.participationBelowThreshold.read(),
@@ -3857,7 +4052,7 @@ mod HelloStarknet {
             );
         }
 
-        fn get_new_wallet_rates(self: @ContractState) -> (u256, u256, u256, u256) {
+        fn logic_get_new_wallet_rates(self: @ContractState) -> (u256, u256, u256, u256) {
             return (
                 self.hopRewardNewWallet.read(),
                 self.participationNewWallet.read(),
@@ -3866,7 +4061,7 @@ mod HelloStarknet {
             );
         }
 
-        fn get_hop_limits(self: @ContractState) -> (u256, u256, u256, u256) {
+        fn logic_get_hop_limits(self: @ContractState) -> (u256, u256, u256, u256) {
             return (
                 self.participationMinimumHops.read(),
                 self.hopRewardCap.read(),
@@ -3876,7 +4071,7 @@ mod HelloStarknet {
         }
 
         // The soft cap covers hops and participation ONLY. Hides take the Daily
-        fn get_soft_caps(self: @ContractState) -> (u256, u256, u256, u256) {
+        fn logic_get_soft_caps(self: @ContractState) -> (u256, u256, u256, u256) {
             return (
                 self.dailySoftCapRoz.read(),
                 self.newWalletSoftCapRoz.read(),
@@ -3885,11 +4080,11 @@ mod HelloStarknet {
             );
         }
 
-        fn get_gate_thresholds(self: @ContractState) -> (u256, u256) {
+        fn logic_get_gate_thresholds(self: @ContractState) -> (u256, u256) {
             return (self.dailySpendThreshold.read(), self.lifetimeSpendThreshold.read());
         }
 
-        fn get_hide_settings(self: @ContractState) -> (u256, u256, u256, u256, u256) {
+        fn logic_get_hide_settings(self: @ContractState) -> (u256, u256, u256, u256, u256) {
             return (
                 self.hideFeeBase.read(),
                 self.hideFeeHigh.read(),
@@ -3910,18 +4105,18 @@ mod HelloStarknet {
         // Regenerate the off-chain proof file whenever this changes. Every leaf
         // index shifts when the tree is rebuilt, so a stale proof file silently
         // drops addresses back to the ordinary daily cap.
-        fn set_whitelist_merkle_root(ref self: ContractState, newRoot: felt252) -> bool {
+        fn logic_set_whitelist_merkle_root(ref self: ContractState, newRoot: felt252) -> bool {
             self._assert_admin();
             self.whitelist_merkle_root.write(newRoot);
             return true;
         }
 
-        fn get_whitelist_merkle_root(self: @ContractState) -> felt252 {
+        fn logic_get_whitelist_merkle_root(self: @ContractState) -> felt252 {
             return self.whitelist_merkle_root.read();
         }
 
         // roundCap bounds ONE whitelisted address; collectiveCap bounds ALL of
-        fn get_whitelist_caps(self: @ContractState) -> (u256, u256, u256) {
+        fn logic_get_whitelist_caps(self: @ContractState) -> (u256, u256, u256) {
             return (
                 self.whitelistRoundCap.read(),
                 self.whitelistCollectiveCap.read(),
@@ -3966,7 +4161,7 @@ mod HelloStarknet {
         // canonical 35-key order. The Poseidon check below rejects omissions,
         // duplicates and typos before any setting is written. See "Post-deploy
         // initialisation" in ROZ_DEPLOYMENT_AND_FUNDING.md.
-        fn set_params(ref self: ContractState, keys: Array<felt252>, values: Array<u256>) -> bool {
+        fn logic_set_params(ref self: ContractState, keys: Array<felt252>, values: Array<u256>) -> bool {
             self._assert_admin();
 
             assert(keys.len() == values.len(), 'keys and values differ');
@@ -4016,7 +4211,7 @@ mod HelloStarknet {
             return true;
         }
 
-        fn update_price_band(
+        fn logic_update_price_band(
             ref self: ContractState, bandKind: u8, bandIndex: u8, upTo: u256, num: u256, den: u256,
         ) -> bool {
             self._assert_admin();
@@ -4062,7 +4257,7 @@ mod HelloStarknet {
             return true;
         }
 
-        fn get_price_band(self: @ContractState, bandKind: u8, bandIndex: u8) -> (u256, u256, u256) {
+        fn logic_get_price_band(self: @ContractState, bandKind: u8, bandIndex: u8) -> (u256, u256, u256) {
             assert(bandKind < 2, 'band kind out of range');
             if bandKind == 0 {
                 return (
@@ -4084,7 +4279,7 @@ mod HelloStarknet {
 
         // Everything that resets at midnight UTC, in one call: hops today, ROZ
         // from hops today, hides today, spend today, free hops used today.
-        fn get_player_daily_state(
+        fn logic_get_player_daily_state(
             self: @ContractState, gamerWalletAddress: ContractAddress,
         ) -> (u256, u256, u256, u256, u256) {
             let dayIndex: u64 = self._currentDayIndex();
@@ -4098,7 +4293,7 @@ mod HelloStarknet {
         }
 
         // The counter that decides new-wallet status. Never resets.
-        fn get_player_lifetime_spend(
+        fn logic_get_player_lifetime_spend(
             self: @ContractState, gamerWalletAddress: ContractAddress,
         ) -> u256 {
             return self.player_lifetime_spend.read(gamerWalletAddress);
@@ -4106,7 +4301,7 @@ mod HelloStarknet {
 
         // What the UI needs to show "N free hops left today". Counts down from
         // dailyFreeHops and floors at zero.
-        fn get_free_hops_remaining(
+        fn logic_get_free_hops_remaining(
             self: @ContractState, gamerWalletAddress: ContractAddress,
         ) -> u256 {
             let dayIndex: u64 = self._currentDayIndex();
@@ -4157,7 +4352,7 @@ mod HelloStarknet {
         // Any other token is fully sweepable - nobody has a claim on it. The
         // ordinary path still needs a delayed proposal. The explicit FULL path
         // ignores all reservations only while paused at proposal AND execution.
-        fn withdraw_token_balance(
+        fn logic_withdraw_token_balance(
             ref self: ContractState, tokenAddress: ContractAddress, receiver: ContractAddress,
         ) {
             let action = self.pending_admin_action.read();
@@ -4194,7 +4389,7 @@ mod HelloStarknet {
 
         // What the sweep would release for a given token, without moving
         // anything. Lets the admin check the surplus before acting.
-        fn get_sweepable_balance(self: @ContractState, tokenAddress: ContractAddress) -> u256 {
+        fn logic_get_sweepable_balance(self: @ContractState, tokenAddress: ContractAddress) -> u256 {
             let token_dispatcher = ERC20ABIDispatcher { contract_address: tokenAddress };
             let heldBalance: u256 = token_dispatcher.balance_of(get_contract_address());
 
@@ -4214,4 +4409,6 @@ mod HelloStarknet {
             return heldBalance - owedToPlayers;
         }
     }
+
+
 }

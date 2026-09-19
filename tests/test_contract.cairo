@@ -8,11 +8,16 @@ use openzeppelin::access::accesscontrol::interface::{
 };
 use openzeppelin::token::erc20::interface::{ERC20ABIDispatcher, ERC20ABIDispatcherTrait};
 use project_name::mock_erc20::{IMockERC20Dispatcher, IMockERC20DispatcherTrait};
-use project_name::{
-    IGameAdministrationDispatcher, IGameAdministrationDispatcherTrait,
-    IGameAdministrationSafeDispatcher, IGameAdministrationSafeDispatcherTrait,
-    IHelloStarknetDispatcher, IHelloStarknetDispatcherTrait, IHelloStarknetSafeDispatcher,
-    IHelloStarknetSafeDispatcherTrait, NextRoundParams,
+use project_name::NextRoundParams;
+use project_name::{IRoutedGameSafeDispatcher, IRoutedGameSafeDispatcherTrait};
+mod routed_game_dispatcher;
+use routed_game_dispatcher::{
+    RoutedGameDispatcher as IGameAdministrationDispatcher,
+    RoutedGameDispatcher as IHelloStarknetDispatcher,
+    RoutedGameDispatcherTrait,
+    RoutedGameSafeDispatcher as IGameAdministrationSafeDispatcher,
+    RoutedGameSafeDispatcher as IHelloStarknetSafeDispatcher,
+    RoutedGameSafeDispatcherTrait,
 };
 use snforge_std::{
     ContractClassTrait, DeclareResultTrait, EventSpyTrait, EventsFilterTrait, declare,
@@ -27,6 +32,27 @@ fn admin_address() -> ContractAddress {
 
 fn pauser_address() -> ContractAddress {
     contract_address_const::<0x515e>()
+}
+
+// Must match the fourteen constructor indexes documented in the facet runbook.
+// These are class hashes, not contract addresses: library calls retain the
+// game's own storage, caller and event-emitting address.
+fn append_facet_hashes(ref calldata: Array<felt252>) {
+    calldata.append(14);
+    calldata.append((*declare("GameRoundActionsFacet").unwrap().contract_class().class_hash).into());
+    calldata.append((*declare("GameRoundViewsFacet").unwrap().contract_class().class_hash).into());
+    calldata.append((*declare("GameHideActionsFacet").unwrap().contract_class().class_hash).into());
+    calldata.append((*declare("GameHideViewsFacet").unwrap().contract_class().class_hash).into());
+    calldata.append((*declare("GameFinderValidationFacet").unwrap().contract_class().class_hash).into());
+    calldata.append((*declare("GameFinderActionsFacet").unwrap().contract_class().class_hash).into());
+    calldata.append((*declare("GameFinderViewsFacet").unwrap().contract_class().class_hash).into());
+    calldata.append((*declare("GameUsdcClaimsFacet").unwrap().contract_class().class_hash).into());
+    calldata.append((*declare("GameRozClaimsFacet").unwrap().contract_class().class_hash).into());
+    calldata.append((*declare("GameSettingsActionsFacet").unwrap().contract_class().class_hash).into());
+    calldata.append((*declare("GameSettingsViewsFacet").unwrap().contract_class().class_hash).into());
+    calldata.append((*declare("GameTreasuryFacet").unwrap().contract_class().class_hash).into());
+    calldata.append((*declare("GameAdminUpgradeFacet").unwrap().contract_class().class_hash).into());
+    calldata.append((*declare("GameAdminActionsFacet").unwrap().contract_class().class_hash).into());
 }
 
 // The game contract's constructor takes the VRF provider, game token, ROZ
@@ -81,10 +107,22 @@ fn deploy_contract(name: ByteArray) -> ContractAddress {
         );
     constructorCalldata.append(contract_address_const::<0x515e>().into());
     constructorCalldata.append(100);
+    append_facet_hashes(ref constructorCalldata);
 
     let (contract_address, _) = contract.deploy(@constructorCalldata).unwrap();
     contract_address
 }
+
+#[test]
+#[feature("safe_dispatcher")]
+fn test_router_rejects_out_of_range_facet() {
+    let game = deploy_contract("HelloStarknet");
+    let router = IRoutedGameSafeDispatcher { contract_address: game };
+    let calldata: Array<felt252> = ArrayTrait::new();
+    let result = router.route(14, 0, calldata.span());
+    assert(result.is_err(), 'invalid facet must revert');
+}
+
 
 // Spawn, then hop - the two steps in the order the contract requires.
 //
@@ -425,6 +463,7 @@ fn deploy_wired_with_roz(
         );
     constructorCalldata.append(contract_address_const::<0x515e>().into());
     constructorCalldata.append(100);
+    append_facet_hashes(ref constructorCalldata);
 
     let (game, _) = contract.deploy(@constructorCalldata).unwrap();
 
@@ -2064,6 +2103,8 @@ fn test_start_next_round_preserves_the_live_staged_count() {
 
     let (roundId, stateAfter, _, _, _, active, initial, _) = dispatcher.get_round_status();
     assert(roundId == 1_u256, 'round increments');
+    assert(dispatcher.get_game_week() == 1_u256, 'library reads game week');
+    assert(dispatcher.get_game_grid_size(1_u256) == (14_u128, 14_u128), 'library reads game grid');
     assert(stateAfter == 0_u8, 'new round must be open');
     assert(active == 2_u256 && initial == 2_u256, 'active count survives');
     assert(dispatcher.get_claim_share_amounts(1, player) == 2, 'find gate count must survive');

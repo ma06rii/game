@@ -49,9 +49,9 @@ most 20 hops, or fewer (for example 15).
 
 ## Prerequisites
 
-The currently tested toolchain is:
+The Sepolia-targeted toolchain is pinned in [`.tool-versions`](.tool-versions):
 
-- Scarb and Cairo `2.20.0`.
+- Scarb and Cairo `2.19.0` (Sierra `1.9.0`).
 - Starknet Foundry (`snforge` and `sncast`) `0.62.1`.
 - Node.js `22.3.0` or newer and npm (required by the pinned Varlock release).
 - The Doppler CLI, authenticated **and scoped to this repository**:
@@ -70,9 +70,12 @@ The currently tested toolchain is:
 - A funded Starknet account configured in `sncast` for network deployment.
 
 The manifest pins the matching Cairo, OpenZeppelin, and `snforge_std`
-dependencies. Confirm your installation before working on the contract:
+dependencies. Install the pinned versions with `asdf` if needed, then confirm
+them before working on the contract:
 
 ```bash
+asdf install scarb 2.19.0
+asdf install starknet-foundry 0.62.1
 scarb --version
 snforge --version
 sncast --version
@@ -110,9 +113,8 @@ DOPPLER_CONFIG=dev npm run env:check -- starterpack --online
 
 The online check verifies the RPC chain ID and confirms that each configured
 account alias exists locally, targets Sepolia, and has the expected address. It
-never prints the RPC URL. The `game` check intentionally remains blocked until
-`PAUSER_ADDRESS` and `PAUSER_SNCAST_ACCOUNT` are added to `roz-contract/dev`;
-the starter-pack check similarly remains blocked until
+never prints the RPC URL. The `game` check passed on 2026-09-17; re-run it before
+each declaration or deployment. The starter-pack check remains blocked until
 `ARCADE_REGISTRY_ADDRESS` is known. Admin and pauser must be distinct accounts.
 
 Use the repository safety checks before committing environment-related work:
@@ -256,30 +258,51 @@ should alert on every one of them.
 
 ## Safe Sepolia deployment
 
-The current shared-dev address predates upgradeability. Moving to this class
-requires one final coordinated deployment and consumer repoint. Once deployed,
-future classes can use delayed Starknet `replace_class_syscall` upgrades while
-keeping the same address and storage. This is not an Ethereum proxy. Follow the
-complete [upgrade and pause runbook](docs/UPGRADES_AND_PAUSE.md), and inspect
-outstanding claims on any address being retired.
+The current shared-dev address predates upgradeability. A future deployable
+replacement will require a coordinated deployment and consumer repoint. This
+worktree's routed multi-class implementation is not deployed yet. The eventual
+game can use delayed Starknet `replace_class_syscall` upgrades while keeping
+its address and storage; this is not an Ethereum proxy. Follow the complete
+[upgrade and pause runbook](docs/UPGRADES_AND_PAUSE.md), and inspect outstanding
+claims on any address being retired.
 
-Populate the missing pauser values in `roz-contract/dev` first. The keeper must
-be the account used by the deployed AWS lifecycle functions. Then build, test,
-run the online preflight, declare, and deploy inside Varlock so constructor
-values do not need to be manually exported:
+The keeper must be the account used by the deployed AWS lifecycle functions.
+The commands below build, test, and inspect the routed implementation; they do not deploy
+it. Before any future deployment, validate the role values in `roz-contract/dev`
+and run the online preflight inside Varlock.
 
-As checked on 2026-09-16, the Doppler `STARKNET_RPC_URL` serves Starknet RPC
-0.9.0 while `sncast 0.62.1` expects 0.10.0; a declaration dry-run with
-`--url "$STARKNET_RPC_URL"` fails. The predefined `--network sepolia`
-provider succeeds, so use that provider consistently for the declare, deploy,
-and verification commands below. The online environment preflight still
-checks the Doppler URL and constructor inputs. Upgrade the Doppler RPC
-endpoint to a compatible version before switching these commands back to
-`--url`.
+Read [the declaration diagnosis and split decision](docs/SEPOLIA_GAME_DECLARATION.md)
+and [the conditional routed-game deployment procedure](docs/SEPOLIA_ROUTED_GAME_DEPLOYMENT.md)
+before submitting a transaction. The previous Cairo 2.20 build emitted Sierra
+1.9.3, while Sepolia currently supports Sierra 1.9.0; the previously printed
+class hash and transaction hash are not a deployment checkpoint. Build and
+check the new artifact first. As checked on 2026-09-17, the Doppler RPC reports
+spec 0.10.3-rc.0 but has not passed a declaration dry-run with this toolchain.
+The documented `--network sepolia` path is the fallback until a dedicated RPC
+has passed that check. A missing pending transaction on a different provider
+does not by itself prove the class was rejected.
+
+**Do not resubmit the current 2.19.0 class**
+`0x04710d5c3c4401145c06833183c04bd7fb502476bf7e23b2c90de3e079ea456e`.
+Its declaration dry-run estimated 5,984,131,520 L2 gas, versus Starknet's
+published *mainnet* per-transaction limit of 1.1 billion. The Sepolia limit
+still needs confirmation, but the attempt with transaction hash
+`0x7f5c4153d6db1b80dbeab0c12e7a2eab3123e637923d3f12dae3b1dfff658c9`
+timed out and the class is not at `latest`. The following dry-run is safe;
+however, the worktree now contains a **15-class routed implementation**.
+Read [the measured facet architecture](docs/GAME_FACET_ARCHITECTURE.md).
+The root dry-run estimated 1,054,092,480 L2 gas and all 14 facet dry-runs
+completed, but the active Sepolia transaction limit still needs confirmation. Its constructor
+requires 14 facet hashes after the original seven arguments. The commands
+below are diagnostics only; do not submit paid transactions until the
+[deployment gate](docs/GAME_FACET_ARCHITECTURE.md) is met.
 
 ```bash
-scarb build
+scarb --release build
+npm run contract:artifact-check
+node scripts/export-routed-game-manifest.mjs
 snforge test
+SNCAST_ACCOUNT=account_braavos bash scripts/dry-run-routed-classes.sh
 DOPPLER_CONFIG=dev npm run env:check -- game --online
 sncast utils class-hash --contract-name HelloStarknet
 
@@ -289,45 +312,27 @@ DOPPLER_CONFIG=dev npm exec -- varlock run -- bash -c '
     --network sepolia \
     --dry-run --detailed
 '
-
-DOPPLER_CONFIG=dev npm exec -- varlock run -- bash -c '
-  sncast --account "$SNCAST_ACCOUNT" --wait declare \
-    --contract-name HelloStarknet \
-    --network sepolia
-'
-
-export GAME_CLASS_HASH=0x... # exact class hash printed by the accepted declaration
-
-DOPPLER_CONFIG=dev GAME_CLASS_HASH="$GAME_CLASS_HASH" npm exec -- varlock run -- bash -c '
-  : "${GAME_CLASS_HASH:?set GAME_CLASS_HASH to the hash printed by declare}"
-  sncast --account "$SNCAST_ACCOUNT" deploy \
-    --class-hash "$GAME_CLASS_HASH" \
-    --arguments "$VRF_PROVIDER_ADDRESS,$USDC_TOKEN_ADDRESS,$ROZ_TOKEN_ADDRESS,$ROUND_KEEPER_ADDRESS,$ADMIN_ADDRESS,$PAUSER_ADDRESS,$UPGRADE_DELAY" \
-    --network sepolia \
-    --dry-run --detailed
-'
-
-DOPPLER_CONFIG=dev GAME_CLASS_HASH="$GAME_CLASS_HASH" npm exec -- varlock run -- bash -c '
-  : "${GAME_CLASS_HASH:?set GAME_CLASS_HASH to the hash printed by declare}"
-  sncast --account "$SNCAST_ACCOUNT" --wait deploy \
-    --class-hash "$GAME_CLASS_HASH" \
-    --arguments "$VRF_PROVIDER_ADDRESS,$USDC_TOKEN_ADDRESS,$ROZ_TOKEN_ADDRESS,$ROUND_KEEPER_ADDRESS,$ADMIN_ADDRESS,$PAUSER_ADDRESS,$UPGRADE_DELAY" \
-    --network sepolia
-'
 ```
 
-`deploy --class-hash` does not declare a missing class. Wait for the declare
-transaction to be accepted, then use its reported class hash; if it differs
-from the local hash, stop and inspect the build before deploying. Do not
-retry a failed deployment until the declaration is confirmed on Sepolia.
+The [operator procedure](docs/SEPOLIA_ROUTED_GAME_DEPLOYMENT.md) contains
+conditional paid declaration and deployment commands, but they are **not
+cleared to run** until its Sepolia resource-limit and fee gate is met. All 14
+facet classes must be confirmed onchain before deploying the root. The
+frontend and AWS use copies of the generated manifest; keep them synchronized
+with this exact build.
 
-`GAME_CLASS_HASH` is a shell variable, not a Doppler secret — a class hash
-changes with every build, so it does not belong in `.env.schema` alongside the
-stable addresses. Varlock does forward the ambient environment to the child, so
-an `export`ed value would reach sncast, but the explicit
-`GAME_CLASS_HASH="$GAME_CLASS_HASH"` prefix works whether or not it was
-exported. The `:?` line aborts with a named error when it is unset instead of
-passing sncast `--class-hash ""`.
+`deploy --class-hash` does not declare a missing class. `Success: Declaration
+completed` without `--wait` only confirms submission, not inclusion. Wait for
+`ACCEPTED_ON_L2`, verify the class at `latest`, and compare its hash with the
+new local build before deploying. On a timeout, check the transaction, account
+nonce, and class on-chain before retrying; do not submit repeated declarations
+just because an explorer cannot yet find the transaction.
+
+`GAME_CLASS_HASH` is a shell variable, not a Doppler secret: a class hash
+changes with every build. A deployment must also track each facet class hash,
+confirm every declaration, and serialize the constructor array in the
+documented order. The conditional command is in the
+[routed-game deployment procedure](docs/SEPOLIA_ROUTED_GAME_DEPLOYMENT.md).
 
 Class hashes are named per contract, so a runbook never has to guess which one
 a variable refers to:
@@ -341,34 +346,23 @@ a variable refers to:
 Only the game flow is documented today; the other two names are reserved for
 when those declare flows are written.
 
-Constructor order is exactly `(vrfProvider, gameToken, rewardToken,
-roundKeeper, admin, pauser, upgradeDelay)`. The historical hardcoded owner is
-used only for Ownable bootstrap, then ownership is transferred to `admin` in
-the constructor. The admin and pauser must be nonzero and distinct. Mainnet
-rejects an upgrade delay below 259200 seconds (three days); testnets may use
-zero explicitly.
+Routed constructor order is exactly `(vrfProvider, gameToken, rewardToken,
+roundKeeper, admin, pauser, upgradeDelay, facetClassHashes)`. The final value
+is an array of 14 declared class hashes, serialized as length followed by
+the hashes in [facet index order](docs/GAME_FACET_ARCHITECTURE.md). The
+historical hardcoded owner is used only for Ownable bootstrap, then ownership
+is transferred to `admin` in the constructor. The admin and pauser must be
+nonzero and distinct. Mainnet rejects an upgrade delay below 259200 seconds
+(three days); testnets may use zero explicitly.
 
 Record the returned contract address, transaction hash, accepted deployment
-block, and class hash. Verify the deployment before repointing anything:
-
-```bash
-export GAME_CONTRACT_ADDRESS=0x...
-
-sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function owner --network sepolia
-sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function get_admin --network sepolia
-sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function get_upgrade_delay --network sepolia
-sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function is_paused --network sepolia
-sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function get_contract_addresses --network sepolia
-sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function get_round_keeper --network sepolia
-sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function get_game_week --network sepolia
-sncast call --contract-address "$GAME_CONTRACT_ADDRESS" --function get_min_treasures_to_start --network sepolia
-```
-
-Expected initial state is round `0` and paused; configurable gameplay values
-must be initialized before unpausing. `get_contract_addresses` returns VRF,
-game token, and reward token addresses in that order. Verify role membership
-with `has_role`: admin has the default-admin, admin, and upgrade selectors;
-pauser has only the pause selector.
+block, and class hash. Follow the [routed Sepolia deployment
+runbook](docs/SEPOLIA_ROUTED_GAME_DEPLOYMENT.md) to verify the root and all
+14 facet class hashes at `latest` and confirm the instance starts paused.
+Former game/admin getters such as `get_admin`, `is_paused`, and
+`get_contract_addresses` are routed calls, not direct root ABI functions.
+Gameplay settings and pricing bands must be initialized and verified through
+the routed ABI before unpausing or repointing integrations.
 
 ## Coordinated deployment checklist
 

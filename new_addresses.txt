@@ -1,4 +1,4 @@
-Game Contract Address: 0x01aff92bfd50b4953f8b53a95dee15065e89c44e1d98ab4f27d57b6587f1472b
+Game Contract Address: 0x07088478d5e2464e947186bca33dec61bfd3a84bdf82f76b78f2528bd19b3c86
 Game Contract Class Hash: 0x051de976192a752b2938d5efa71cace4cf97df4045baa9ad51dd3939d4e0aafb
 Game Contract Deployment Block: 14484189
 
@@ -6,6 +6,4 @@ VRF Contract Address: 0x01baad38bde8d3d60eebab5b96f72a297d52e6d1386bc3d4ec5344d9
 
 USDC Contract Address: 0x0512feAc6339Ff7889822cb5aA2a86C848e9D392bB0E3E237C008674feeD8343
 
-Game Reward Token Address: 0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b
-
-Game Reward Token RZBX : 0x03fe67347b01321eaa4f656edb9fbff8d210af2c1806dcc8065a7c7cdc2a63f9
+Game Reward Token Address: 0x03fe67347b01321eaa4f656edb9fbff8d210af2c1806dcc8065a7c7cdc2a63f9

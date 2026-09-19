@@ -6,7 +6,8 @@
     "node": ">=22.3.0"
   },
   "scripts": {
-    "test": "node --test tests/deployment-env.test.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "contract:artifact-check": "node scripts/check-class-artifact.mjs",
     "env:load": "varlock load --agent --show-all",
     "env:audit": "varlock audit --ignore target --ignore .snfoundry_cache",
     "env:scan": "varlock scan",
