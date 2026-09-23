@@ -573,7 +573,7 @@ against the contract's staged facts; they are never writes.
 The AWS `StartNextRound` Lambda reads `CONFIG#FEES` and `CONFIG#ROUND`, queries
 the staged `Game#Room0#Week<N>` rows, computes the Merkle root/grid/coordinates,
 checks `get_next_round_totals()`, and submits the struct. There is no public API
-for this call and no repeating six-hour cron. The constructor's empty round 0
+for this call and no repeating fixed-interval cron. The constructor's empty round 0
 is allowed to run its timer once. After that expiry, round 0 remains `ENDING`
 until at least two treasures are staged for round 1. Every later rollover has
 the same minimum; `start_next_round` enforces it on-chain, and the Lambda avoids
