@@ -348,6 +348,13 @@ committed** — worth rotating, and the replacement belongs in Doppler as
 
 ### Post-deploy initialisation - the contract deploys PAUSED and empty
 
+For the current routed Sepolia game, use
+[`scripts/initialize-routed-game.mjs`](scripts/initialize-routed-game.mjs)
+as described in the [routed deployment guide](docs/SEPOLIA_ROUTED_GAME_DEPLOYMENT.md).
+The direct `sncast invoke --function set_params`, `update_price_band`, and
+`unpause` examples below document the earlier non-routed ABI and **will not
+work against the routed root contract**.
+
 **The class does not set its own defaults.** `_initialiseRewardSettings` used to
 write about ninety constants in the constructor; it cost **5,329 of the 81,920
 casm felts** Starknet allows a class, and it was removed to get the contract

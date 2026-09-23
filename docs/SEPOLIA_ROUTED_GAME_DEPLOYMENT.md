@@ -267,10 +267,28 @@ stop before changing any integration address.
 The new instance has empty gameplay settings and pricing bands. **Do not run
 the old direct `set_params`, `update_price_band`, or `unpause` commands in
 `ROZ_DEPLOYMENT_AND_FUNDING.md`: those functions are now routed through facet
-IDs 9, 9, and 12 respectively, not directly exposed by the root ABI.** A
-route-aware initialization procedure must submit the canonical 35-value
-settings batch and all ten price bands, read them back, and only then unpause
-from the distinct pauser account.
+IDs 9, 9, and 12 respectively, not directly exposed by the root ABI.** Use the
+route-aware operator script from the contract repository root:
+
+```bash
+DOPPLER_CONFIG=dev npm exec -- varlock run -- node scripts/initialize-routed-game.mjs --check
+DOPPLER_CONFIG=dev npm exec -- varlock run -- node scripts/initialize-routed-game.mjs --estimate
+DOPPLER_CONFIG=dev npm exec -- varlock run -- node scripts/initialize-routed-game.mjs --send
+```
+
+`--send` submits the canonical 35-value settings batch and ten price bands in
+order, estimates each transaction before sending, and checks public readback
+after acceptance. It leaves the game paused. After the backend, indexers, and
+frontend are ready, the distinct pauser runs:
+
+```bash
+DOPPLER_CONFIG=dev npm exec -- varlock run -- node scripts/initialize-routed-game.mjs --unpause
+```
+
+The script is intentionally pinned to this Sepolia deployment and refuses
+other chains or an unexpected root class hash. Three fee-deduction fields do
+not have individual public getters; their canonical values are protected by
+the accepted first batch and the contract's unpause guard.
 
 To make the game playable, coordinate the new address and matching facet ABI
 manifest with AWS, Apibara, and the frontend; settle the old shared-dev game
