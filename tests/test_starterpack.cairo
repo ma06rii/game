@@ -107,19 +107,19 @@ fn test_exact_defaults_and_views() {
     let (usdc, strk, roz) = administration.get_token_addresses();
     assert(usdc == setup.usdc, 'wrong USDC token');
     assert(strk == setup.strk, 'wrong STRK token');
-    assert(roz == setup.roz, 'wrong ROZ token');
+    assert(roz == setup.roz, 'wrong RZBX token');
     assert(administration.get_arcade_registry() == arcade(), 'wrong Arcade registry');
     assert(administration.get_min_hide_stake_usdc() == MIN_HIDE_STAKE_USDC, 'wrong minimum stake');
 
     let (welcome_usdc, welcome_strk, welcome_roz) = administration.pack_amounts(WELCOME_ID);
     assert(welcome_usdc == WELCOME_USDC, 'Welcome USDC units');
     assert(welcome_strk == WELCOME_STRK, 'Welcome STRK units');
-    assert(welcome_roz == WELCOME_ROZ, 'Welcome ROZ units');
+    assert(welcome_roz == WELCOME_ROZ, 'Welcome RZBX units');
 
     let (week_usdc, week_strk, week_roz) = administration.pack_amounts(WEEK_ID);
     assert(week_usdc == WEEK_USDC, 'Week USDC units');
     assert(week_strk == WEEK_STRK, 'Week STRK units');
-    assert(week_roz == WEEK_ROZ, 'Week ROZ units');
+    assert(week_roz == WEEK_ROZ, 'Week RZBX units');
 
     match issuer.supply(WELCOME_ID) {
         Option::None => (),
@@ -156,7 +156,7 @@ fn test_welcome_issues_once_with_exact_amounts_and_events() {
     );
     assert(
         ERC20ABIDispatcher { contract_address: setup.roz }.balance_of(recipient) == WELCOME_ROZ,
-        'wrong Welcome ROZ',
+        'wrong Welcome RZBX',
     );
 
     spy
@@ -210,7 +210,7 @@ fn test_week_can_issue_twice_and_multiplies_quantity() {
     );
     assert(
         ERC20ABIDispatcher { contract_address: setup.roz }.balance_of(recipient) == WEEK_ROZ * 3,
-        'wrong Week ROZ total',
+        'wrong Week RZBX total',
     );
 }
 
@@ -270,10 +270,10 @@ fn test_pack_amount_update_only_changes_future_issues() {
     let roz = ERC20ABIDispatcher { contract_address: setup.roz };
     assert(usdc.balance_of(first) == WELCOME_USDC, 'past USDC was changed');
     assert(strk.balance_of(first) == WELCOME_STRK, 'past STRK was changed');
-    assert(roz.balance_of(first) == WELCOME_ROZ, 'past ROZ was changed');
+    assert(roz.balance_of(first) == WELCOME_ROZ, 'past RZBX was changed');
     assert(usdc.balance_of(second) == new_usdc, 'new USDC not used');
     assert(strk.balance_of(second) == new_strk, 'new STRK not used');
-    assert(roz.balance_of(second) == new_roz, 'new ROZ not used');
+    assert(roz.balance_of(second) == new_roz, 'new RZBX not used');
 }
 
 #[test]
@@ -345,7 +345,7 @@ fn test_insufficient_inventory_is_atomic_and_does_not_consume_welcome() {
     );
     assert(
         ERC20ABIDispatcher { contract_address: setup.roz }.balance_of(recipient) == 0,
-        'failed issue transferred ROZ',
+        'failed issue transferred RZBX',
     );
 }
 

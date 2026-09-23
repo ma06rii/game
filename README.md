@@ -1,8 +1,8 @@
 # Realm of Zee game contracts
 
 Cairo contracts for the Realm of Zee Starknet treasure hunt. This repository
-defines the authoritative round state, player actions, USDC accounting, ROZ
-rewards, priority-hider Merkle root, and lifecycle events consumed by the
+defines the authoritative round state, player actions, USDC accounting, Zee
+Bucks (RZBX) rewards, priority-hider Merkle root, and lifecycle events consumed by the
 off-chain services.
 
 ```text
@@ -34,14 +34,20 @@ from Doppler or deployment outputs instead of copying a second snapshot.
 | Game class hash | `0x051de976192a752b2938d5efa71cace4cf97df4045baa9ad51dd3939d4e0aafb` |
 | Deployment block | `14484189` |
 | Sepolia USDC | `0x0512feac6339ff7889822cb5aa2a86c848e9d392bb0e3e237c008674feed8343` |
-| ROZ reward token | `0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b` |
+| Reward token (intended Zee Bucks/RZBX branding) | `0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b` |
 | Test VRF provider | `0x01baad38bde8d3d60eebab5b96f72a297d52e6d1386bc3d4ec5344d9a30388bd` |
 | Legacy owner | `0x052a2b0b20d8796e57f0f00e99adfd61e0b40c4a49553d4197e4da6c1c023833` |
 | Live hop limits | participation `28`, round reward cap `40`, USDC-free/day `20`, free spawns/day `1` |
 
+The reward-token source initializes new deployments as Zee Bucks (`RZBX`). The
+configured Sepolia address above still reports its legacy on-chain metadata,
+`ROZToken` / `ROZ`, as verified on 2026-09-23. The game ABI and internal
+`ROZToken`, `ROZ_*`, and `roz` identifiers remain unchanged for compatibility.
+See the funding runbook for the migration implications.
+
 The test VRF provider is Sepolia-only. Do not deploy or configure it on
 mainnet. Operational balances and historical deployments are documented in
-[`ROZ_DEPLOYMENT_AND_FUNDING.md`](ROZ_DEPLOYMENT_AND_FUNDING.md).
+[`RZBX_DEPLOYMENT_AND_FUNDING.md`](RZBX_DEPLOYMENT_AND_FUNDING.md).
 
 The first 20 hops of each UTC day waive the USDC game fee; players still pay
 gas in STRK. A future paymaster campaign is a separate limit and may sponsor at
@@ -96,9 +102,9 @@ The schema exposes separate preflight targets for each deployable contract:
 
 | Target | Contract | Target-specific inputs |
 | --- | --- | --- |
-| `game` | `HelloStarknet` | VRF, USDC, ROZ, keeper, admin, pauser, pauser account alias, upgrade delay |
-| `roz` | `ROZToken` | initial recipient and owner |
-| `starterpack` | `TreasureGameStarterpack` | owner, Arcade registry, USDC, STRK, and ROZ |
+| `game` | `HelloStarknet` | VRF, USDC, Zee Bucks (RZBX), keeper, admin, pauser, pauser account alias, upgrade delay |
+| `roz` (legacy target name) | `ROZToken` (legacy artifact name) | initial recipient and owner for Zee Bucks (RZBX) |
+| `starterpack` | `TreasureGameStarterpack` | owner, Arcade registry, USDC, STRK, and Zee Bucks (RZBX) |
 
 All targets also require the Sepolia network, masked RPC URL, local `sncast`
 account alias, and matching deployer address. Inspect the resolved setup and
@@ -144,11 +150,12 @@ Both commands must pass before declaring a class. The principal sources are:
 ```text
 src/lib.cairo                  game contract
 src/starterpack.cairo          Cartridge Arcade starter-pack implementation
-src/game_reward_token.cairo    ROZ ERC-20 contract
+src/game_reward_token.cairo    Zee Bucks (RZBX) ERC-20 contract
 src/mock_erc20.cairo           test-only token
 src/mock_vrf_provider.cairo    Sepolia/test-only VRF provider
 tests/test_contract.cairo       contract and regression tests
 tests/test_starterpack.cairo    starter-pack regression tests
+tests/test_reward_token.cairo   Zee Bucks (RZBX) metadata regression test
 ```
 
 `mock_erc20` and `mock_vrf_provider` are testing components; they are not
@@ -165,7 +172,7 @@ implementation. Arcade collects the $9.99 Welcome or $29.99 Week purchase
 price, then the configured Arcade registry calls `on_issue`; the pack contract
 does not charge the buyer. Welcome is one per recipient, while Week is
 reissuable and quantity-aware. Both send stored, owner-updatable amounts of
-USDC, STRK, and 18-decimal ROZ.
+USDC, STRK, and 18-decimal Zee Bucks (RZBX).
 
 The constructor is `(owner, arcadeRegistry, usdcToken, strkToken, rozToken)`.
 Pack IDs are assigned by Arcade and must be written afterward with
@@ -221,7 +228,7 @@ grid, coordinate root, duration, minimum duration, blackout, and end buffer.
 The AWS keeper supplies the next configuration, but the contract enforces the
 fee ceilings, timing relationships, staged facts, and minimum count.
 
-USDC gameplay amounts use 6 decimals. ROZ rewards use 18 decimals. Hider claim
+USDC gameplay amounts use 6 decimals. RZBX rewards use 18 decimals. Hider claim
 values are snapshotted when charged, so later fee changes cannot reprice an old
 claim.
 
@@ -340,7 +347,7 @@ a variable refers to:
 | Contract (Cairo module) | Variable |
 |---|---|
 | `HelloStarknet` (`src/lib.cairo`) | `GAME_CLASS_HASH` |
-| `ROZToken` (`src/game_reward_token.cairo`) | `ROZ_CLASS_HASH` |
+| `ROZToken` (`src/game_reward_token.cairo`; legacy artifact name for Zee Bucks/RZBX) | `ROZ_CLASS_HASH` |
 | `TreasureGameStarterpack` (`src/starterpack.cairo`) | `STARTERPACK_CLASS_HASH` |
 
 Only the game flow is documented today; the other two names are reserved for
@@ -387,8 +394,8 @@ decision to replace the address instead of upgrading it in place:
 7. Confirm `RoundStarted(0)` reached `GameRounds`, hide at least two treasures,
    and let the normal expiry/buffer workflow open round `1`. Do not call
    `start_next_round` manually.
-8. Fund the new game contract with ROZ only after the intended tranche and
-   recipient have been reviewed. A zero ROZ balance skips/accrues reward credit
+8. Fund the new game contract with RZBX only after the intended tranche and
+   recipient have been reviewed. A zero RZBX balance skips/accrues reward credit
    without blocking USDC gameplay.
 
 ## Priority bulk hiding

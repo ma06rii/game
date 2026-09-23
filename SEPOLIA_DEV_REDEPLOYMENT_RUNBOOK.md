@@ -94,9 +94,9 @@ Do not sweep or abandon the old contract without a deliberate decision:
 | USDC balance | 140.012833 USDC |
 | Immediately sweepable USDC | 25.307992 USDC |
 | Reserved USDC liability | approximately 114.704841 USDC |
-| Pending ROZ | 0 ROZ |
-| Missed ROZ ledger | 274.4 ROZ |
-| ROZ balance | 0 ROZ |
+| Pending RZBX | 0 RZBX |
+| Missed RZBX ledger | 274.4 RZBX |
+| RZBX balance | 0 RZBX |
 | Round state | round 9 `ENDING` |
 | Next-round staging | one of two required treasures |
 
@@ -277,7 +277,7 @@ The constructor deliberately pauses the routed contract. First follow the
 [routed deployment runbook](docs/SEPOLIA_ROUTED_GAME_DEPLOYMENT.md) to verify
 the deployed root, all 14 facet hashes, and paused state. The historical direct
 `set_params`, `update_price_band`, `get_contract_addresses`, `is_paused`, and
-`unpause` commands in `ROZ_DEPLOYMENT_AND_FUNDING.md` are **not valid for this
+`unpause` commands in `RZBX_DEPLOYMENT_AND_FUNDING.md` are **not valid for this
 ABI**. A route-aware initialization procedure must submit the canonical
 35-value settings batch and ten price bands, read them back, and then unpause
 from the distinct pauser account. Keep the contract paused until this is
@@ -458,7 +458,7 @@ Verify:
 6. Unpause and confirm the five-minute `RoundHealth` recovery can resume an
    eligible rollover.
 7. Stage two treasures for round 2, finish round 1, let round 2 open, then test
-   USDC and ROZ claims.
+   USDC and RZBX claims.
 
 ## Timing warning
 

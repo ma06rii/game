@@ -3360,3 +3360,7 @@ the Ekubo pool, and staking or in-game spending of ROZ.
   not the $1.00/day a per-round bonus demanded. The gap is no longer the binding
   constraint either, since §2.6's $0.60 threshold withdraws the bonus outright
   below it. Closing the gap alone would not reopen the hole.
++> **Historical terminology:** This document uses **ROZ**, the former working name
+> for the reward token now branded **Zee Bucks (RZBX)**. Legacy code identifiers
+> may still use `roz` or `ROZ_*` for compatibility.
+>

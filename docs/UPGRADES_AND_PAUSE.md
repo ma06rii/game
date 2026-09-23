@@ -218,7 +218,7 @@ action cannot overwrite the first. Propose the exact operation, wait
 The arguments are hashed into the proposal. Execution with different arguments
 reverts. `cancel_admin_action()` clears the queue.
 
-A normal token withdrawal remains liability-safe. For ROZ it reserves
+A normal token withdrawal remains liability-safe. For RZBX it reserves
 `total_reward_token_pending + total_reward_token_missed`; for the game token it
 reserves `total_usdc_claimable`, exactly as before. A full withdrawal ignores
 those reserves only during one uninterrupted paused window, and it still waits

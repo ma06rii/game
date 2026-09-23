@@ -347,3 +347,7 @@ Add to `controllerPolicies.js`: `hide_treasure_bulk`, `claim_reward_tokens`,
   handles the address being *unset* (zero) gracefully, but an address pointing at
   nothing makes `balance_of` revert and takes the whole hop or hide with it. Do
   not configure a placeholder.
++> **Historical terminology:** This document uses **ROZ**, the former working name
+> for the reward token now branded **Zee Bucks (RZBX)**. Legacy code identifiers
+> may still use `roz` or `ROZ_*` for compatibility.
+>

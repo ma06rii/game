@@ -22,7 +22,7 @@ missed-ROZ ledger:
 | ROZ token | `0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b` |
 | USDC | `0x0512feac6339ff7889822cb5aa2a86c848e9d392bb0e3e237c008674feed8343` |
 
-Two further deployments precede these — see `ROZ_DEPLOYMENT_AND_FUNDING.md` §1.
+Two further deployments precede these — see `RZBX_DEPLOYMENT_AND_FUNDING.md` §1.
 
 **The frontend points at `0x0771fdfb…`, not the current contract**, so it has the
 views this document asked for but not the missed-ROZ ledger. See
@@ -313,3 +313,7 @@ views.
 - The `/impeccable` design skill's full flow requires a `PRODUCT.md`, which this
   repo does not have. `/impeccable document` would generate a `DESIGN.md` from the
   existing CSS and is worth running before further visual work.
++> **Historical terminology:** This document uses **ROZ**, the former working name
+> for the reward token now branded **Zee Bucks (RZBX)**. Legacy code identifiers
+> may still use `roz` or `ROZ_*` for compatibility.
+>

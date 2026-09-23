@@ -2114,3 +2114,7 @@ write "no game fee" and not "free" until the paymaster operates.
     invocation that fails means a round never starts. A function `advance_round()`
     in the contract, that anyone can call after a time limit, would remove this
     privilege. Keep it for later.
++> **Historical terminology:** This document uses **ROZ**, the former working name
+> for the reward token now branded **Zee Bucks (RZBX)**. Legacy code identifiers
+> may still use `roz` or `ROZ_*` for compatibility.
+>

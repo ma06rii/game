@@ -3,7 +3,7 @@
 // this file, and never deployed to mainnet. See src/mock_vrf_provider.cairo for
 // the full explanation.
 
-// The ROZ reward token - a fixed-supply ERC20 with no mint function, deployed
+// The RZBX reward token - a fixed-supply ERC20 with no mint function, deployed
 // on its own before the game contract. Declaring it here is what puts it in the
 // build; without this line the file is never compiled and its class is never
 // produced. The game contract never calls into it by module path: it holds the
@@ -21,7 +21,7 @@ mod mock_vrf_provider;
 
 // Cartridge Arcade calls this separate implementation contract after it has
 // collected payment for a registered starter pack. The contract distributes
-// pre-funded USDC, STRK and ROZ; it never charges the buyer itself.
+// pre-funded USDC, STRK and RZBX; it never charges the buyer itself.
 pub mod starterpack;
 pub mod game_roundactions_facet;
 pub mod game_roundviews_facet;
@@ -236,12 +236,12 @@ pub trait IHelloStarknet<TContractState> {
     ) -> (u128, u128);
     fn get_minimum_allowance_fee(self: @TContractState) -> u256;
     fn claim_reward(ref self: TContractState, gameWeek: u256) -> bool;
-    // The ROZ claim leg (4g, 4h, 4i)
+    // The RZBX claim leg (4g, 4h, 4i)
     fn claim_reward_tokens(ref self: TContractState) -> bool;
     fn claim_reward_token_for_week(ref self: TContractState, gameWeek: u256) -> bool;
     fn get_reward_token_pending(self: @TContractState, gamerWalletAddress: ContractAddress) -> u256;
     fn get_total_reward_token_pending(self: @TContractState) -> u256;
-    // ROZ earned while the contract could not pay for it, and the call that
+    // RZBX earned while the contract could not pay for it, and the call that
     // turns it back into a withdrawable balance once it can.
     fn get_reward_token_missed(self: @TContractState, gamerWalletAddress: ContractAddress) -> u256;
     fn get_total_reward_token_missed(self: @TContractState) -> u256;
@@ -262,7 +262,7 @@ pub trait IHelloStarknet<TContractState> {
     ) -> (u256, u256, u256);
     fn update_vrf_provider(ref self: TContractState, vrfProviderAddress: ContractAddress) -> bool;
     fn update_game_token(ref self: TContractState, gameTokenAddress: ContractAddress) -> bool;
-    // ROZ reward token - address and rates (4a, 4b)
+    // RZBX reward token - address and rates (4a, 4b)
     fn update_game_reward_token(
         ref self: TContractState, rewardTokenAddress: ContractAddress,
     ) -> bool;
@@ -661,7 +661,7 @@ pub mod HelloStarknet {
         treasuresSurvived: u256,
     }
 
-    // Every successful ROZ credit. Amounts are raw 18-decimal ROZ.
+    // Every successful RZBX credit. Amounts are raw 18-decimal RZBX.
     #[derive(Drop, starknet::Event)]
     struct RewardTokenAccrued {
         #[key]
@@ -691,7 +691,7 @@ pub mod HelloStarknet {
         amount: u256,
     }
 
-    // Fired when a player converts ROZ that was previously skipped into a
+    // Fired when a player converts RZBX that was previously skipped into a
     // pending balance they can actually withdraw. `remaining` is what is still
     // waiting on further funding - non-zero means the conversion was PARTIAL
     // because the contract could not cover the whole backlog yet, and calling
@@ -890,20 +890,20 @@ pub mod HelloStarknet {
         found_coordinates: LegacyMap<(u256, u256), bool>,
         minimumAllowance: u256,
         // ------------------------------------------------------------------
-        // ROZ reward token - address (4a)
+        // RZBX reward token - address (4a)
         // ------------------------------------------------------------------
         // The ERC-20 this contract pays gameplay rewards in. Held as an address
         // and reached through the ERC20 dispatcher, exactly like the game token
         // above, so the token can be swapped without a new class.
         //
-        // ROZ has 18 decimals. The game token (USDC) has 6. Every ROZ amount
+        // RZBX has 18 decimals. The game token (USDC) has 6. Every RZBX amount
         // below is therefore 1e18-scaled and every USDC amount is 1e6-scaled -
         // mixing the two silently changes a value by a factor of a trillion.
         game_reward_token_contract_address: ContractAddress,
         // ------------------------------------------------------------------
-        // ROZ reward rates, at full rate (4b)
+        // RZBX reward rates, at full rate (4b)
         // ------------------------------------------------------------------
-        // Raw 18-decimal ROZ. These replace currentGameTokenReward, which held a
+        // Raw 18-decimal RZBX. These replace currentGameTokenReward, which held a
         // 6-decimal USD figure only the frontend understood.
         rewardHide: u256, // 30  - paid the moment a hide succeeds
         rewardHideSurvived: u256, // 50  - paid if the treasure is still unfound
@@ -941,13 +941,13 @@ pub mod HelloStarknet {
         softCapMultiplierDen: u256, // 5 }
         newWalletSoftCapRoz: u256, // 80 - near inert, ~142 hops to bind
         // dailyFreeHops (20) MUST stay strictly below participationMinimumHops
-        // (28), so the 18-ROZ bonus can never be had for free. Since 2.6 the
+        // (28), so the 18-RZBX bonus can never be had for free. Since 2.6 the
         // spend threshold is the primary guard and this ordering is defence in
         // depth, but breaking it would reopen a zero-cost route to the bonus.
         // ------------------------------------------------------------------
         // The Lightweight Gate - thresholds (2.6)
         // ------------------------------------------------------------------
-        // Both are 6-decimal game-token amounts, NOT ROZ.
+        // Both are 6-decimal game-token amounts, NOT RZBX.
         dailySpendThreshold: u256, // 600000  = $0.60, resets daily
         lifetimeSpendThreshold: u256, // 3000000 = $3.00, permanent once passed
         // ------------------------------------------------------------------
@@ -1046,14 +1046,14 @@ pub mod HelloStarknet {
         hider_survival_roz: LegacyMap<(u256, ContractAddress), u256>,
         //Reward_token_pending: LegacyMap::<gamerWalletAddress, rozOwed>
         //
-        //ROZ is ACCRUED here, never transferred per action. If the contract held
-        //no ROZ and every action transferred, then hiding, moving and spawning
+        //RZBX is ACCRUED here, never transferred per action. If the contract held
+        //no RZBX and every action transferred, then hiding, moving and spawning
         //would all revert the moment the balance ran dry - the game would stop.
         //With a pending balance the game continues and only the reward pauses.
         reward_token_pending: LegacyMap<ContractAddress, u256>,
         //Reward_token_claimed: LegacyMap::<(gameWeek, gamerWalletAddress), rozLegSettled>
         //
-        //Separate from claimed_rewards so a failed ROZ leg can be retried
+        //Separate from claimed_rewards so a failed RZBX leg can be retried
         //without letting the USDC be claimed twice. See 4h.
         reward_token_claimed: LegacyMap<(u256, ContractAddress), bool>,
         //The sum of every reward_token_pending balance. Kept so the coverage
@@ -1062,10 +1062,10 @@ pub mod HelloStarknet {
         total_reward_token_pending: u256,
         //Reward_token_missed: LegacyMap::<gamerWalletAddress, rozEarnedButRefused>
         //
-        //ROZ that was EARNED and then REFUSED, because the coverage rule could
+        //RZBX that was EARNED and then REFUSED, because the coverage rule could
         //not cover it at the time. This is not an IOU the contract can pay right
         //now - that is reward_token_pending above - it is a record that the
-        //reward is still owed once there is ROZ to pay it from.
+        //reward is still owed once there is RZBX to pay it from.
         //
         //WITHOUT THIS A SKIPPED REWARD IS SIMPLY LOST. The skip emits an event
         //and returns, and a contract cannot read its own logs, so nothing on
@@ -1172,7 +1172,7 @@ pub mod HelloStarknet {
     // literals has to be rescaled to match. (They were previously written for
     // 18-decimal ETH priced at roughly $3,333.)
     //
-    // rewardTokenAddress is the ROZ ERC-20 this contract accrues gameplay
+    // rewardTokenAddress is the RZBX ERC-20 this contract accrues gameplay
     // rewards in. Deployed on its own first (phase 1), so its address is known
     // by the time this class is deployed. It can be changed afterwards through
     // update_game_reward_token, but only as a setup lever: doing it while
@@ -1180,7 +1180,7 @@ pub mod HelloStarknet {
     // total_reward_token_pending still counts IOUs denominated in the old token
     // while the coverage check reads the balance of the new one.
     //
-    // ROZ HAS 18 DECIMALS AND THE GAME TOKEN HAS 6. Every reward literal below
+    // RZBX HAS 18 DECIMALS AND THE GAME TOKEN HAS 6. Every reward literal below
     // is 1e18-scaled; every fee literal is 1e6-scaled. They are never mixed.
     // The selector must exist in the selected declared facet. The facet index
     // is a fixed allowlist; callers cannot supply an arbitrary class hash.
@@ -1258,7 +1258,7 @@ pub mod HelloStarknet {
         // 0x0512feac6339ff7889822cb5aa2a86c848e9d392bb0e3e237c008674feed8343.
         self.game_token_contract_address.write(gameTokenAddress);
 
-        // The ROZ token, deployed in phase 1 and passed in here.
+        // The RZBX token, deployed in phase 1 and passed in here.
         self.game_reward_token_contract_address.write(rewardTokenAddress);
 
         // THE REWARD SETTINGS ARE NOT SET HERE. They used to be, in
@@ -1271,7 +1271,7 @@ pub mod HelloStarknet {
         // fee and band at zero, and the admin must set them through set_params
         // and the indexed band entrypoint
         // before the game can be played. See "Post-deploy initialisation" in
-        // ROZ_DEPLOYMENT_AND_FUNDING.md for the sequence and the one ordering
+        // RZBX_DEPLOYMENT_AND_FUNDING.md for the sequence and the one ordering
         // rule it must obey.
         //
         // To make forgetting that impossible rather than merely unlikely, the
@@ -1860,7 +1860,7 @@ pub mod HelloStarknet {
         // participation ever see - they never touch the volume multiplier, which
         // belongs to hides.
         //
-        // The cap is set to 136, just under the 137.2 raw ROZ a 160-hop day can
+        // The cap is set to 136, just under the 137.2 raw RZBX a 160-hop day can
         // reach when four spawns are taken before hopping. In practice it binds
         // only that bought-crossing route. An honest active player reaches
         // about 96.7 and never meets it at all. That is deliberate: it
@@ -1946,10 +1946,10 @@ pub mod HelloStarknet {
             self.total_reward_token_missed.write(totalMissed + amount);
         }
 
-        // Credit ROZ to a player's pending balance. NEVER transfers.
+        // Credit RZBX to a player's pending balance. NEVER transfers.
         //
         // This is the single most important design decision in the reward
-        // system. If every rewarded action transferred ROZ directly, then the
+        // system. If every rewarded action transferred RZBX directly, then the
         // moment the contract's balance ran dry, hiding, moving and spawning
         // would all start reverting - the game itself would stop because a
         // REWARD ran out. Accruing to a balance means an unfunded contract still
@@ -1959,7 +1959,7 @@ pub mod HelloStarknet {
         // THE COVERAGE RULE (4c-i). A credit is only made if the contract can
         // still honour every pending balance afterwards:
         //
-        //     total_reward_token_pending + amount <= ROZ balance of this contract
+        //     total_reward_token_pending + amount <= RZBX balance of this contract
         //
         // That invariant is what lets claim_reward_tokens be written without any
         // failure path: if the sum of all IOUs never exceeds the balance, a
@@ -1967,7 +1967,7 @@ pub mod HelloStarknet {
         // SKIPPED, not reverted, and an event is emitted - the caller's gameplay
         // action still succeeds.
         //
-        // Returns true if the ROZ landed, false if it was skipped. The five
+        // Returns true if the RZBX landed, false if it was skipped. The five
         // gameplay rewards ignore this and simply come round again next round;
         // only the claim leg in 4h records it, because a claim happens once.
         fn _accrueRewardToken(
@@ -2005,7 +2005,7 @@ pub mod HelloStarknet {
 
             // Read the live balance rather than tracking a funded budget in
             // storage. A tracked budget drifts from the truth the moment anybody
-            // transfers ROZ in directly - which is exactly how funding happens,
+            // transfers RZBX in directly - which is exactly how funding happens,
             // since the token has no mint and tranches arrive as plain
             // transfers. This costs one external call per rewarded action, and
             // that is the honest price of not being wrong.
@@ -2542,12 +2542,12 @@ pub mod HelloStarknet {
         // validate_treasure_coordinates just moves one from the hider to the
         // finder. At claim time that makes a survived hide and a steal
         // INDISTINGUISHABLE - they are the same number in the same map. Paying
-        // 50 ROZ for one and 110 for the other is impossible without splitting
+        // 50 RZBX for one and 110 for the other is impossible without splitting
         // them.
         //
         // So the two maps below are maintained ALONGSIDE claim_share_amounts,
         // never instead of it. The aggregate still drives the USDC claim exactly
-        // as it does today; the typed counts drive the ROZ leg only. Keeping the
+        // as it does today; the typed counts drive the RZBX leg only. Keeping the
         // USDC path untouched is deliberate - it is live, it works, and this
         // change must not put it at risk.
         fn _rewardHiderShare(
@@ -2572,7 +2572,7 @@ pub mod HelloStarknet {
         // Moves one share from the hider to the finder. Called from
         // validate_treasure_coordinates when a treasure is stolen.
         //
-        // The hider's stored survival ROZ is reduced PRO RATA, because
+        // The hider's stored survival RZBX is reduced PRO RATA, because
         // hider_survival_roz is one accumulated number and the contract cannot
         // tell which of a player's treasures was the one taken. With hides
         // capped at 10 a day for ordinary wallets the approximation is bounded
@@ -2802,14 +2802,14 @@ pub mod HelloStarknet {
                 self.total_usdc_claimable.write(0);
             }
 
-            // --- The ROZ leg (4g, 4h) ---
+            // --- The RZBX leg (4g, 4h) ---
             //
             // THE USDC HAS ALREADY BEEN PAID AND THE FLAG ALREADY SET. That
-            // ordering is the whole point: a ROZ shortage must never be able to
+            // ordering is the whole point: a RZBX shortage must never be able to
             // block a USDC claim. This is the behaviour the entire accrual
             // design exists to protect.
             //
-            // The ROZ leg is tracked by its own flag so a skipped credit can be
+            // The RZBX leg is tracked by its own flag so a skipped credit can be
             // retried later through claim_reward_token_for_week, without the
             // USDC becoming claimable a second time.
             self._creditClaimRoz(gamerWalletAddress, gameWeek);
@@ -2817,7 +2817,7 @@ pub mod HelloStarknet {
             return true;
         }
 
-        // Credit the ROZ owed for a finished week's shares.
+        // Credit the RZBX owed for a finished week's shares.
         //
         // Survived hides pay the amount STORED AT HIDE TIME in
         // hider_survival_roz - never a freshly resolved rate. A claim can land
@@ -3361,7 +3361,7 @@ pub mod HelloStarknet {
         }
 
         // One hop. Charges the 2.5 tier price for this wallet's hop number
-        // TODAY, then credits ROZ at whatever rate the 2.6 gate resolves to.
+        // TODAY, then credits RZBX at whatever rate the 2.6 gate resolves to.
         //
         // ORDER MATTERS HERE AND IS THE WHOLE POINT. The fee is charged and the
         // spend counters updated BEFORE the reward rate is read, so the hop that
@@ -3396,7 +3396,7 @@ pub mod HelloStarknet {
             //
             // A free hop is identical to a paid one in every respect except the
             // charge. It moves the player, it counts toward the 28-hop
-            // participation minimum and the 40-hop cap, and it earns ROZ at the
+            // participation minimum and the 40-hop cap, and it earns RZBX at the
             // same resolved rate. An earlier design made free hops earn nothing,
             // which meant taking the allowance COST an earning player money and
             // the rational move was to avoid the feature entirely.
@@ -3516,7 +3516,7 @@ pub mod HelloStarknet {
 
                 // The aggregate calls above move the USDC-backed share. Keep
                 // the parallel typed ledgers in step so the hider loses the
-                // pro-rata survival ROZ and the finder receives rewardFind at
+                // pro-rata survival RZBX and the finder receives rewardFind at
                 // claim time.
                 self
                     ._moveShareToFinder(
@@ -3589,7 +3589,7 @@ pub mod HelloStarknet {
 
             // The free spawn allowance, one a day by default.
             //
-            // A SPAWN PAYS NO ROZ - free or paid, first of the day or fifth. It
+            // A SPAWN PAYS NO RZBX - free or paid, first of the day or fifth. It
             // repositions the rabbit and nothing more. That is why there is no
             // reward branch here at all, and why free and paid spawns are
             // identical apart from the charge. The daily reward and streak bonus
@@ -3630,10 +3630,10 @@ pub mod HelloStarknet {
             return self._claimReward(gamerWalletAddress, gameWeek);
         }
 
-        // Withdraw accrued ROZ. A SEPARATE entrypoint from claim_reward, not a
+        // Withdraw accrued RZBX. A SEPARATE entrypoint from claim_reward, not a
         // replacement for it (4g).
         //
-        // This can never fail for lack of ROZ, and that is guaranteed by
+        // This can never fail for lack of RZBX, and that is guaranteed by
         // construction rather than by checking: the coverage rule in
         // _accrueRewardToken refuses to create an IOU the contract cannot
         // honour, so if a balance exists here the tokens exist to pay it.
@@ -3684,12 +3684,12 @@ pub mod HelloStarknet {
             return true;
         }
 
-        // Retry the ROZ leg of a past claim (4h).
+        // Retry the RZBX leg of a past claim (4h).
         //
         // If the contract was unfunded when claim_reward ran, the USDC was still
-        // paid but the ROZ credit was skipped and reward_token_claimed left
+        // paid but the RZBX credit was skipped and reward_token_claimed left
         // clear. This re-runs just that leg. Without it, a player who claimed
-        // during a funding gap would lose their ROZ permanently through no
+        // during a funding gap would lose their RZBX permanently through no
         // fault of their own.
         //
         // Safe to call repeatedly: once the credit lands the flag is set and
@@ -3707,14 +3707,14 @@ pub mod HelloStarknet {
             return self._creditClaimRoz(gamerWalletAddress, gameWeek);
         }
 
-        // How much ROZ this wallet can withdraw right now.
+        // How much RZBX this wallet can withdraw right now.
         fn logic_get_reward_token_pending(
             self: @ContractState, gamerWalletAddress: ContractAddress,
         ) -> u256 {
             return self.reward_token_pending.read(gamerWalletAddress);
         }
 
-        // The sum of every outstanding IOU. Compare against the contract's ROZ
+        // The sum of every outstanding IOU. Compare against the contract's RZBX
         // balance to see how much headroom the coverage rule has left - when
         // these meet, rewards stop accruing and RewardTokenAccrualSkipped starts
         // firing.
@@ -3722,7 +3722,7 @@ pub mod HelloStarknet {
             return self.total_reward_token_pending.read();
         }
 
-        // ROZ this wallet earned while the contract could not pay for it.
+        // RZBX this wallet earned while the contract could not pay for it.
         //
         // NOT withdrawable. Call claim_missed_reward_token to move whatever the
         // balance can now cover into the pending balance, then
@@ -3744,7 +3744,7 @@ pub mod HelloStarknet {
             return self.total_reward_token_missed.read();
         }
 
-        // Turn previously skipped ROZ into a balance that can be withdrawn.
+        // Turn previously skipped RZBX into a balance that can be withdrawn.
         //
         // Moves as much as the contract can currently cover out of
         // reward_token_missed and into reward_token_pending. Then
@@ -3790,7 +3790,7 @@ pub mod HelloStarknet {
 
             // Same live read as the coverage rule in _accrueRewardToken, and for
             // the same reason - a tracked budget drifts the moment somebody
-            // transfers ROZ in, which is how funding arrives.
+            // transfers RZBX in, which is how funding arrives.
             let reward_token_dispatcher = ERC20ABIDispatcher {
                 contract_address: rewardTokenAddress,
             };
@@ -3838,7 +3838,7 @@ pub mod HelloStarknet {
             return converting;
         }
 
-        // Whether the ROZ leg of a given week has settled. False after a claim
+        // Whether the RZBX leg of a given week has settled. False after a claim
         // made while the contract was unfunded, which is the signal to call
         // claim_reward_token_for_week.
         fn logic_get_reward_token_claimed(
@@ -3859,8 +3859,8 @@ pub mod HelloStarknet {
         //     either, because get_caller_address() is 0 in a call - the probe
         //     reports address zero's state, not the player's.
         //   - get_reward_token_claimed is not a usable substitute. It stays
-        //     false whenever the ROZ leg was skipped for want of funding,
-        //     which is every claim made while the contract holds no ROZ.
+        //     false whenever the RZBX leg was skipped for want of funding,
+        //     which is every claim made while the contract holds no RZBX.
         //
         // Note the parameters read (address, week) while the storage key is
         // (week, address). That inversion is the convention every getter here
@@ -3932,7 +3932,7 @@ pub mod HelloStarknet {
             return claimable;
         }
 
-        // The typed share counts behind a week's ROZ, and the survival reward
+        // The typed share counts behind a week's RZBX, and the survival reward
         // stored at hide time.
         fn logic_get_reward_token_due(
             self: @ContractState, gamerWalletAddress: ContractAddress, gameWeek: u256,
@@ -4004,11 +4004,11 @@ pub mod HelloStarknet {
         // call this; it is the quickest way to confirm a deploy wired up the token
         // you intended.
         // ------------------------------------------------------------------
-        // ROZ reward token - address and rates (4a, 4b)
+        // RZBX reward token - address and rates (4a, 4b)
         // ------------------------------------------------------------------
 
         // A setup lever, not a live one. Changing this while players hold
-        // pending ROZ strands them: total_reward_token_pending still counts IOUs
+        // pending RZBX strands them: total_reward_token_pending still counts IOUs
         // denominated in the OLD token, while the coverage check in 4c-i reads
         // the balance of the new one. Treat it exactly like update_game_token.
         fn logic_update_game_reward_token(
@@ -4160,7 +4160,7 @@ pub mod HelloStarknet {
         // On a freshly deployed contract the FIRST batch must use the exact
         // canonical 35-key order. The Poseidon check below rejects omissions,
         // duplicates and typos before any setting is written. See "Post-deploy
-        // initialisation" in ROZ_DEPLOYMENT_AND_FUNDING.md.
+        // initialisation" in RZBX_DEPLOYMENT_AND_FUNDING.md.
         fn logic_set_params(ref self: ContractState, keys: Array<felt252>, values: Array<u256>) -> bool {
             self._assert_admin();
 
@@ -4277,7 +4277,7 @@ pub mod HelloStarknet {
         // Per-player state (4e)
         // ------------------------------------------------------------------
 
-        // Everything that resets at midnight UTC, in one call: hops today, ROZ
+        // Everything that resets at midnight UTC, in one call: hops today, RZBX
         // from hops today, hides today, spend today, free hops used today.
         fn logic_get_player_daily_state(
             self: @ContractState, gamerWalletAddress: ContractAddress,
@@ -4317,21 +4317,21 @@ pub mod HelloStarknet {
 
         // Sweep a token out of the contract (4j).
         //
-        // Now takes a token address, so ROZ sent here by mistake is recoverable
+        // Now takes a token address, so RZBX sent here by mistake is recoverable
         // and an over-funded tranche can be reclaimed. Previously it could only
-        // move the configured game token, which is why ROZ transferred in was
+        // move the configured game token, which is why RZBX transferred in was
         // stuck forever.
         //
         // TWO GUARDS, ONE RULE: money that belongs to players is not the
         // owner's to take, so each branch releases only the SURPLUS above what
         // is owed.
         //
-        //   ROZ  - subtract total_reward_token_pending AND
+        //   RZBX  - subtract total_reward_token_pending AND
         //          total_reward_token_missed. The first is the backing for every
         //          accrued balance; without it the admin could sweep it and
         //          claim_reward_tokens would start failing, which is exactly the
         //          failure the coverage rule in 4c-i exists to prevent. The
-        //          second is ROZ players earned while the contract was unfunded
+        //          second is RZBX players earned while the contract was unfunded
         //          and have not converted yet - equally theirs, just not yet in
         //          a payable form.
         //

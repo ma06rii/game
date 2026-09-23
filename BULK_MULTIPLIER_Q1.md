@@ -86,3 +86,7 @@ This multiplier applies whether the player uses single hide or bulk hide.
 ---
 
 **End of Specification**
++> **Historical terminology:** This document uses **ROZ**, the former working name
+> for the reward token now branded **Zee Bucks (RZBX)**. Legacy code identifiers
+> may still use `roz` or `ROZ_*` for compatibility.
+>

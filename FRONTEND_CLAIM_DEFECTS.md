@@ -268,3 +268,7 @@ The verification below needs a round opened and played.
    transaction succeeds.
 5. A round funded below its fees makes `get_player_reward_due` revert; the panel
    shows "nothing to collect from that round" and the rest still renders.
++> **Historical terminology:** This document uses **ROZ**, the former working name
+> for the reward token now branded **Zee Bucks (RZBX)**. Legacy code identifiers
+> may still use `roz` or `ROZ_*` for compatibility.
+>

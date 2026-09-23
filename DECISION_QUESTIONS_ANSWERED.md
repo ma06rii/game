@@ -444,3 +444,7 @@ This document contains everything needed to implement the whitelist system.
 24. **Three settings operate together, and nothing protects the relation.** `dailyHideCap` x `hideFee` \= `dailySpendThreshold`, which is 3 x $0.20 \= $0.60. This makes the maximum number of hides get through the gate exactly. The owner can change all three, and they are independent. `hideFee` at $0.25 lets two hides get through the gate. `dailyHideCap` at 2 stops hides from getting through at all. Put a test in the set functions, or write the relation next to them and accept the danger.
 
 Yes, put a test in the set function.
++> **Historical terminology:** This document uses **ROZ**, the former working name
+> for the reward token now branded **Zee Bucks (RZBX)**. Legacy code identifiers
+> may still use `roz` or `ROZ_*` for compatibility.
+>

@@ -3,7 +3,7 @@
 `TreasureGameStarterpack` is the inventory-backed implementation used by
 Cartridge Arcade after Arcade has collected a pack's purchase price. It does
 not charge the buyer, implement game actions, or sponsor Starknet gas. The
-contract sends USDC, STRK, and ROZ already held at its own address directly to
+contract sends USDC, STRK, and Zee Bucks (RZBX) already held at its own address directly to
 the recipient supplied by Arcade.
 
 The implementation exposes Cartridge's required interface:
@@ -26,12 +26,12 @@ contract's token balances. Only the configured Arcade registry may call
 
 ## Pack configuration
 
-| Pack | Arcade price | Reissuable in Arcade | USDC issued | STRK issued | ROZ issued |
+| Pack | Arcade price | Reissuable in Arcade | USDC issued | STRK issued | RZBX issued |
 | --- | ---: | --- | ---: | ---: | ---: |
 | Welcome | $9.99 | false | `6_000_000` | `2_500_000_000_000_000_000` | `1_000_000_000_000_000_000_000` |
 | Week | $29.99 | true | `18_000_000` | `6_000_000_000_000_000_000` | `3_000_000_000_000_000_000_000` |
 
-USDC uses 6 decimals. STRK and the repository's ROZ token use 18 decimals.
+USDC uses 6 decimals. STRK and the repository's Zee Bucks (RZBX) token use 18 decimals.
 The Arcade price is separate from these issued amounts: changing amounts in
 this contract does not change the Arcade listing price, and changing an
 Arcade price does not change this contract's transfers.
@@ -78,8 +78,8 @@ assigns them during registration.
 
 Use this deployment sequence:
 
-1. Confirm the network's official Arcade registry, USDC, STRK, and ROZ
-   addresses. Confirm ROZ uses 18 decimals.
+1. Confirm the network's official Arcade registry, USDC, STRK, and RZBX
+   addresses. Confirm RZBX uses 18 decimals.
 2. Build and test this repository, then declare and deploy
    `TreasureGameStarterpack` with the constructor arguments above.
 3. Fund the deployed contract with enough of all three tokens for the planned

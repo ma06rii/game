@@ -1,7 +1,20 @@
-# ROZ deployment state and funding runbook
+# Zee Bucks (RZBX) deployment state and funding runbook
 
 Operational notes for the live Sepolia deployment. Every address and balance
 below was **read from the chain**, not copied from a note.
+
+The Cairo artifact and environment variables retain the legacy `ROZToken` and
+`ROZ_*` names for compatibility. They refer to the Zee Bucks token with ticker
+`RZBX` throughout this runbook.
+
+> **Sepolia metadata status (verified 2026-09-23):** The configured token at
+> `0x03a5c876…d445b` still returns `name() = "ROZToken"` and
+> `symbol() = "ROZ"`. The routed game at `0x07088478…b3c86` is wired to that
+> same address. The current source initializes a newly deployed token as
+> `"Zee Bucks"` / `"RZBX"`, but changing source code does not rewrite ERC-20
+> metadata already stored at the existing address. Wallets and explorers will
+> keep showing the legacy metadata until a separately reviewed migration or
+> replacement is completed. No such network change is part of this rename.
 
 > **Routed-game ABI warning (2026-09-18):** The game declare, deploy,
 > initialization, and verification commands below describe the older
@@ -55,7 +68,7 @@ checks that both sncast aliases resolve locally to their configured addresses.
 | Contract | Address |
 |---|---|
 | **Game** | `0x01aff92bfd50b4953f8b53a95dee15065e89c44e1d98ab4f27d57b6587f1472b` |
-| **ROZ reward token** | `0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b` |
+| **Reward token (intended Zee Bucks/RZBX branding)** | `0x03a5c8760ed42b8d916f2a37e55335c38979e9ec91c963d0be351e2c285d445b` |
 | **USDC (game token)** | `0x0512feAc6339Ff7889822cb5aA2a86C848e9D392bB0E3E237C008674feeD8343` |
 | **VRF provider (mock)** | `0x01baad38bde8d3d60eebab5b96f72a297d52e6d1386bc3d4ec5344d9a30388bd` |
 | **Owner / deployer** | `0x052a2b0b20d8796e57f0f00e99adfd61e0b40c4a49553d4197e4da6c1c023833` |
@@ -66,11 +79,12 @@ checks that both sncast aliases resolve locally to their configured addresses.
 |---|---|
 | Deployment identity | class `0x051de976…e0aafb`, block `14484189` |
 | Minimum rollover readiness | `get_min_treasures_to_start()` = `2` |
-| Game wiring | `get_contract_addresses()` → `(VRF, USDC, ROZ)` |
-| Token identity | `symbol()` = `"ROZ"`, `decimals()` = 18 |
-| Total supply | 5,000,000,000 ROZ |
-| Owner balance | 5,000,000,000 ROZ — the whole supply |
-| **Game contract balance** | **0 ROZ, 0 USDC** — verified on 2026-09-03 |
+| Game wiring | `get_contract_addresses()` → `(VRF, USDC, RZBX)` |
+| Live token identity | `name()` = `"ROZToken"`, `symbol()` = `"ROZ"`, `decimals()` = 18 |
+| Source metadata for a new deployment | `name()` = `"Zee Bucks"`, `symbol()` = `"RZBX"`, `decimals()` = 18 |
+| Total supply | 5,000,000,000 RZBX |
+| Owner balance | 5,000,000,000 RZBX — the whole supply |
+| **Game contract balance** | **0 RZBX, 0 USDC** — verified on 2026-09-03 |
 | Lifecycle after bootstrap expiry | round `0`, `ENDING`; round `1` did not open with zero staged treasures |
 
 ### Live parameter changes
@@ -92,9 +106,9 @@ its player money behind.
 | Address | Why it was replaced | Two-token sweep? |
 |---|---|---|
 | `0x00430dcb…fa83a` | no minimum-treasure rollover gate | **yes** |
-| `0x0771fdfb…cd834c` | no missed-ROZ ledger | **yes** |
+| `0x0771fdfb…cd834c` | no missed-RZBX ledger | **yes** |
 | `0x0783f240…d350a9` | no `get_reward_claimed` / `get_claimable_weeks` | **yes** |
-| `0x0407390e…c1e2e0` | predates the ROZ work entirely | **no** |
+| `0x0407390e…c1e2e0` | predates the RZBX work entirely | **no** |
 
 **`0x0771fdfb…cd834c` is at week 5 and still holds $22.13 of USDC**, of which
 **$20.08 is owed to players** as hider stakes and only $2.05 is sweepable. Those
@@ -110,7 +124,7 @@ legacy claim still requires deliberately reconnecting to that old contract.
 
 ## 2. Why funding matters
 
-Until the game contract holds ROZ, the coverage rule in §4c-i refuses every
+Until the game contract holds RZBX, the coverage rule in §4c-i refuses every
 credit. **Gameplay still works** — that is the whole point of accruing rather
 than transferring — but `RewardTokenAccrualSkipped` fires on every rewarded
 action and nobody earns anything.
@@ -222,28 +236,28 @@ observed half-applied.
 
 ---
 
-## 6. Recovering ROZ
+## 6. Recovering RZBX
 
 `withdraw_token_balance(tokenAddress, receiver)` — note the token comes **first**;
 the signature changed from `(receiver)`.
 
 For the reward token it releases only the **surplus above
-`total_reward_token_pending`**, so it can never take ROZ that players have
+`total_reward_token_pending`**, so it can never take RZBX that players have
 already accrued. The same guard applies to USDC via `total_usdc_claimable`. Any
 other token is fully sweepable.
 
 Check before acting with `get_sweepable_balance(tokenAddress)`.
 
-**From the §8 build onward the ROZ guard also subtracts
+**From the §8 build onward the RZBX guard also subtracts
 `total_reward_token_missed`** — rewards players earned while the contract was
 unfunded and have not converted yet. Equally theirs, just not yet in a payable
 form. Note the cost: a wallet that never returns to call
 `claim_missed_reward_token` holds that much back from the owner permanently.
 
 **This is why funding the current contract is safe**, and why the address in §3
-matters. `0x0407390e…` swept only the configured game token, so ROZ sent there
+matters. `0x0407390e…` swept only the configured game token, so RZBX sent there
 would be stuck permanently with no recovery path at all. `0x0783f240…` does have
-the two-token sweep, so ROZ sent there by mistake is recoverable — but it is a
+the two-token sweep, so RZBX sent there by mistake is recoverable — but it is a
 wasted round trip on a transfer worth 17% of supply, and the sweep would have to
 be run from the owner account before the tokens could be sent on.
 
@@ -319,7 +333,7 @@ reward token (slot 3). Those are the names `.env.schema` declares and
 
 The first six constructor arguments are plain `ContractAddress`, one felt each,
 and `upgradeDelay` is a `u64`, so `--arguments` and `--constructor-calldata` are
-equivalent here. **The ROZ token does not change** — the same address is reused
+equivalent here. **The RZBX token does not change** — the same address is reused
 every time, which is why it comes from Doppler rather than being pasted in.
 
 **The deployed contract is paused and holds no settings.** Go straight to
@@ -513,12 +527,12 @@ export GAME=0x... # address from step 3
 
 DOPPLER_CONFIG=dev GAME="$GAME" npm exec -- varlock run -- bash -s <<'SH'
 # Proves this is the intended build - pick an entrypoint no earlier
-# deployment has. get_total_reward_token_missed for the missed-ROZ build,
+# deployment has. get_total_reward_token_missed for the missed-RZBX build,
 # get_claimable_weeks for the claim-view build before it.
 sncast call --contract-address "$GAME" --function get_total_reward_token_missed \
   --url "$STARKNET_RPC_URL"                                  # -> 0_u256
 
-sncast call --contract-address "$GAME" --function get_contract_addresses --url "$STARKNET_RPC_URL" # -> (VRF, USDC, ROZ)
+sncast call --contract-address "$GAME" --function get_contract_addresses --url "$STARKNET_RPC_URL" # -> (VRF, USDC, RZBX)
 sncast call --contract-address "$GAME" --function get_game_week          --url "$STARKNET_RPC_URL" # -> 0_u256
 sncast call --contract-address "$GAME" --function owner                  --url "$STARKNET_RPC_URL"
 SH
@@ -533,16 +547,16 @@ SH
 2. Sweep whatever is left with `withdraw_token_balance(tokenAddress, receiver)`.
 3. Repoint the shared frontend address source and `VITE_GAME_CONTRACT_ADDRESS`;
    gameplay and Cartridge session policies both consume that source. Leave the
-   ROZ token address unchanged.
+   RZBX token address unchanged.
 4. Follow the coordinated round bootstrap in §9 to open round 1. The contract
    starts with an empty round 0; do not call live actions with a round id.
 5. Update the address in the docs that carry it —
-   `ROZ_DEPLOYMENT_AND_FUNDING.md`, `ROZ_IMPLEMENTATION_NOTES.md`,
+   `RZBX_DEPLOYMENT_AND_FUNDING.md`, `ROZ_IMPLEMENTATION_NOTES.md`,
    `FRONTEND_ROZ_CHANGES.md`, `FRONTEND_CLAIM_DEFECTS.md` and
    `CLAIM_REWARDS_ASSESSMENT.md`.
 
-**ROZ funding is deliberately not in this list.** A new contract starts with a
-zero balance, so accrual is skipped and — from the missed-ROZ build onward —
+**RZBX funding is deliberately not in this list.** A new contract starts with a
+zero balance, so accrual is skipped and — from the missed-RZBX build onward —
 recorded rather than lost. Gameplay and USDC claims are unaffected. Fund it as a
 separate decision, using §3 pointed at the new address.
 

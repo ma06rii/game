@@ -27,7 +27,7 @@ const SEPOLIA_CHAIN_ID = '0x534e5f5345504f4c4941';
 const MAX_U128 = (1n << 128n) - 1n;
 const ADDRESS = /^0x[0-9a-fA-F]{1,64}$/;
 
-// This is the canonical, ordered first batch from ROZ_DEPLOYMENT_AND_FUNDING.md.
+// This is the canonical, ordered first batch from RZBX_DEPLOYMENT_AND_FUNDING.md.
 export const SETTINGS = [
   ['rewardHide', 30000000000000000000n],
   ['rewardHideSurvived', 50000000000000000000n],

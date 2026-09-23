@@ -60,5 +60,14 @@ build-external-contracts = [
     "project_name::starterpack::TreasureGameStarterpack",
 ]
 
+[[test]]
+name = "reward_token_integrationtest"
+kind = "test"
+source-path = "tests/test_reward_token.cairo"
+test-type = "integration"
+build-external-contracts = [
+    "project_name::game_reward_token::ROZToken",
+]
+
 [scripts]
 test = "snforge test"

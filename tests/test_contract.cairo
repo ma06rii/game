@@ -55,7 +55,7 @@ fn append_facet_hashes(ref calldata: Array<felt252>) {
     calldata.append((*declare("GameAdminActionsFacet").unwrap().contract_class().class_hash).into());
 }
 
-// The game contract's constructor takes the VRF provider, game token, ROZ
+// The game contract's constructor takes the VRF provider, game token, RZBX
 // reward token, round keeper, admin, pauser, and upgrade delay. This minimal
 // harness uses production-shaped addresses plus distinct admin/pauser wallets;
 // token-moving tests use deploy_wired below instead.
@@ -74,7 +74,7 @@ fn deploy_contract(name: ByteArray) -> ContractAddress {
         0x0512feac6339ff7889822cb5aa2a86c848e9d392bb0e3e237c008674feed8343,
     >();
 
-    // The ROZ reward token, deliberately left UNSET here.
+    // The RZBX reward token, deliberately left UNSET here.
     //
     // Zero is the honest pre-configuration state - the game contract is
     // deployed before any reward token is wired up - and it exercises the
@@ -175,7 +175,7 @@ fn test_spawn_then_hop_and_reject_duplicate_spawn() {
 }
 
 // ---------------------------------------------------------------------------
-// ROZ reward settings (section 7)
+// RZBX reward settings (section 7)
 // ---------------------------------------------------------------------------
 //
 // These exercise the parts of the plan that can be checked without moving
@@ -196,7 +196,7 @@ fn test_reward_settings_defaults() {
     initialise_game_settings(contract_address);
     let dispatcher = IHelloStarknetDispatcher { contract_address };
 
-    // Full rates, raw 18-decimal ROZ.
+    // Full rates, raw 18-decimal RZBX.
     let (hide, hideSurvived, find, participation, perHop) = dispatcher.get_reward_rates();
     assert(hide == 30000000000000000000, 'hide != 30');
     assert(hideSurvived == 50000000000000000000, 'hideSurvived != 50');
@@ -236,7 +236,7 @@ fn test_hop_limits_and_gate_thresholds() {
     assert(freeHops == 20, 'freeHops != 20');
     assert(freeSpawns == 1, 'freeSpawns != 1');
 
-    // The ordering that stops the 18-ROZ bonus being had for nothing.
+    // The ordering that stops the 18-RZBX bonus being had for nothing.
     assert(freeHops < participationMin, 'free hops >= participation');
     assert(participationMin <= roundCap, 'participation > round cap');
 
@@ -346,7 +346,7 @@ fn test_soft_caps() {
     assert(num == 1 && den == 5, 'soft cap != 0.2x');
 }
 
-// A fresh wallet has the full free hop allowance and no accrued ROZ.
+// A fresh wallet has the full free hop allowance and no accrued RZBX.
 #[test]
 fn test_fresh_wallet_state() {
     let contract_address = deploy_contract("HelloStarknet");
@@ -373,7 +373,7 @@ fn test_fresh_wallet_state() {
 }
 
 // The reward token is deliberately left unset by this harness, which is the
-// state the game contract is deployed in before phase 1 wires ROZ up.
+// state the game contract is deployed in before phase 1 wires RZBX up.
 #[test]
 fn test_reward_token_starts_unset() {
     let contract_address = deploy_contract("HelloStarknet");
@@ -388,8 +388,8 @@ fn test_reward_token_starts_unset() {
 // ---------------------------------------------------------------------------
 //
 // These need real tokens. Two MockERC20s are deployed - one standing in for the
-// game token (USDC) and one for ROZ - the player is funded and approves the
-// game contract, and the game contract is funded with ROZ so the coverage rule
+// game token (USDC) and one for RZBX - the player is funded and approves the
+// game contract, and the game contract is funded with RZBX so the coverage rule
 // in 4c-i lets rewards accrue.
 //
 // THEY ALL EXERCISE THE HIDE PATH, not the hop path. Hopping asserts the player
@@ -414,18 +414,18 @@ fn deploy_mock_token(name: ByteArray, symbol: ByteArray) -> ContractAddress {
 }
 
 // Deploys the game contract with both tokens wired up, funds the player, and
-// funds the contract with ROZ. Returns (game, gameToken, rewardToken).
-// The ordinary harness: a game funded with plenty of ROZ, so rewards land.
+// funds the contract with RZBX. Returns (game, gameToken, rewardToken).
+// The ordinary harness: a game funded with plenty of RZBX, so rewards land.
 fn deploy_wired(
     player: ContractAddress, playerFunds: u256,
 ) -> (ContractAddress, ContractAddress, ContractAddress) {
     deploy_wired_with_roz(player, playerFunds, 1000000000000000000000)
 }
 
-// The same harness with the ROZ funding chosen by the caller.
+// The same harness with the RZBX funding chosen by the caller.
 //
 // Pass 0 to get a contract that cannot pay any reward - the state every
-// deployment starts in, and the one the missed-ROZ ledger exists for. Pass a
+// deployment starts in, and the one the missed-RZBX ledger exists for. Pass a
 // deliberately small figure to test a PARTIAL recovery, where the contract can
 // cover some of a player's backlog but not all of it.
 fn deploy_wired_with_roz(
@@ -474,7 +474,7 @@ fn deploy_wired_with_roz(
     ERC20ABIDispatcher { contract_address: gameToken }.approve(game, playerFunds);
     stop_cheat_caller_address(gameToken);
 
-    // Fund the game with ROZ. Without this the coverage rule refuses every
+    // Fund the game with RZBX. Without this the coverage rule refuses every
     // credit and rewards silently read back as zero - which would make these
     // tests pass for the wrong reason.
     if (rozFunding > 0) {
@@ -490,7 +490,7 @@ fn deploy_wired_with_roz(
 }
 
 // The post-deploy initialisation sequence, exactly as
-// ROZ_DEPLOYMENT_AND_FUNDING.md specifies it for a real deployment. Keeping the
+// RZBX_DEPLOYMENT_AND_FUNDING.md specifies it for a real deployment. Keeping the
 // tests on the same path as the runbook means a mistake in the runbook shows up
 // here as a failing test rather than on mainnet.
 //
@@ -517,7 +517,7 @@ fn initialise_game_settings(game: ContractAddress) {
     dispatcher
         .set_params(
             array![
-                // Full rates, raw 18-decimal ROZ.
+                // Full rates, raw 18-decimal RZBX.
                 'rewardHide', 'rewardHideSurvived', 'rewardFind', 'rewardParticipation',
                 'rewardPerHop', // Below the daily spend threshold. Absolute values, never multipliers.
                 'hopRewardBelowThreshold', 'participationBelowThreshold',
@@ -733,7 +733,7 @@ fn test_bulk_hide_equals_the_same_number_of_single_hides() {
     let (_, _, bulkHides, bulkSpend, _) = dispatcherB.get_player_daily_state(bulkHider);
 
     assert(bulkHides == 10, 'bulk should place 10');
-    assert(bulkPending == singlePending, 'bulk ROZ must equal singles');
+    assert(bulkPending == singlePending, 'bulk RZBX must equal singles');
     assert(bulkSpend == singleSpend, 'bulk spend must equal singles');
 
     // And the fee tier really did step up: 3 x $0.20 + 7 x $0.25.
@@ -925,7 +925,7 @@ fn test_single_hide_emits_the_same_event_with_count_one() {
 // flat new-wallet rate of 15. Comparing treasure 10 against treasure 1 measures
 // the gate, not the curve, and gets the wrong answer:
 //
-//   ten treasures earn 64.2 ROZ, which is MORE than ten first-treasures (45),
+//   ten treasures earn 64.2 RZBX, which is MORE than ten first-treasures (45),
 //   because the first treasure is unusually cheap rather than unusually dear.
 //
 // So this walks the marginal reward instead, which is what the curve actually
@@ -986,7 +986,7 @@ fn test_volume_multiplier_reduces_later_treasures() {
     assert(marginalFour < marginalThree, 'curve must fall at band 1');
     assert(marginalTen < marginalFour, 'curve must keep falling');
 
-    // And the whole day comes to 64.2 ROZ, which is the figure the farm
+    // And the whole day comes to 64.2 RZBX, which is the figure the farm
     // economics in 4l-ii are built on.
     assert(afterTen == 64200000000000000000, 'ten hides should total 64.2');
 }
@@ -1041,7 +1041,7 @@ fn test_daily_cap_counts_treasures_not_calls() {
     assert(oversized.is_err(), 'bulk of 11 must revert');
 }
 
-// Accrued ROZ can be withdrawn, and the running total is kept honest so the
+// Accrued RZBX can be withdrawn, and the running total is kept honest so the
 // sweep in 4j can tell the surplus from what players are owed.
 #[test]
 fn test_claim_reward_tokens_pays_and_clears() {
@@ -1066,7 +1066,7 @@ fn test_claim_reward_tokens_pays_and_clears() {
     assert(dispatcher.get_total_reward_token_pending() == 0, 'total should clear');
 
     let balance = ERC20ABIDispatcher { contract_address: rewardToken }.balance_of(player);
-    assert(balance == owed, 'player should hold the ROZ');
+    assert(balance == owed, 'player should hold the RZBX');
 }
 
 // ---------------------------------------------------------------------------
@@ -1075,7 +1075,7 @@ fn test_claim_reward_tokens_pays_and_clears() {
 //
 // Hopping asserts the player already holds coordinates, so every test below
 // spawns first through MockVrfProvider. The spawn itself is free once a day and
-// pays no ROZ at all, which the first test checks before moving on.
+// pays no RZBX at all, which the first test checks before moving on.
 
 // Hops once, choosing a direction guaranteed to stay on the board.
 //
@@ -1114,21 +1114,21 @@ fn test_first_spawn_is_free_and_pays_no_roz() {
     // reached the spend counters.
     assert(spendToday == 0, 'first spawn should be free');
 
-    // A SPAWN PAYS NO ROZ - free or paid, first of the day or fifth. The daily
+    // A SPAWN PAYS NO RZBX - free or paid, first of the day or fifth. The daily
     // reward and streak bonus that used to hang off spawning are gone with it.
-    assert(dispatcher.get_reward_token_pending(player) == 0, 'spawn must pay no ROZ');
+    assert(dispatcher.get_reward_token_pending(player) == 0, 'spawn must pay no RZBX');
 
     // And the player is now on the board.
     let (x, y) = dispatcher.get_finder_player_position(player, dispatcher.get_game_week());
     assert(x != 0 || y != 0, 'player should have a position');
 }
 
-// TEST 5e-i - A FREE HOP EARNS ROZ BUT IS NOT SPEND.
+// TEST 5e-i - A FREE HOP EARNS RZBX BUT IS NOT SPEND.
 //
 // This is the zero-cost sybil surface from 4l-i-a, measured directly. A wallet
 // that never pays cannot clear the $0.60 gate, so its hops resolve to
-// hopRewardBelowThreshold and it earns 20 x 0.15 = 3 ROZ a day for nothing
-// but gas. That 3 ROZ is the figure the 780,822-wallet estimate rests on.
+// hopRewardBelowThreshold and it earns 20 x 0.15 = 3 RZBX a day for nothing
+// but gas. That 3 RZBX is the figure the 780,822-wallet estimate rests on.
 #[test]
 fn test_free_hops_earn_but_never_count_as_spend() {
     let player: ContractAddress = contract_address_const::<0xb002>();
@@ -1163,10 +1163,10 @@ fn test_free_hops_earn_but_never_count_as_spend() {
     assert(spendToday == 0, 'free hops are not spend');
     assert(dispatcher.get_player_lifetime_spend(player) == 0, 'free hops not lifetime spend');
 
-    // 20 x 0.15 = 3 ROZ. A free hop earns exactly what a paid hop by the same
+    // 20 x 0.15 = 3 RZBX. A free hop earns exactly what a paid hop by the same
     // wallet would - the rate is set by the gate, never by whether the hop was
     // charged for.
-    assert(dispatcher.get_reward_token_pending(player) == 3000000000000000000, 'should be 3 ROZ');
+    assert(dispatcher.get_reward_token_pending(player) == 3000000000000000000, 'should be 3 RZBX');
 }
 
 // TEST 5e-i continued - PARTICIPATION IS LOCKED TWICE OVER for a free player.
@@ -1198,7 +1198,7 @@ fn test_free_player_cannot_reach_participation() {
     }
     stop_cheat_caller_address(game);
 
-    // 3 ROZ and not a unit more. An 18-ROZ participation bonus on top would
+    // 3 RZBX and not a unit more. An 18-RZBX participation bonus on top would
     // be immediately visible here.
     assert(dispatcher.get_reward_token_pending(player) == 3000000000000000000, 'no bonus expected');
 }
@@ -1337,7 +1337,7 @@ fn test_hops_past_the_round_cap_move_but_earn_nothing() {
 //
 // A player reaches 28 hops long before $0.60 of spend. If the bonus were
 // credited at hop 28 and never looked at again, this player would lose all 18
-// ROZ silently and permanently - it pays once a day.
+// RZBX silently and permanently - it pays once a day.
 #[test]
 fn test_participation_waits_for_both_conditions() {
     let player: ContractAddress = contract_address_const::<0xb006>();
@@ -1693,7 +1693,7 @@ fn test_only_admin_publishes_the_root() {
     assert(attempt.is_err(), 'non-admin must not set root');
 }
 
-// The sweep must not be able to take ROZ that players have accrued, nor USDC
+// The sweep must not be able to take RZBX that players have accrued, nor USDC
 // they can still claim (4j). Both guards release only the surplus.
 #[test]
 fn test_sweep_leaves_what_players_are_owed() {
@@ -1842,7 +1842,7 @@ fn advance_round(game: ContractAddress) {
 
 // A successful find moves both representations of the treasure share. The
 // aggregate count pays the same net USDC stake as before; the typed count is
-// what turns the claim-time ROZ leg into the full finder reward.
+// what turns the claim-time RZBX leg into the full finder reward.
 #[test]
 fn test_find_moves_usdc_and_typed_reward_share() {
     let hider: ContractAddress = contract_address_const::<0xa11ce>();
@@ -1866,7 +1866,7 @@ fn test_find_moves_usdc_and_typed_reward_share() {
         .get_reward_token_due(hider, round);
     assert(hiderSharesBefore == 1, 'hider typed share missing');
     assert(finderSharesBefore == 0, 'unexpected finder share');
-    assert(survivalBefore > 0, 'survival ROZ missing');
+    assert(survivalBefore > 0, 'survival RZBX missing');
 
     let keeper = dispatcher.get_round_keeper();
     start_cheat_caller_address(game, keeper);
@@ -1880,7 +1880,7 @@ fn test_find_moves_usdc_and_typed_reward_share() {
     let (hiderSharesAfter, _, survivalAfter) = dispatcher.get_reward_token_due(hider, round);
     let (_, finderSharesAfter, _) = dispatcher.get_reward_token_due(finder, round);
     assert(hiderSharesAfter == 0, 'hider typed share not removed');
-    assert(survivalAfter == 0, 'survival ROZ retained');
+    assert(survivalAfter == 0, 'survival RZBX retained');
     assert(finderSharesAfter == 1, 'finder typed share not credited');
 
     let (_, _, _, _, _, activeAfter, _, _) = dispatcher.get_round_status();
@@ -1893,7 +1893,7 @@ fn test_find_moves_usdc_and_typed_reward_share() {
     stop_cheat_caller_address(game);
     assert(
         dispatcher.get_reward_token_pending(finder) == 110000000000000000000,
-        'finder should receive 110 ROZ',
+        'finder should receive 110 RZBX',
     );
 }
 
@@ -2250,7 +2250,7 @@ fn test_claimable_weeks_empty_before_any_round_finishes() {
 }
 
 // ---------------------------------------------------------------------------
-// MISSED ROZ - rewards earned while the contract could not pay for them
+// MISSED RZBX - rewards earned while the contract could not pay for them
 // ---------------------------------------------------------------------------
 
 // TEST 1 - THE WHOLE POINT: a skipped reward is written down, not forgotten.
@@ -2268,7 +2268,7 @@ fn test_claimable_weeks_empty_before_any_round_finishes() {
 fn test_a_skipped_reward_is_recorded_not_lost() {
     let player: ContractAddress = contract_address_const::<0x9001>();
 
-    // No ROZ at all - the state every deployment starts in.
+    // No RZBX at all - the state every deployment starts in.
     let (poorGame, _, _) = deploy_wired_with_roz(player, 100000000, 0);
     let poor = IHelloStarknetDispatcher { contract_address: poorGame };
 
@@ -2400,7 +2400,7 @@ fn test_converting_twice_does_not_double_credit() {
     assert(dispatcher.get_reward_token_missed(player) == 0, 'missed must stay clear');
 }
 
-// TEST 5 - the sweep cannot take ROZ that is owed as missed.
+// TEST 5 - the sweep cannot take RZBX that is owed as missed.
 //
 // Money players have earned is not the owner's to withdraw, whether it is
 // already payable (pending) or still waiting on funding (missed).
@@ -2476,7 +2476,7 @@ fn test_participation_bonus_survives_an_unfunded_contract() {
     assert(spendAfter >= dailyThreshold, 'should be past the gate');
 
     // Same assertion as the funded participation test: the jump has to be
-    // bigger than a hop alone, so it must contain the 9 ROZ bonus.
+    // bigger than a hop alone, so it must contain the 9 RZBX bonus.
     let delta = dispatcher.get_reward_token_missed(player) - missedBefore;
 
     assert(delta > 9000000000000000000, 'bonus must be recorded');
@@ -2624,7 +2624,7 @@ fn test_pause_freezes_play_but_pending_roz_can_still_be_claimed() {
     gameplay.finder_player_generate_position();
     gameplay.hide_treasure();
     stop_cheat_caller_address(game);
-    assert(gameplay.get_reward_token_pending(player) > 0, 'test needs pending ROZ');
+    assert(gameplay.get_reward_token_pending(player) > 0, 'test needs pending RZBX');
 
     start_cheat_caller_address(game, pauser_address());
     administration.pause();

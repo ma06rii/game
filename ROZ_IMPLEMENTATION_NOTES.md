@@ -314,3 +314,7 @@ between at the new, reduced rate out of the old balance.
 succeeds, the skip event fires, and `claim_reward` still pays USDC in full.
 Sending the full tranche removes the chance to exercise that on Sepolia. A small
 transfer, a check, then a top-up costs one extra transaction.
++> **Historical terminology:** This document uses **ROZ**, the former working name
+> for the reward token now branded **Zee Bucks (RZBX)**. Legacy code identifiers
+> may still use `roz` or `ROZ_*` for compatibility.
+>

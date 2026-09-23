@@ -9,7 +9,7 @@ The 35 canonical settings and ten price bands were submitted and checked on
 This procedure replaces the existing shared-dev services. It intentionally
 does not move or sweep balances or claims from the old game. For this first
 manual test, use Braavos/Argent standard wallets; Cartridge starter packs,
-Neon analytics, ROZ funding, and reward claims are not part of the cutover.
+Neon analytics, Zee Bucks (RZBX) funding, and reward claims are not part of the cutover.
 
 ## 1. Access and maintenance gate
 

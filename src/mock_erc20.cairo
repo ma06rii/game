@@ -1,7 +1,7 @@
 // A test-only ERC-20 with an unrestricted mint.
 //
 // The game contract talks to two tokens through the ERC20 dispatcher: the game
-// token it charges fees in (USDC, 6 decimals) and the ROZ reward token it
+// token it charges fees in (USDC, 6 decimals) and the RZBX reward token it
 // accrues rewards in (18 decimals). Neither can be exercised in a test without
 // a real ERC-20 deployed at a real address - a plain placeholder address makes
 // every balance_of and transfer_from revert with "not deployed".

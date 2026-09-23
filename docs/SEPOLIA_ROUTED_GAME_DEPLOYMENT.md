@@ -200,7 +200,7 @@ done
 Run the standalone script from this checkout. It already contains the 15
 release hashes, retrieves the other values through Varlock, and supplies the
 constructor in this order:
-`(vrfProvider, USDC game token, ROZ reward token, roundKeeper, admin, pauser,
+`(vrfProvider, USDC game token, Zee Bucks (RZBX) reward token, roundKeeper, admin, pauser,
 upgradeDelay, facetClassHashes)`. The array length `14` is serialized before
 the facet hashes. It uses `STARKNET_RPC_URL` from Varlock for both its chain and
 class checks and the sncast transaction, and verifies the configured deployer
@@ -266,7 +266,7 @@ stop before changing any integration address.
 
 The new instance has empty gameplay settings and pricing bands. **Do not run
 the old direct `set_params`, `update_price_band`, or `unpause` commands in
-`ROZ_DEPLOYMENT_AND_FUNDING.md`: those functions are now routed through facet
+`RZBX_DEPLOYMENT_AND_FUNDING.md`: those functions are now routed through facet
 IDs 9, 9, and 12 respectively, not directly exposed by the root ABI.** Use the
 route-aware operator script from the contract repository root:
 
