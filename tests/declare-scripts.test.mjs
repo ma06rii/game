@@ -7,6 +7,8 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { formatStrk, parseFeeLog, summarize } from "../scripts/sum-fees.mjs";
+
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const declareScript = path.join(root, "scripts/declare-routed-classes.sh");
 const tokenScript = path.join(root, "scripts/deploy-reward-token.sh");
@@ -47,6 +49,7 @@ exec "$@"
 `,
     node: `#!/usr/bin/env bash
 case "$1" in
+  *sum-fees.mjs) exec "$TEST_REAL_NODE" "$@" ;;
   *check-contract-env.mjs) printf '%s\\n' "$*" >> "$TEST_ENV_LOG"; exit "$TEST_ENV_STATUS" ;;
   *check-declaration.mjs)
     if [[ "$3" == --require-declared ]]; then exit "$TEST_LANDED_STATUS"; fi
@@ -64,6 +67,8 @@ if [[ "$1" == utils ]]; then
   exit 0
 fi
 printf '%s\\n' "$*" >> "$TEST_SNCAST_LOG"
+if [[ " $* " == *" --dry-run "* ]]; then printf 'Overall Fee: 1250000000000000 Fri (~0.00125 STRK)\\n'
+else printf 'Transaction Hash: 0x%s\\n' "$(printf '%s' "$*" | sha1sum | cut -c1-8)"; fi
 `,
   };
   for (const [name, contents] of Object.entries(commands)) {
@@ -83,6 +88,7 @@ printf '%s\\n' "$*" >> "$TEST_SNCAST_LOG"
         TEST_ENV_STATUS: "0",
         TEST_LANDED_STATUS: "0",
         TEST_DECLARED: "",
+        TEST_REAL_NODE: process.execPath,
         ...env,
         ...overrides,
       },
@@ -115,6 +121,7 @@ test("declare dry-run estimates only missing classes and prints Doppler hashes i
   assert.match(result.stdout, new RegExp(`GAME_CLASS_HASH=${hashOf("HelloStarknet")}\n`));
   assert.match(result.stdout, new RegExp(`FACET_CLASS_HASHES="${facets.map(hashOf).join(" ")}"`));
   assert.match(result.stdout, /1 class\(es\) are not declared on sepolia yet/);
+  assert.match(result.stdout, /Estimated total fee: 0\.00125 STRK across 1 transaction\(s\)/);
 });
 
 test("declare --send waits for each missing class and confirms it landed", () => {
@@ -133,6 +140,8 @@ test("declare --send waits for each missing class and confirms it landed", () =>
   assert.equal(unconfirmed.status, 1);
   assert.match(unconfirmed.stderr, /was submitted but .* is not at sepolia latest/);
   assert.equal(unconfirmed.sncast.length, 1);
+  // The fee total still prints when a run stops part-way.
+  assert.match(unconfirmed.stdout, /Total fee paid: 0 STRK[\s\S]*receipt unavailable/);
 });
 
 test("declare refuses mismatched or implicit mainnet configs before signing", () => {
@@ -169,6 +178,7 @@ test("token deploy passes (recipient, owner) and only waits with --send", () => 
     `--account account_braavos deploy --dry-run --detailed --url ${env.STARKNET_RPC_URL} ` +
       `--class-hash ${tokenHash} --constructor-calldata 0x7 0x8`,
   ]);
+  assert.match(dry.stdout, /Estimated total fee: 0\.00125 STRK across 1 transaction\(s\)/);
 
   const sent = run(tokenScript, ["--network", "mainnet", "--doppler-config", "prd", "--send"], {
     STARKNET_NETWORK: "mainnet",
@@ -180,4 +190,42 @@ test("token deploy passes (recipient, owner) and only waits with --send", () => 
       `--class-hash ${tokenHash} --constructor-calldata 0x7 0x8`,
   ]);
   assert.match(sent.stdout, /set ROZ_TOKEN_ADDRESS in Doppler prd/);
+  // Both transactions are found; the fake RPC host cannot return their receipts.
+  assert.match(sent.stdout, /Total fee paid: 0 STRK across 0 transaction\(s\)/);
+  assert.equal(sent.stdout.match(/Fee not counted, receipt unavailable/g).length, 2);
+});
+
+test("fee totals parse sncast estimates and format exact STRK amounts", () => {
+  const log = `Success: Dry run completed
+Overall Fee: 1500000000000000000 Fri (~1.5 STRK)
+Overall Fee: 250000000000000 Fri (~0.00025 STRK)
+Transaction Hash: 0xabc
+Transaction Hash: 0xabc
+`;
+  assert.deepEqual(parseFeeLog(log), {
+    estimates: [1500000000000000000n, 250000000000000n],
+    transactions: ["0xabc"],
+  });
+  assert.equal(formatStrk(1500250000000000000n), "1.50025 STRK");
+  assert.equal(formatStrk(3n * 10n ** 18n), "3 STRK");
+  assert.equal(formatStrk(1n), "0.000000000000000001 STRK");
+});
+
+test("fee totals sum receipt actual_fee for sent transactions", async () => {
+  const fees = { "0x1": "0xde0b6b3a7640000", "0x2": "0x6f05b59d3b20000" };
+  const fetchImpl = async (_url, options) => {
+    const { params } = JSON.parse(options.body);
+    const amount = fees[params.transaction_hash];
+    return { ok: true, json: async () => amount
+      ? { result: { actual_fee: { amount, unit: "FRI" } } }
+      : { error: { code: 29, message: "Transaction hash not found" } } };
+  };
+  const lines = await summarize(
+    "Transaction Hash: 0x1\nTransaction Hash: 0x2\nTransaction Hash: 0x3\n",
+    "https://rpc.example.invalid", fetchImpl,
+  );
+  assert.deepEqual(lines, [
+    "Total fee paid: 1.5 STRK across 2 transaction(s)",
+    "  Fee not counted, receipt unavailable: 0x3",
+  ]);
 });

@@ -7,7 +7,8 @@ set -euo pipefail
 #
 # Classes already declared at latest are skipped. Progress goes to stderr; stdout
 # gets one "CLASS HASH declared|pending" line per class, where pending means a
-# dry-run class that still needs a --send.
+# dry-run class that still needs a --send. sncast output is also appended to
+# FEE_LOG, when set, for sum-fees.mjs.
 mode=${1:?usage: declare-classes.sh dry|send CLASS...}
 shift
 case "$mode" in
@@ -50,13 +51,13 @@ for class in "$@"; do
 
   if [[ "$mode" == dry ]]; then
     sncast --account "$SNCAST_ACCOUNT" declare --dry-run --detailed \
-      --contract-name "$class" --url "$STARKNET_RPC_URL" >&2
+      --contract-name "$class" --url "$STARKNET_RPC_URL" 2>&1 | tee -a "${FEE_LOG:-/dev/null}" >&2
     printf '%s %s pending\n' "$class" "$local_hash"
     continue
   fi
 
   sncast --account "$SNCAST_ACCOUNT" --wait --wait-timeout 600 declare \
-    --contract-name "$class" --url "$STARKNET_RPC_URL" >&2
+    --contract-name "$class" --url "$STARKNET_RPC_URL" 2>&1 | tee -a "${FEE_LOG:-/dev/null}" >&2
   # sncast rebuilds before declaring; confirm the class that landed is this build.
   if ! node "$script_dir/check-declaration.mjs" "$local_hash" --require-declared >&2; then
     printf '%s was submitted but %s is not at %s latest. Check the transaction before retrying.\n' \

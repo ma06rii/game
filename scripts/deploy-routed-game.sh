@@ -103,6 +103,12 @@ DOPPLER_CONFIG="$doppler_config" npm exec -- varlock run -- bash -c '
 
   node scripts/preflight-routed-game-deploy.mjs "$network" "$config" "$game_hash" "$@"
 
+  # Print the STRK fee total on every exit, including a failure part-way through.
+  FEE_LOG=$(mktemp)
+  export FEE_LOG
+  finish() { node scripts/sum-fees.mjs "$FEE_LOG" || true; rm -f "$FEE_LOG"; }
+  trap finish EXIT
+
   # sncast takes --wait before the subcommand but --dry-run after it.
   wait_flags=()
   dry_flags=()
@@ -116,5 +122,5 @@ DOPPLER_CONFIG="$doppler_config" npm exec -- varlock run -- bash -c '
     --constructor-calldata \
       "$VRF_PROVIDER_ADDRESS" "$USDC_TOKEN_ADDRESS" "$ROZ_TOKEN_ADDRESS" \
       "$ROUND_KEEPER_ADDRESS" "$ADMIN_ADDRESS" "$PAUSER_ADDRESS" \
-      "$UPGRADE_DELAY" "$#" "$@"
+      "$UPGRADE_DELAY" "$#" "$@" 2>&1 | tee -a "$FEE_LOG"
 ' _ "$network" "$doppler_config" "$mode" "$GAME_CLASS_HASH" "${FACET_HASHES[@]}"

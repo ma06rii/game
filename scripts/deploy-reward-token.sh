@@ -76,6 +76,12 @@ DOPPLER_CONFIG="$doppler_config" npm exec -- varlock run -- bash -c '
   # Also rejects a missing or zero recipient or owner address.
   node scripts/check-contract-env.mjs roz --online
 
+  # Print the STRK fee total on every exit, including a failure part-way through.
+  FEE_LOG=$(mktemp)
+  export FEE_LOG
+  finish() { node scripts/sum-fees.mjs "$FEE_LOG" || true; rm -f "$FEE_LOG"; }
+  trap finish EXIT
+
   result=$(bash scripts/declare-classes.sh "$mode" ROZToken)
   read -r _ class_hash state <<< "$result"
   if [[ "$state" == pending ]]; then
@@ -94,7 +100,7 @@ DOPPLER_CONFIG="$doppler_config" npm exec -- varlock run -- bash -c '
   fi
   sncast --account "$SNCAST_ACCOUNT" "${wait_flags[@]}" deploy "${dry_flags[@]}" \
     --url "$STARKNET_RPC_URL" --class-hash "$class_hash" \
-    --constructor-calldata "$ROZ_RECIPIENT_ADDRESS" "$ROZ_OWNER_ADDRESS"
+    --constructor-calldata "$ROZ_RECIPIENT_ADDRESS" "$ROZ_OWNER_ADDRESS" 2>&1 | tee -a "$FEE_LOG"
 
   if [[ "$mode" == send ]]; then
     printf "\nNext: set ROZ_TOKEN_ADDRESS in Doppler %s to the contract address above,\n" "$config"

@@ -82,6 +82,12 @@ DOPPLER_CONFIG="$doppler_config" npm exec -- varlock run -- bash -c '
   fi
   node scripts/check-contract-env.mjs classes --online
 
+  # Print the STRK fee total on every exit, including a failure part-way through.
+  FEE_LOG=$(mktemp)
+  export FEE_LOG
+  finish() { node scripts/sum-fees.mjs "$FEE_LOG" || true; rm -f "$FEE_LOG"; }
+  trap finish EXIT
+
   results=$(bash scripts/declare-classes.sh "$mode" "$@")
   game_hash=
   facets=()

@@ -62,11 +62,13 @@ shift 5
 exec "$@"
 `,
     node: `#!/usr/bin/env bash
+[[ "$1" == *sum-fees.mjs ]] && exec "$TEST_REAL_NODE" "$@"
 printf '%s\\n' "$@" > "$TEST_PREFLIGHT_LOG"
 exit "$TEST_PREFLIGHT_STATUS"
 `,
     sncast: `#!/usr/bin/env bash
 printf '%s\\n' "$@" > "$TEST_SNCAST_LOG"
+if [[ " $* " == *" --dry-run "* ]]; then printf 'Overall Fee: 2500000000000000000 Fri (~2.5 STRK)\\n'; fi
 `,
   };
   for (const [name, contents] of Object.entries(commands)) {
@@ -85,6 +87,7 @@ printf '%s\\n' "$@" > "$TEST_SNCAST_LOG"
         TEST_PREFLIGHT_LOG: preflightLog,
         TEST_SNCAST_LOG: sncastLog,
         TEST_PREFLIGHT_STATUS: "0",
+        TEST_REAL_NODE: process.execPath,
         ...env,
         GAME_CLASS_HASH: gameHash,
         FACET_CLASS_HASHES: facetHashes.join(" "),
@@ -121,6 +124,7 @@ test("defaults to a Sepolia dry-run with the exact 14-hash constructor array", (
     env.ROZ_TOKEN_ADDRESS, env.ROUND_KEEPER_ADDRESS, env.ADMIN_ADDRESS,
     env.PAUSER_ADDRESS, env.UPGRADE_DELAY, "14", ...facetHashes,
   ]);
+  assert.match(result.stdout, /Estimated total fee: 2\.5 STRK across 1 transaction\(s\)/);
 });
 
 test("--send enables a fee-bearing deployment and mainnet needs an explicit config", () => {
