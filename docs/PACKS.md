@@ -93,7 +93,7 @@ Use this deployment sequence:
    sales window. It needs no token allowance because it uses direct ERC-20
    transfers from its own inventory.
 4. Register Welcome in Arcade at $9.99 with `reissuable = false`, using the
-   deployed implementation address.
+   deployed implementation address. Steps 4-7 are scripted (see below).
 5. Register Week in Arcade at $29.99 with `reissuable = true`, using the same
    implementation address.
 6. Record the two `u32` IDs returned by Arcade and call
@@ -103,6 +103,47 @@ Use this deployment sequence:
    `get_min_hide_stake_usdc`, and `get_arcade_registry`.
 8. Issue test purchases to fresh recipient addresses and reconcile all three
    contract and recipient balances before enabling public sales.
+
+### Scripted registration
+
+`scripts/register-starterpacks.sh` performs steps 4-7. It registers both packs
+with the Arcade starter pack registry, reads each new ID from the
+`StarterpackRegistered` event in its receipt, and confirms the ID with the
+registry's `quote`. It then calls `set_pack_ids` and reads the IDs back.
+
+Before anything is signed, it checks that the pack contract trusts
+`ARCADE_REGISTRY_ADDRESS` and pays out the same `USDC_TOKEN_ADDRESS` that
+buyers pay in. It also stops if pack IDs are already configured, so a second run
+cannot create duplicate listings.
+
+It needs these values in Doppler, in addition to the constructor values:
+
+| Variable | Meaning |
+| --- | --- |
+| `STARTERPACK_ADDRESS` | The deployed `TreasureGameStarterpack`. |
+| `STARTERPACK_OWNER_SNCAST_ACCOUNT` | Local sncast alias for `STARTERPACK_OWNER_ADDRESS`. It owns the Arcade listings and signs `set_pack_ids`. |
+| `STARTERPACK_PAYMENT_RECEIVER` | Wallet that receives the USDC sales revenue. |
+
+The mainnet registry is
+`0x3eb03b8f2be0ec2aafd186d72f6d8f3dd320dbc89f2b6802bca7465f6ccaa43`, from
+Cartridge's `manifest_mainnet.json`. Sepolia uses the same address.
+
+Pack names, descriptions and images come from
+`integrations/starterpacks/{welcome,week}.json`. Set
+`STARTERPACK_METADATA_DIR` to use per-network copies. `--send` refuses to run
+while the files still contain the `YOUR-HOST` image placeholders. Prices,
+reissuability and the 0% referral share are set in `PACKS` in
+`scripts/register-starterpacks.mjs`.
+
+```bash
+bash scripts/register-starterpacks.sh --network mainnet --doppler-config prd          # previews IDs and fees
+bash scripts/register-starterpacks.sh --network mainnet --doppler-config prd --send
+```
+
+A run that stops after a registration has landed prints the ID it already got.
+Re-run with `--welcome-id N` and/or `--week-id N` to reuse that listing instead
+of registering a duplicate. The script checks a reused ID's price and payment
+token first.
 
 Record the implementation class hash, contract address, deployment
 transaction, deployment block, Arcade registry, token addresses, pack IDs,

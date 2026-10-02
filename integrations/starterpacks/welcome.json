@@ -1,0 +1,12 @@
+{
+  "name": "Welcome Pack",
+  "description": "Everything you need to start hunting in Realm of Zee.",
+  "image_uri": "https://YOUR-HOST/welcome.png",
+  "items": [
+    { "name": "6 USDC", "description": "Enough for your first hide", "image_uri": "https://YOUR-HOST/usdc.png" },
+    { "name": "2.5 STRK", "description": "Gas for your first hops", "image_uri": "https://YOUR-HOST/strk.png" },
+    { "name": "1,000 RZBX", "description": "Zee Bucks", "image_uri": "https://YOUR-HOST/rzbx.png" }
+  ],
+  "additional_payment_tokens": [],
+  "conditions": []
+}

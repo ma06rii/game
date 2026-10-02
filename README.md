@@ -393,6 +393,8 @@ bash scripts/deploy-reward-token.sh --network mainnet --doppler-config prd --sen
 # Optional: Arcade starter packs, once ROZ_TOKEN_ADDRESS and the Arcade registry
 #    are set in Doppler (see docs/PACKS.md for funding and registration).
 bash scripts/deploy-starterpack.sh --network mainnet --doppler-config prd --send
+#    Then set STARTERPACK_ADDRESS, fund the inventory, and register both packs:
+bash scripts/register-starterpacks.sh --network mainnet --doppler-config prd --send
 
 # 2. Root + 14 facets: skips classes already declared on the network.
 bash scripts/declare-routed-classes.sh --network mainnet --doppler-config prd --send

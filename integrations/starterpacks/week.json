@@ -1,0 +1,12 @@
+{
+  "name": "Week Pack",
+  "description": "A week of play in Realm of Zee.",
+  "image_uri": "https://YOUR-HOST/week.png",
+  "items": [
+    { "name": "18 USDC", "description": "Three hides", "image_uri": "https://YOUR-HOST/usdc.png" },
+    { "name": "6 STRK", "description": "Gas for a week of hops", "image_uri": "https://YOUR-HOST/strk.png" },
+    { "name": "3,000 RZBX", "description": "Zee Bucks", "image_uri": "https://YOUR-HOST/rzbx.png" }
+  ],
+  "additional_payment_tokens": [],
+  "conditions": []
+}
