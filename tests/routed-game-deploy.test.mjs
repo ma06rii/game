@@ -86,6 +86,8 @@ printf '%s\\n' "$@" > "$TEST_SNCAST_LOG"
         TEST_SNCAST_LOG: sncastLog,
         TEST_PREFLIGHT_STATUS: "0",
         ...env,
+        GAME_CLASS_HASH: gameHash,
+        FACET_CLASS_HASHES: facetHashes.join(" "),
         ...overrides,
       },
     });

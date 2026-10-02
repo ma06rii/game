@@ -1,0 +1,26 @@
+name: Contract checks (no on-chain actions)
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - uses: software-mansion/setup-scarb@v1
+        with:
+          scarb-version: '2.19.0'
+      - run: scarb --release build --no-warnings
+      - run: npm run contract:artifact-check

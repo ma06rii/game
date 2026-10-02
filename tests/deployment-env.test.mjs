@@ -85,12 +85,25 @@ test("rejects unsafe networks, RPCs, addresses, aliases, and delays", () => {
       UPGRADE_DELAY: "-1",
     }),
   );
-  assert.ok(errors.includes("DOPPLER_CONFIG must be dev for this repository setup"));
-  assert.ok(errors.includes("STARKNET_NETWORK must be sepolia"));
   assert.ok(errors.includes("STARKNET_RPC_URL must be a valid HTTPS URL"));
   assert.ok(errors.includes("SNCAST_ACCOUNT must be a valid sncast account alias"));
   assert.ok(errors.includes("ADMIN_ADDRESS must not be the zero address"));
   assert.ok(errors.includes("UPGRADE_DELAY must be an unsigned 64-bit integer"));
+});
+
+test("accepts isolated staging and mainnet contract contexts", () => {
+  assert.deepEqual(validateEnvironment("game", game({
+    DOPPLER_CONFIG: "stg", ADMIN_SNCAST_ACCOUNT: "account_admin",
+  })), []);
+  assert.deepEqual(validateEnvironment("game", game({
+    DOPPLER_CONFIG: "prd", STARKNET_NETWORK: "mainnet", UPGRADE_DELAY: "259200",
+    ADMIN_SNCAST_ACCOUNT: "account_admin",
+  })), []);
+  assert.ok(validateEnvironment("game", game({ DOPPLER_CONFIG: "prd" }))
+    .includes("DOPPLER_CONFIG=prd requires STARKNET_NETWORK=mainnet"));
+  assert.ok(validateEnvironment("game", game({
+    DOPPLER_CONFIG: "prd", STARKNET_NETWORK: "mainnet", UPGRADE_DELAY: "100",
+  })).includes("Mainnet UPGRADE_DELAY must be at least 259200 seconds"));
 });
 
 test("requires distinct role and token addresses", () => {

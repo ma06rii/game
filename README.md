@@ -335,7 +335,10 @@ new local build before deploying. On a timeout, check the transaction, account
 nonce, and class on-chain before retrying; do not submit repeated declarations
 just because an explorer cannot yet find the transaction.
 
-`GAME_CLASS_HASH` is a shell variable, not a Doppler secret: a class hash
+For the existing dev deployment, `GAME_CLASS_HASH` is a pinned shell variable. For
+new staging and production deployments, pin the reviewed root hash in Doppler as
+`GAME_CLASS_HASH` and all 14 ordered hashes as `FACET_CLASS_HASHES`, then use
+`--doppler-config stg` or `--doppler-config prd`. A class hash
 changes with every build. A deployment must also track each facet class hash,
 confirm every declaration, and serialize the constructor array in the
 documented order. The conditional command is in the

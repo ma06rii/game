@@ -90,6 +90,17 @@ DOPPLER_CONFIG="$doppler_config" npm exec -- varlock run -- bash -c '
   game_hash=$4
   shift 4
 
+  if [[ "$config" != dev ]]; then
+    game_hash=${GAME_CLASS_HASH:?GAME_CLASS_HASH must be pinned in Doppler for stg/prd}
+    : "${FACET_CLASS_HASHES:?FACET_CLASS_HASHES must list 14 hashes in Doppler for stg/prd}"
+    read -r -a configured_facets <<< "$FACET_CLASS_HASHES"
+    if ((${#configured_facets[@]} != 14)); then
+      echo "Expected 14 FACET_CLASS_HASHES" >&2
+      exit 2
+    fi
+    set -- "${configured_facets[@]}"
+  fi
+
   node scripts/preflight-routed-game-deploy.mjs "$network" "$config" "$game_hash" "$@"
 
   flags=()

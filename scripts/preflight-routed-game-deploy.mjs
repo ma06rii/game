@@ -35,6 +35,10 @@ export function validateDeploymentEnvironment(network, config, hashes, env = pro
   if (!config || env.DOPPLER_CONFIG !== config) {
     errors.push("Varlock did not load the requested Doppler config");
   }
+  const expectedNetwork = { dev: "sepolia", stg: "sepolia", prd: "mainnet" }[config];
+  if (!expectedNetwork || network !== expectedNetwork) {
+    errors.push("Doppler config does not match deployment network");
+  }
   if (env.STARKNET_NETWORK !== network) {
     errors.push(`STARKNET_NETWORK must be ${network}`);
   }

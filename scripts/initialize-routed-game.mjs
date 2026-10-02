@@ -5,9 +5,9 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { readSncastAccount } from './check-contract-env.mjs';
 
-export const GAME = '0x07088478d5e2464e947186bca33dec61bfd3a84bdf82f76b78f2528bd19b3c86';
-export const GAME_CLASS_HASH = '0x05c62564e2163b40ed87e846bfb06fd79b11c1fd9a0719a2d4ea91e4022644df';
-export const FACET_HASHES = [
+export let GAME = '0x07088478d5e2464e947186bca33dec61bfd3a84bdf82f76b78f2528bd19b3c86';
+export let GAME_CLASS_HASH = '0x05c62564e2163b40ed87e846bfb06fd79b11c1fd9a0719a2d4ea91e4022644df';
+export let FACET_HASHES = [
   '0x007babbfe571caf1a047b808d2c7bf3e01e3084c7ebc67a491bb3699052c6534',
   '0x024232d93f567ee49ed7e7f186b060877012f4caff1cd69bf84b8c3186254f91',
   '0x0716b9541dfeb1cf20952062ada1d417f8d41375e980e573e7873692525adb1d',
@@ -23,7 +23,7 @@ export const FACET_HASHES = [
   '0x036f4b18dc52af7edec3f8187513ca1475af4b5845ce8496946d572f2f4f222d',
   '0x0609086696cddca40e66aad9752c106addbeb45c3f6843ab9010a877f1e68af7',
 ];
-const SEPOLIA_CHAIN_ID = '0x534e5f5345504f4c4941';
+const CHAIN_IDS = { sepolia: '0x534e5f5345504f4c4941', mainnet: '0x534e5f4d41494e' };
 const MAX_U128 = (1n << 128n) - 1n;
 const ADDRESS = /^0x[0-9a-fA-F]{1,64}$/;
 
@@ -184,12 +184,12 @@ async function inspect(url) {
   return { paused, wrongSettings, wrongBands };
 }
 
-function verifyAccount(alias, expected) {
+function verifyAccount(alias, expected, network) {
   const output = execFileSync('sncast', ['account', 'list'], { encoding: 'utf8' });
   const account = readSncastAccount(output, alias);
-  if (!account || !account.network?.toLowerCase().includes('sepolia') ||
+  if (!account || !account.network?.toLowerCase().includes(network) ||
       BigInt(account.address) !== BigInt(expected)) {
-    throw new Error(`${alias}: local account does not match the expected Sepolia address`);
+    throw new Error(`${alias}: local account does not match the expected ${network} address`);
   }
 }
 
@@ -204,17 +204,34 @@ function invoke(alias, url, facet, name, calldata, dryRun) {
 
 async function main() {
   const mode = process.argv[2] ?? '--check';
-  if (!['--check', '--estimate', '--send', '--unpause'].includes(mode) || process.argv.length > 3) {
-    throw new Error('Usage: DOPPLER_CONFIG=dev varlock run -- node scripts/initialize-routed-game.mjs [--check|--estimate|--send|--unpause]');
+  const mainnetConfirmed = process.argv[3] === '--confirm-mainnet';
+  if (!['--check', '--estimate', '--send', '--unpause'].includes(mode) ||
+      process.argv.length > (mainnetConfirmed ? 4 : 3)) {
+    throw new Error('Usage: varlock run -- node scripts/initialize-routed-game.mjs [--check|--estimate|--send|--unpause] [--confirm-mainnet]');
   }
   const env = process.env;
-  if (env.DOPPLER_CONFIG !== 'dev' || env.STARKNET_NETWORK !== 'sepolia' ||
-      !env.STARKNET_RPC_URL?.startsWith('https:')) throw new Error('Sepolia roz-contract/dev Varlock context required');
+  const expectedNetwork = { dev: 'sepolia', stg: 'sepolia', prd: 'mainnet' }[env.DOPPLER_CONFIG];
+  if (!expectedNetwork || env.STARKNET_NETWORK !== expectedNetwork ||
+      !env.STARKNET_RPC_URL?.startsWith('https:')) throw new Error('Doppler config, network, or RPC mismatch');
+  if (env.DOPPLER_CONFIG !== 'dev') {
+    GAME = env.GAME_ADDRESS;
+    GAME_CLASS_HASH = env.GAME_CLASS_HASH;
+    FACET_HASHES = (env.FACET_CLASS_HASHES ?? '').trim().split(/\s+/);
+    if (!ADDRESS.test(GAME ?? '') || !ADDRESS.test(GAME_CLASS_HASH ?? '') ||
+        FACET_HASHES.length !== 14 || FACET_HASHES.some((hash) => !ADDRESS.test(hash))) {
+      throw new Error('GAME_ADDRESS, GAME_CLASS_HASH and 14 FACET_CLASS_HASHES are required');
+    }
+  }
+  if (env.DOPPLER_CONFIG === 'prd' && ['--send', '--unpause'].includes(mode) && !mainnetConfirmed) {
+    throw new Error('Mainnet changes require --confirm-mainnet');
+  }
   if (!ADDRESS.test(env.ADMIN_ADDRESS ?? '') || !ADDRESS.test(env.PAUSER_ADDRESS ?? '')) {
     throw new Error('admin and pauser addresses are required');
   }
+  const adminSigner = env.DOPPLER_CONFIG === 'dev' ? env.SNCAST_ACCOUNT : env.ADMIN_SNCAST_ACCOUNT;
+  if (!adminSigner) throw new Error('ADMIN_SNCAST_ACCOUNT is required outside development');
   const chain = await rpc(env.STARKNET_RPC_URL, 'starknet_chainId', []);
-  if (BigInt(chain) !== BigInt(SEPOLIA_CHAIN_ID)) throw new Error('RPC is not Starknet Sepolia');
+  if (BigInt(chain) !== BigInt(CHAIN_IDS[expectedNetwork])) throw new Error('RPC chain mismatch');
   const onchainAdmin = (await routeCall(env.STARKNET_RPC_URL, 13, 'get_admin'))[0];
   if (onchainAdmin !== BigInt(env.ADMIN_ADDRESS)) throw new Error('on-chain admin does not match Doppler');
   const state = await inspect(env.STARKNET_RPC_URL);
@@ -223,31 +240,31 @@ async function main() {
   if (mode === '--check') return;
   if (!state.paused) throw new Error('game is already unpaused; refusing initialization action');
   if (mode === '--estimate') {
-    verifyAccount(env.SNCAST_ACCOUNT, env.ADMIN_ADDRESS);
+    verifyAccount(adminSigner, env.ADMIN_ADDRESS, expectedNetwork);
     if (state.wrongSettings.length) {
-      invoke(env.SNCAST_ACCOUNT, env.STARKNET_RPC_URL, 9, 'set_params', settingsCalldata(), true);
+      invoke(adminSigner, env.STARKNET_RPC_URL, 9, 'set_params', settingsCalldata(), true);
     } else if (state.wrongBands.length) {
       const [kind, index] = state.wrongBands[0].split(':').map(BigInt);
       const band = BANDS.find(([k, i]) => k === kind && i === index);
-      invoke(env.SNCAST_ACCOUNT, env.STARKNET_RPC_URL, 9, 'update_price_band', bandCalldata(band), true);
+      invoke(adminSigner, env.STARKNET_RPC_URL, 9, 'update_price_band', bandCalldata(band), true);
     } else {
       console.log('All settings and bands already match.');
     }
     return;
   }
   if (mode === '--send') {
-    verifyAccount(env.SNCAST_ACCOUNT, env.ADMIN_ADDRESS);
+    verifyAccount(adminSigner, env.ADMIN_ADDRESS, expectedNetwork);
     if (state.wrongSettings.length) {
-      invoke(env.SNCAST_ACCOUNT, env.STARKNET_RPC_URL, 9, 'set_params', settingsCalldata(), true);
-      invoke(env.SNCAST_ACCOUNT, env.STARKNET_RPC_URL, 9, 'set_params', settingsCalldata(), false);
+      invoke(adminSigner, env.STARKNET_RPC_URL, 9, 'set_params', settingsCalldata(), true);
+      invoke(adminSigner, env.STARKNET_RPC_URL, 9, 'set_params', settingsCalldata(), false);
       const after = await inspect(env.STARKNET_RPC_URL);
       if (after.wrongSettings.length) throw new Error(`settings readback failed: ${after.wrongSettings.join(', ')}`);
     }
     for (const band of BANDS) {
       const current = decodeU256(await routeCall(env.STARKNET_RPC_URL, 10, 'get_price_band', band.slice(0, 2)));
       if (current.length === 3 && current.every((value, i) => value === band[i + 2])) continue;
-      invoke(env.SNCAST_ACCOUNT, env.STARKNET_RPC_URL, 9, 'update_price_band', bandCalldata(band), true);
-      invoke(env.SNCAST_ACCOUNT, env.STARKNET_RPC_URL, 9, 'update_price_band', bandCalldata(band), false);
+      invoke(adminSigner, env.STARKNET_RPC_URL, 9, 'update_price_band', bandCalldata(band), true);
+      invoke(adminSigner, env.STARKNET_RPC_URL, 9, 'update_price_band', bandCalldata(band), false);
       const updated = decodeU256(await routeCall(env.STARKNET_RPC_URL, 10, 'get_price_band', band.slice(0, 2)));
       if (updated.length !== 3 || updated.some((value, i) => value !== band[i + 2])) {
         throw new Error(`band ${band[0]}:${band[1]} readback failed`);
@@ -257,7 +274,7 @@ async function main() {
     return;
   }
   if (state.wrongSettings.length || state.wrongBands.length) throw new Error('settings or bands are incomplete');
-  verifyAccount(env.PAUSER_SNCAST_ACCOUNT, env.PAUSER_ADDRESS);
+  verifyAccount(env.PAUSER_SNCAST_ACCOUNT, env.PAUSER_ADDRESS, expectedNetwork);
   const pauseRole = selector('PAUSE_ROLE');
   const roleResult = await rpc(env.STARKNET_RPC_URL, 'starknet_call', [{
     contract_address: GAME, entry_point_selector: selector('has_role'),

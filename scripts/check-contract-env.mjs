@@ -11,7 +11,8 @@ const FORBIDDEN_SIGNING_VARIABLES = [
   "MNEMONIC",
   "SEED_PHRASE",
 ];
-const SEPOLIA_CHAIN_ID = "0x534e5f5345504f4c4941";
+const CONFIG_NETWORKS = Object.freeze({ dev: "sepolia", stg: "sepolia", prd: "mainnet" });
+const CHAIN_IDS = Object.freeze({ sepolia: "0x534e5f5345504f4c4941", mainnet: "0x534e5f4d41494e" });
 const ADDRESS_PATTERN = /^0x[0-9a-fA-F]{1,64}$/;
 const ACCOUNT_PATTERN = /^[A-Za-z][A-Za-z0-9_-]*$/;
 
@@ -92,11 +93,11 @@ export function validateEnvironment(target, env = process.env) {
   );
   requireVariables(TARGET_VARIABLES[target], env, errors);
 
-  if ((env.DOPPLER_CONFIG ?? "dev") !== "dev") {
-    errors.push("DOPPLER_CONFIG must be dev for this repository setup");
-  }
-  if (hasValue(env.STARKNET_NETWORK) && env.STARKNET_NETWORK !== "sepolia") {
-    errors.push("STARKNET_NETWORK must be sepolia");
+  const config = env.DOPPLER_CONFIG ?? "dev";
+  if (!(config in CONFIG_NETWORKS)) {
+    errors.push("DOPPLER_CONFIG must be dev, stg, or prd");
+  } else if (hasValue(env.STARKNET_NETWORK) && env.STARKNET_NETWORK !== CONFIG_NETWORKS[config]) {
+    errors.push(`DOPPLER_CONFIG=${config} requires STARKNET_NETWORK=${CONFIG_NETWORKS[config]}`);
   }
   if (hasValue(env.STARKNET_RPC_URL)) {
     try {
@@ -121,6 +122,10 @@ export function validateEnvironment(target, env = process.env) {
 
   if (target === "game") {
     validateAccount("PAUSER_SNCAST_ACCOUNT", env, errors);
+    if (config !== "dev") {
+      requireVariables(["ADMIN_SNCAST_ACCOUNT"], env, errors);
+      validateAccount("ADMIN_SNCAST_ACCOUNT", env, errors);
+    }
     requireDistinct(
       ["VRF_PROVIDER_ADDRESS", "USDC_TOKEN_ADDRESS", "ROZ_TOKEN_ADDRESS"],
       env,
@@ -134,6 +139,9 @@ export function validateEnvironment(target, env = process.env) {
         }
         const delay = BigInt(env.UPGRADE_DELAY);
         if (delay < 0n || delay > 18446744073709551615n) throw new Error("outside u64");
+        if (config === "prd" && delay < 259200n) {
+          errors.push("Mainnet UPGRADE_DELAY must be at least 259200 seconds");
+        }
       } catch {
         errors.push("UPGRADE_DELAY must be an unsigned 64-bit integer");
       }
@@ -169,11 +177,11 @@ export function readSncastAccount(output, alias) {
   return { address: fields.address, network: fields.network };
 }
 
-function verifyLocalAccount(alias, expectedAddress, output, label) {
+function verifyLocalAccount(alias, expectedAddress, output, label, network) {
   const account = readSncastAccount(output, alias);
   if (!account) throw new Error(`${label} sncast account alias was not found locally`);
-  if (!account.network?.toLowerCase().includes("sepolia")) {
-    throw new Error(`${label} sncast account is not configured for Sepolia`);
+  if (!account.network?.toLowerCase().includes(network)) {
+    throw new Error(`${label} sncast account is not configured for ${network}`);
   }
   if (
     !ADDRESS_PATTERN.test(account.address ?? "") ||
@@ -193,22 +201,27 @@ export async function runOnlineChecks(target, env = process.env) {
   if (!response.ok) throw new Error(`Starknet RPC returned HTTP ${response.status}`);
   const payload = await response.json();
   if (payload.error) throw new Error("Starknet RPC rejected starknet_chainId");
-  if (String(payload.result).toLowerCase() !== SEPOLIA_CHAIN_ID) {
-    throw new Error("Starknet RPC is not connected to Sepolia");
+  if (String(payload.result).toLowerCase() !== CHAIN_IDS[env.STARKNET_NETWORK]) {
+    throw new Error(`Starknet RPC is not connected to ${env.STARKNET_NETWORK}`);
   }
 
   const accountOutput = execFileSync("sncast", ["account", "list"], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   });
-  verifyLocalAccount(env.SNCAST_ACCOUNT, env.DEPLOYER_ADDRESS, accountOutput, "deployer");
+  verifyLocalAccount(env.SNCAST_ACCOUNT, env.DEPLOYER_ADDRESS, accountOutput, "deployer", env.STARKNET_NETWORK);
   if (target === "game") {
     verifyLocalAccount(
       env.PAUSER_SNCAST_ACCOUNT,
       env.PAUSER_ADDRESS,
       accountOutput,
       "pauser",
+      env.STARKNET_NETWORK,
     );
+    if (env.DOPPLER_CONFIG !== "dev") {
+      verifyLocalAccount(env.ADMIN_SNCAST_ACCOUNT, env.ADMIN_ADDRESS,
+        accountOutput, "admin", env.STARKNET_NETWORK);
+    }
   }
 }
 
