@@ -12,6 +12,7 @@ import { formatStrk, parseFeeLog, summarize } from "../scripts/sum-fees.mjs";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const declareScript = path.join(root, "scripts/declare-routed-classes.sh");
 const tokenScript = path.join(root, "scripts/deploy-reward-token.sh");
+const packScript = path.join(root, "scripts/deploy-starterpack.sh");
 const facets = [
   "GameRoundActionsFacet", "GameRoundViewsFacet",
   "GameHideActionsFacet", "GameHideViewsFacet",
@@ -26,6 +27,11 @@ const env = {
   SNCAST_ACCOUNT: "account_braavos",
   ROZ_RECIPIENT_ADDRESS: "0x7",
   ROZ_OWNER_ADDRESS: "0x8",
+  STARTERPACK_OWNER_ADDRESS: "0x11",
+  ARCADE_REGISTRY_ADDRESS: "0x12",
+  USDC_TOKEN_ADDRESS: "0x13",
+  STRK_TOKEN_ADDRESS: "0x14",
+  ROZ_TOKEN_ADDRESS: "0x15",
 };
 
 // Must match the fake sncast below: 0x + first 12 hex digits of sha1(class).
@@ -228,4 +234,41 @@ test("fee totals sum receipt actual_fee for sent transactions", async () => {
     "Total fee paid: 1.5 STRK across 2 transaction(s)",
     "  Fee not counted, receipt unavailable: 0x3",
   ]);
+});
+
+test("starter pack dry-run estimates only the declaration while the class is undeclared", () => {
+  const result = run(packScript, []);
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(result.envChecks, ["scripts/check-contract-env.mjs starterpack --online"]);
+  assert.deepEqual(result.sncast, [
+    `--account account_braavos declare --dry-run --detailed --contract-name TreasureGameStarterpack --url ${env.STARKNET_RPC_URL}`,
+  ]);
+  assert.match(result.stdout, /TreasureGameStarterpack is not declared on sepolia/);
+});
+
+test("starter pack deploy passes the five constructor addresses in order", () => {
+  const packHash = hashOf("TreasureGameStarterpack");
+  const calldata = "--constructor-calldata 0x11 0x12 0x13 0x14 0x15";
+  const dry = run(packScript, [], { TEST_DECLARED: packHash });
+  assert.equal(dry.status, 0, dry.stderr);
+  assert.deepEqual(dry.sncast, [
+    `--account account_braavos deploy --dry-run --detailed --url ${env.STARKNET_RPC_URL} ` +
+      `--class-hash ${packHash} ${calldata}`,
+  ]);
+  assert.doesNotMatch(dry.stdout, /Next steps/);
+
+  const sent = run(packScript, ["--network", "mainnet", "--doppler-config", "prd", "--send"], {
+    STARKNET_NETWORK: "mainnet", TEST_DECLARED: packHash,
+  });
+  assert.equal(sent.status, 0, sent.stderr);
+  assert.deepEqual(sent.sncast, [
+    `--account account_braavos --wait --wait-timeout 600 deploy --url ${env.STARKNET_RPC_URL} ` +
+      `--class-hash ${packHash} ${calldata}`,
+  ]);
+  assert.match(sent.stdout, /set_pack_ids\(welcome_id, week_id\)/);
+
+  const implicit = run(packScript, ["--network", "mainnet", "--send"]);
+  assert.equal(implicit.status, 2);
+  assert.match(implicit.stderr, /explicit --doppler-config/);
+  assert.equal(implicit.sncast, null);
 });

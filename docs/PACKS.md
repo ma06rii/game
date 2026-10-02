@@ -81,7 +81,14 @@ Use this deployment sequence:
 1. Confirm the network's official Arcade registry, USDC, STRK, and RZBX
    addresses. Confirm RZBX uses 18 decimals.
 2. Build and test this repository, then declare and deploy
-   `TreasureGameStarterpack` with the constructor arguments above.
+   `TreasureGameStarterpack` with the constructor arguments above. The script
+   reads them from Doppler (`STARTERPACK_OWNER_ADDRESS`,
+   `ARCADE_REGISTRY_ADDRESS`, `USDC_TOKEN_ADDRESS`, `STRK_TOKEN_ADDRESS`,
+   `ROZ_TOKEN_ADDRESS`). It is a dry-run with a fee estimate until you add `--send`:
+
+   ```bash
+   bash scripts/deploy-starterpack.sh --network mainnet --doppler-config prd [--send]
+   ```
 3. Fund the deployed contract with enough of all three tokens for the planned
    sales window. It needs no token allowance because it uses direct ERC-20
    transfers from its own inventory.

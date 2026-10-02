@@ -390,6 +390,10 @@ scarb --release build
 bash scripts/deploy-reward-token.sh --network mainnet --doppler-config prd --send
 #    Set ROZ_TOKEN_ADDRESS in Doppler prd to the printed contract address.
 
+# Optional: Arcade starter packs, once ROZ_TOKEN_ADDRESS and the Arcade registry
+#    are set in Doppler (see docs/PACKS.md for funding and registration).
+bash scripts/deploy-starterpack.sh --network mainnet --doppler-config prd --send
+
 # 2. Root + 14 facets: skips classes already declared on the network.
 bash scripts/declare-routed-classes.sh --network mainnet --doppler-config prd --send
 #    Copy the printed GAME_CLASS_HASH and FACET_CLASS_HASHES into Doppler prd.
