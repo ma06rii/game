@@ -103,13 +103,15 @@ DOPPLER_CONFIG="$doppler_config" npm exec -- varlock run -- bash -c '
 
   node scripts/preflight-routed-game-deploy.mjs "$network" "$config" "$game_hash" "$@"
 
-  flags=()
+  # sncast takes --wait before the subcommand but --dry-run after it.
+  wait_flags=()
+  dry_flags=()
   if [[ "$mode" == dry ]]; then
-    flags=(--dry-run --detailed)
+    dry_flags=(--dry-run --detailed)
   else
-    flags=(--wait --wait-timeout 600)
+    wait_flags=(--wait --wait-timeout 600)
   fi
-  sncast --account "$SNCAST_ACCOUNT" "${flags[@]}" deploy \
+  sncast --account "$SNCAST_ACCOUNT" "${wait_flags[@]}" deploy "${dry_flags[@]}" \
     --url "$STARKNET_RPC_URL" --class-hash "$game_hash" \
     --constructor-calldata \
       "$VRF_PROVIDER_ADDRESS" "$USDC_TOKEN_ADDRESS" "$ROZ_TOKEN_ADDRESS" \

@@ -33,6 +33,7 @@ global.fetch = async (_url, options) => {
       env: {
         ...process.env,
         STARKNET_RPC_URL: "https://mock.sepolia.invalid",
+        STARKNET_NETWORK: "",
         DEPLOYER_ADDRESS: "",
         TEST_RPC_REPLIES: JSON.stringify(replies),
         TEST_RPC_LOG: log,
@@ -75,6 +76,38 @@ test("require-declared rejects a non-Sepolia RPC", () => {
   assert.equal(result.status, 1);
   assert.match(result.stderr, /not Starknet Sepolia/);
   assert.deepEqual(result.methods, ["starknet_chainId"]);
+});
+
+test("status mode reports declared, missing, and lookup errors by exit code", () => {
+  const declared = withMockRpc({
+    starknet_chainId: { result: chainId },
+    starknet_getClass: { result: { sierra_program: [] } },
+  }, { args: [classHash, "--status"] });
+  assert.equal(declared.status, 0, declared.stderr);
+  const missing = withMockRpc({
+    starknet_chainId: { result: chainId },
+    starknet_getClass: { error: { code: 28, message: "Class hash not found" } },
+  }, { args: [classHash, "--status"] });
+  assert.equal(missing.status, 3, missing.stderr);
+  assert.match(missing.stdout, /Class at latest: not declared/);
+  const failed = withMockRpc({
+    starknet_chainId: { result: chainId },
+    starknet_getClass: { error: { code: 31, message: "Class lookup failed" } },
+  }, { args: [classHash, "--status"] });
+  assert.equal(failed.status, 1);
+});
+
+test("STARKNET_NETWORK=mainnet checks the mainnet chain ID", () => {
+  const mainnet = withMockRpc({
+    starknet_chainId: { result: "0x534e5f4d41494e" },
+    starknet_getClass: { result: { sierra_program: [] } },
+  }, { args: [classHash, "--require-declared"], env: { STARKNET_NETWORK: "mainnet" } });
+  assert.equal(mainnet.status, 0, mainnet.stderr);
+  const wrongChain = withMockRpc({
+    starknet_chainId: { result: chainId },
+  }, { args: [classHash, "--require-declared"], env: { STARKNET_NETWORK: "mainnet" } });
+  assert.equal(wrongChain.status, 1);
+  assert.match(wrongChain.stderr, /not Starknet Mainnet/);
 });
 
 test("diagnostic mode still checks transaction and nonce", () => {

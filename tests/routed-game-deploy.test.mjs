@@ -115,7 +115,7 @@ test("defaults to a Sepolia dry-run with the exact 14-hash constructor array", (
     "scripts/preflight-routed-game-deploy.mjs", "sepolia", "dev", ...hashes,
   ]);
   assert.deepEqual(result.sncast, [
-    "--account", env.SNCAST_ACCOUNT, "--dry-run", "--detailed", "deploy",
+    "--account", env.SNCAST_ACCOUNT, "deploy", "--dry-run", "--detailed",
     "--url", env.STARKNET_RPC_URL, "--class-hash", gameHash,
     "--constructor-calldata", env.VRF_PROVIDER_ADDRESS, env.USDC_TOKEN_ADDRESS,
     env.ROZ_TOKEN_ADDRESS, env.ROUND_KEEPER_ADDRESS, env.ADMIN_ADDRESS,

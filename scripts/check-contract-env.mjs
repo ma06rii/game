@@ -3,7 +3,7 @@
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
-const TARGETS = new Set(["game", "roz", "starterpack"]);
+const TARGETS = new Set(["classes", "game", "roz", "starterpack"]);
 const FORBIDDEN_SIGNING_VARIABLES = [
   "PRIVATE_KEY",
   "STARKNET_PRIVATE_KEY",
@@ -17,6 +17,8 @@ const ADDRESS_PATTERN = /^0x[0-9a-fA-F]{1,64}$/;
 const ACCOUNT_PATTERN = /^[A-Za-z][A-Za-z0-9_-]*$/;
 
 const TARGET_VARIABLES = {
+  // Declaring classes needs only the common network, RPC and deployer values.
+  classes: [],
   game: [
     "VRF_PROVIDER_ADDRESS",
     "USDC_TOKEN_ADDRESS",
@@ -232,7 +234,7 @@ function parseArguments(argv) {
     (argument) => argument.startsWith("--") && argument !== "--online",
   );
   if (positional.length !== 1 || unknownFlags.length > 0 || !TARGETS.has(positional[0])) {
-    throw new Error("usage: npm run env:check -- <game|roz|starterpack> [--online]");
+    throw new Error("usage: npm run env:check -- <classes|game|roz|starterpack> [--online]");
   }
   return { target: positional[0], online };
 }

@@ -140,6 +140,13 @@ test("rejects signing material from the process environment", () => {
   );
 });
 
+test("the classes target needs only the common deployer context", () => {
+  assert.deepEqual(validateEnvironment("classes", common()), []);
+  assert.deepEqual(validateEnvironment("classes", common({ SNCAST_ACCOUNT: "" })), [
+    "SNCAST_ACCOUNT is required",
+  ]);
+});
+
 test("rejects missing and unknown targets", () => {
   assert.match(validateEnvironment(undefined, {})[0], /target must be exactly one of/);
   assert.match(validateEnvironment("unknown", {})[0], /target must be exactly one of/);

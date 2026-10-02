@@ -102,6 +102,7 @@ The schema exposes separate preflight targets for each deployable contract:
 
 | Target | Contract | Target-specific inputs |
 | --- | --- | --- |
+| `classes` | all 15 routed classes (declaration only) | none beyond the common values |
 | `game` | `HelloStarknet` | VRF, USDC, Zee Bucks (RZBX), keeper, admin, pauser, pauser account alias, upgrade delay |
 | `roz` (legacy target name) | `ROZToken` (legacy artifact name) | initial recipient and owner for Zee Bucks (RZBX) |
 | `starterpack` | `TreasureGameStarterpack` | owner, Arcade registry, USDC, STRK, and Zee Bucks (RZBX) |
@@ -373,6 +374,34 @@ Former game/admin getters such as `get_admin`, `is_paused`, and
 `get_contract_addresses` are routed calls, not direct root ABI functions.
 Gameplay settings and pricing bands must be initialized and verified through
 the routed ABI before unpausing or repointing integrations.
+
+## Scripted deployment sequence
+
+Three scripts cover a full deployment on either network. Each one defaults to a
+dry-run, sends transactions only with `--send`, and requires an explicit
+`--doppler-config` for mainnet (`prd`). Each script checks the environment first
+and refuses a Doppler config whose `STARKNET_NETWORK` does not match `--network`.
+
+```bash
+scarb --release build
+
+# 1. Zee Bucks (RZBX): declares ROZToken if missing, then deploys it.
+bash scripts/deploy-reward-token.sh --network mainnet --doppler-config prd --send
+#    Set ROZ_TOKEN_ADDRESS in Doppler prd to the printed contract address.
+
+# 2. Root + 14 facets: skips classes already declared on the network.
+bash scripts/declare-routed-classes.sh --network mainnet --doppler-config prd --send
+#    Copy the printed GAME_CLASS_HASH and FACET_CLASS_HASHES into Doppler prd.
+
+# 3. The routed game instance (starts paused).
+bash scripts/deploy-routed-game.sh --network mainnet --doppler-config prd --send
+```
+
+Run each step without `--send` first to see the fee estimates. A class that is
+not yet declared has no deploy estimate, so the token dry-run stops after the
+declaration estimate. For Sepolia staging, use `--network sepolia
+--doppler-config stg`. Mainnet needs `alpha-mainnet` sncast aliases for the
+deployer and pauser.
 
 ## Coordinated deployment checklist
 
