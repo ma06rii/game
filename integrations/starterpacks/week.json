@@ -1,11 +1,23 @@
 {
   "name": "Week Pack",
   "description": "A week of play in Realm of Zee.",
-  "image_uri": "https://YOUR-HOST/week.png",
+  "image_uri": "https://2x2pm0ggtk.ucarecd.net/57a44ae1-a068-4af6-a216-73dae47f865b/-/preview/1000x1000/",
   "items": [
-    { "name": "18 USDC", "description": "Three hides", "image_uri": "https://YOUR-HOST/usdc.png" },
-    { "name": "6 STRK", "description": "Gas for a week of hops", "image_uri": "https://YOUR-HOST/strk.png" },
-    { "name": "3,000 RZBX", "description": "Zee Bucks", "image_uri": "https://YOUR-HOST/rzbx.png" }
+    {
+      "name": "18 USDC",
+      "description": "Three hides",
+      "image_uri": "https://2x2pm0ggtk.ucarecd.net/3909d5a4-63df-4eeb-9cb8-b3f1cf0cbae1/-/preview/671x1000/"
+    },
+    {
+      "name": "6 STRK",
+      "description": "Gas for a week of hops",
+      "image_uri": "https://2x2pm0ggtk.ucarecd.net/ff6f5291-bcb9-47b6-9c16-1257bca80de9/-/preview/671x1000/"
+    },
+    {
+      "name": "3,000 RZBX",
+      "description": "Zee Bucks",
+      "image_uri": "https://2x2pm0ggtk.ucarecd.net/b7e4d925-91d3-4aa7-a7e3-f28135110302/-/preview/671x1000/"
+    }
   ],
   "additional_payment_tokens": [],
   "conditions": []

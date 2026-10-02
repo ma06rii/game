@@ -105,11 +105,11 @@ DOPPLER_CONFIG="$doppler_config" npm exec -- varlock run -- bash -c '
       "$USDC_TOKEN_ADDRESS" "$STRK_TOKEN_ADDRESS" "$ROZ_TOKEN_ADDRESS" 2>&1 | tee -a "$FEE_LOG"
 
   if [[ "$mode" == send ]]; then
-    printf "\nNext steps (docs/PACKS.md): record the contract address above, then\n"
-    printf "1. fund it with USDC, STRK and RZBX inventory for the sales window;\n"
-    printf "2. register Welcome and Week in Arcade with this address;\n"
-    printf "3. call set_pack_ids(welcome_id, week_id) as the owner;\n"
-    printf "4. read back get_pack_ids, pack_amounts, get_token_addresses,\n"
-    printf "   get_min_hide_stake_usdc and get_arcade_registry.\n"
+    printf "\nNext steps (docs/PACKS.md):\n"
+    printf "1. Set STARTERPACK_ADDRESS in Doppler %s to the contract address above.\n" "$config"
+    printf "2. Fund it with USDC, STRK and RZBX inventory for the sales window.\n"
+    printf "3. Register both packs and set their IDs (previews first without --send):\n"
+    printf "   bash scripts/register-starterpacks.sh --network %s --doppler-config %s --send\n" "$network" "$config"
+    printf "4. Make a test purchase and reconcile the contract and buyer balances.\n"
   fi
 ' _ "$network" "$doppler_config" "$mode"

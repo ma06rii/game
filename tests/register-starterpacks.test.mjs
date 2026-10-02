@@ -24,10 +24,15 @@ const registeredEvent = (id, registry = REGISTRY) => ({
 });
 
 test('metadata becomes an escaped Cairo string and placeholders block a send', () => {
-  const text = readFileSync(path.join(root, 'integrations/starterpacks/welcome.json'), 'utf8');
-  assert.throws(() => loadMetadata(text), /YOUR-HOST/);
-  const json = loadMetadata(text, { allowPlaceholders: true });
-  assert.equal(JSON.parse(json).items.length, 3);
+  const placeholder = JSON.stringify({ name: 'n', description: 'd', image_uri: 'https://YOUR-HOST/p.png',
+    items: [{ name: 'i', description: 'd', image_uri: 'https://YOUR-HOST/i.png' }] });
+  assert.throws(() => loadMetadata(placeholder), /YOUR-HOST/);
+  assert.equal(JSON.parse(loadMetadata(placeholder, { allowPlaceholders: true })).items.length, 1);
+  // The checked-in pack files must always parse and have items.
+  for (const key of ['welcome', 'week']) {
+    const text = readFileSync(path.join(root, `integrations/starterpacks/${key}.json`), 'utf8');
+    assert.ok(JSON.parse(loadMetadata(text, { allowPlaceholders: true })).items.length > 0);
+  }
   assert.equal(cairoString('{"a":"b\\\\c"}'), '"{\\"a\\":\\"b\\\\\\\\c\\"}"');
   assert.throws(() => loadMetadata('{"name":"x","description":"y","image_uri":"z","items":[]}'), /items/);
   assert.equal(

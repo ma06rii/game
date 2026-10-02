@@ -1,11 +1,23 @@
 {
   "name": "Welcome Pack",
   "description": "Everything you need to start hunting in Realm of Zee.",
-  "image_uri": "https://YOUR-HOST/welcome.png",
+  "image_uri": "https://2x2pm0ggtk.ucarecd.net/e3e873d4-ab1f-49f3-84ba-abadfcc9dedc/-/preview/1000x1000/",
   "items": [
-    { "name": "6 USDC", "description": "Enough for your first hide", "image_uri": "https://YOUR-HOST/usdc.png" },
-    { "name": "2.5 STRK", "description": "Gas for your first hops", "image_uri": "https://YOUR-HOST/strk.png" },
-    { "name": "1,000 RZBX", "description": "Zee Bucks", "image_uri": "https://YOUR-HOST/rzbx.png" }
+    {
+      "name": "6 USDC",
+      "description": "Enough for your first hide",
+      "image_uri": "https://2x2pm0ggtk.ucarecd.net/3909d5a4-63df-4eeb-9cb8-b3f1cf0cbae1/-/preview/671x1000/"
+    },
+    {
+      "name": "2.5 STRK",
+      "description": "Gas for your first hops",
+      "image_uri": "https://2x2pm0ggtk.ucarecd.net/ff6f5291-bcb9-47b6-9c16-1257bca80de9/-/preview/671x1000/"
+    },
+    {
+      "name": "1,000 RZBX",
+      "description": "Zee Bucks",
+      "image_uri": "https://2x2pm0ggtk.ucarecd.net/b7e4d925-91d3-4aa7-a7e3-f28135110302/-/preview/671x1000/"
+    }
   ],
   "additional_payment_tokens": [],
   "conditions": []
