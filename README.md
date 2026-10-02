@@ -377,10 +377,11 @@ the routed ABI before unpausing or repointing integrations.
 
 ## Scripted deployment sequence
 
-Three scripts cover a full deployment on either network. Each one defaults to a
-dry-run, sends transactions only with `--send`, and requires an explicit
+Four scripts cover a full deployment on either network. They all take the same
+`--network` and `--doppler-config` flags and require an explicit
 `--doppler-config` for mainnet (`prd`). Each script checks the environment first
 and refuses a Doppler config whose `STARKNET_NETWORK` does not match `--network`.
+None of them sends a transaction without `--send` (or `--unpause`).
 
 ```bash
 scarb --release build
@@ -395,16 +396,35 @@ bash scripts/declare-routed-classes.sh --network mainnet --doppler-config prd --
 
 # 3. The routed game instance (starts paused).
 bash scripts/deploy-routed-game.sh --network mainnet --doppler-config prd --send
+#    Set GAME_ADDRESS in Doppler prd to the printed contract address.
+
+# 4. Settings and price bands, signed by ADMIN_SNCAST_ACCOUNT; stays paused.
+bash scripts/initialize-routed-game.sh --network mainnet --doppler-config prd --check
+bash scripts/initialize-routed-game.sh --network mainnet --doppler-config prd --estimate
+bash scripts/initialize-routed-game.sh --network mainnet --doppler-config prd --send --confirm-mainnet
+
+# 5. Open the game, signed by PAUSER_SNCAST_ACCOUNT, once --check shows no
+#    incorrect settings or bands.
+bash scripts/initialize-routed-game.sh --network mainnet --doppler-config prd --unpause --confirm-mainnet
 ```
 
-Each run ends with its STRK fee total, even if it stops part-way. A dry-run
-adds up sncast's `Overall Fee` estimates. A `--send` run adds up each
-transaction receipt's `actual_fee`. Run each step without `--send` first to see the fee estimates. A class that is
-not yet declared has no deploy estimate, so the token dry-run stops after the
-declaration estimate. For `stg` and `prd`, `deploy-routed-game.sh` checks every Doppler class hash
-against the local release build first, and names any entry that differs. For Sepolia staging, use `--network sepolia
---doppler-config stg`. Mainnet needs `alpha-mainnet` sncast aliases for the
-deployer and pauser.
+Steps 1-3 are dry-runs without `--send`. Run each one that way first to see the
+fee estimates. Step 4's `--check` is read-only, and `--estimate` estimates the
+next pending change. A class that is not yet declared has no deploy estimate, so
+the token dry-run stops after the declaration estimate.
+
+Every run except `--check` ends with its STRK fee total, even if it stops
+part-way. A dry-run or estimate adds up sncast's `Overall Fee` estimates. A sent
+transaction adds its receipt's `actual_fee`. Initialization `--send` estimates
+each change before sending it, so it prints both totals.
+
+For `stg` and `prd`, `deploy-routed-game.sh` checks every Doppler class hash
+against the local release build. `initialize-routed-game.sh` checks them against
+the deployed game. Both name any entry that differs.
+
+For Sepolia staging, use `--network sepolia --doppler-config stg`. Mainnet needs
+`alpha-mainnet` sncast aliases for the deployer, admin and pauser, and the admin
+and pauser must be different deployed accounts funded with STRK.
 
 ## Coordinated deployment checklist
 

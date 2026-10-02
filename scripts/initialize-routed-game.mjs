@@ -23,6 +23,15 @@ export let FACET_HASHES = [
   '0x036f4b18dc52af7edec3f8187513ca1475af4b5845ce8496946d572f2f4f222d',
   '0x0609086696cddca40e66aad9752c106addbeb45c3f6843ab9010a877f1e68af7',
 ];
+// Facet index order, matching FACET_HASHES and the root constructor array.
+const FACET_NAMES = [
+  'GameRoundActionsFacet', 'GameRoundViewsFacet',
+  'GameHideActionsFacet', 'GameHideViewsFacet',
+  'GameFinderValidationFacet', 'GameFinderActionsFacet', 'GameFinderViewsFacet',
+  'GameUsdcClaimsFacet', 'GameRozClaimsFacet',
+  'GameSettingsActionsFacet', 'GameSettingsViewsFacet',
+  'GameTreasuryFacet', 'GameAdminUpgradeFacet', 'GameAdminActionsFacet',
+];
 const CHAIN_IDS = { sepolia: '0x534e5f5345504f4c4941', mainnet: '0x534e5f4d41494e' };
 const MAX_U128 = (1n << 128n) - 1n;
 const ADDRESS = /^0x[0-9a-fA-F]{1,64}$/;
@@ -155,14 +164,17 @@ function decodeU256(values) {
 
 async function inspect(url) {
   const actual = await rpc(url, 'starknet_getClassHashAt', ['latest', GAME]);
-  if (BigInt(actual) !== BigInt(GAME_CLASS_HASH)) throw new Error('game class hash mismatch');
+  if (BigInt(actual) !== BigInt(GAME_CLASS_HASH)) {
+    throw new Error(`HelloStarknet class hash mismatch: configured ${GAME_CLASS_HASH}, on-chain ${actual}`);
+  }
   for (let i = 0; i < FACET_HASHES.length; i++) {
     const result = await rpc(url, 'starknet_call', [{
       contract_address: GAME, entry_point_selector: selector('get_facet_hash'),
       calldata: [`0x${i.toString(16)}`],
     }, 'latest']);
     if (result.length !== 1 || BigInt(result[0]) !== BigInt(FACET_HASHES[i])) {
-      throw new Error(`facet ${i} class hash mismatch`);
+      throw new Error(`${FACET_NAMES[i]} (facet ${i}) class hash mismatch: ` +
+        `configured ${FACET_HASHES[i]}, on-chain ${result[0] ?? 'none'}`);
     }
   }
   const paused = (await routeCall(url, 12, 'is_paused'))[0] === 1n;
@@ -194,12 +206,14 @@ function verifyAccount(alias, expected, network) {
 }
 
 function invoke(alias, url, facet, name, calldata, dryRun) {
-  const args = ['--account', alias, '--json', ...(dryRun ? [] : ['--wait', '--wait-timeout', '600']),
+  // Human-readable output carries the "Overall Fee" and "Transaction Hash" lines
+  // that sum-fees.mjs totals.
+  const args = ['--account', alias, ...(dryRun ? [] : ['--wait', '--wait-timeout', '600']),
     'invoke', '--contract-address', GAME, '--function', 'route', '--url', url,
     '--calldata', ...routedCalldata(facet, selector(name), calldata),
     ...(dryRun ? ['--dry-run'] : [])];
   const output = execFileSync('sncast', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] });
-  console.log(`${dryRun ? 'Estimated' : 'Accepted'} ${name}: ${output.trim()}`);
+  console.log(`${dryRun ? 'Estimated' : 'Accepted'} ${name}:\n${output.trim()}`);
 }
 
 async function main() {
