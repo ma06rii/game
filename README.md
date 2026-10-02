@@ -401,7 +401,8 @@ Each run ends with its STRK fee total, even if it stops part-way. A dry-run
 adds up sncast's `Overall Fee` estimates. A `--send` run adds up each
 transaction receipt's `actual_fee`. Run each step without `--send` first to see the fee estimates. A class that is
 not yet declared has no deploy estimate, so the token dry-run stops after the
-declaration estimate. For Sepolia staging, use `--network sepolia
+declaration estimate. For `stg` and `prd`, `deploy-routed-game.sh` checks every Doppler class hash
+against the local release build first, and names any entry that differs. For Sepolia staging, use `--network sepolia
 --doppler-config stg`. Mainnet needs `alpha-mainnet` sncast aliases for the
 deployer and pauser.
 

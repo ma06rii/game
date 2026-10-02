@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import {
   validateDeploymentEnvironment,
   verifyDeploymentOnline,
+  verifyLocalBuild,
 } from "../scripts/preflight-routed-game-deploy.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -245,5 +246,34 @@ test("online preflight accepts mainnet accounts and rejects signer address misma
       accountOutput, fetchImpl,
     }),
     /deployer sncast account address does not match/,
+  );
+});
+
+test("local build check names each configured hash that differs from the build", () => {
+  const classNames = [
+    "HelloStarknet",
+    "GameRoundActionsFacet", "GameRoundViewsFacet",
+    "GameHideActionsFacet", "GameHideViewsFacet",
+    "GameFinderValidationFacet", "GameFinderActionsFacet", "GameFinderViewsFacet",
+    "GameUsdcClaimsFacet", "GameRozClaimsFacet",
+    "GameSettingsActionsFacet", "GameSettingsViewsFacet",
+    "GameTreasuryFacet", "GameAdminUpgradeFacet", "GameAdminActionsFacet",
+  ];
+  const localHashes = Object.fromEntries(classNames.map((name, index) => [name, hashes[index]]));
+  const hashClass = (name) => localHashes[name];
+  verifyLocalBuild(hashes, hashClass);
+  // Leading zeros are not significant.
+  verifyLocalBuild(hashes.map((hash) => hash.replace(/^0x0+/, "0x")), hashClass);
+
+  const truncated = [...hashes];
+  truncated[14] = truncated[14].slice(0, -1);
+  assert.throws(
+    () => verifyLocalBuild(truncated, hashClass),
+    (error) => {
+      assert.match(error.message, /do not match the local release build/);
+      assert.match(error.message, new RegExp(`GameAdminActionsFacet: configured ${truncated[14]}, local build ${hashes[14]}`));
+      assert.doesNotMatch(error.message, /HelloStarknet:/);
+      return true;
+    },
   );
 });

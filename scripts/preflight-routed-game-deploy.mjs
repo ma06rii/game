@@ -154,10 +154,46 @@ export async function verifyDeploymentOnline(network, hashes, env = process.env,
   }
 }
 
+function localClassHash(className) {
+  const artifact = `target/release/project_name_${className}.contract_class.json`;
+  let output;
+  try {
+    output = execFileSync("sncast", ["utils", "class-hash", "--sierra-file", artifact], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch {
+    throw new Error(`could not hash ${artifact}; run scarb --release build first`);
+  }
+  const hash = output.match(/^Class Hash: (0x[0-9a-fA-F]+)$/m)?.[1];
+  if (!hash) throw new Error(`sncast printed no class hash for ${className}`);
+  return hash;
+}
+
+// Catches a mistyped or truncated Doppler hash, which is still a valid felt and
+// would otherwise surface only as a confusing "not declared" lookup.
+export function verifyLocalBuild(hashes, hashClass = localClassHash) {
+  const mismatched = [];
+  for (const [index, configured] of hashes.entries()) {
+    const local = hashClass(CLASS_NAMES[index]);
+    if (BigInt(configured) !== BigInt(local)) {
+      mismatched.push(`${CLASS_NAMES[index]}: configured ${configured}, local build ${local}`);
+    }
+  }
+  if (mismatched.length > 0) {
+    throw new Error(
+      `Configured class hashes do not match the local release build:\n- ${mismatched.join("\n- ")}\n` +
+      "Fix GAME_CLASS_HASH/FACET_CLASS_HASHES in Doppler, or rebuild from the reviewed commit.",
+    );
+  }
+}
+
 async function main() {
   const [network, config, ...hashes] = process.argv.slice(2);
   const errors = validateDeploymentEnvironment(network, config, hashes);
   if (errors.length > 0) throw new Error(errors.join("\n- "));
+  // dev deploys its pinned hashes from the script, which may predate the build.
+  if (config !== "dev") verifyLocalBuild(hashes);
   await verifyDeploymentOnline(network, hashes);
   console.log(`Deployment preflight passed: ${hashes.length} classes declared on ${network} latest.`);
 }
