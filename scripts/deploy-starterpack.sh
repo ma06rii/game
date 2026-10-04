@@ -107,9 +107,11 @@ DOPPLER_CONFIG="$doppler_config" npm exec -- varlock run -- bash -c '
   if [[ "$mode" == send ]]; then
     printf "\nNext steps (docs/PACKS.md):\n"
     printf "1. Set STARTERPACK_ADDRESS in Doppler %s to the contract address above.\n" "$config"
-    printf "2. Fund it with USDC, STRK and RZBX inventory for the sales window.\n"
-    printf "3. Register both packs and set their IDs (previews first without --send):\n"
+    printf "2. Register both packs and set their IDs (previews first without --send):\n"
     printf "   bash scripts/register-starterpacks.sh --network %s --doppler-config %s --send\n" "$network" "$config"
-    printf "4. Make a test purchase and reconcile the contract and buyer balances.\n"
+    printf "3. Fund the inventory for the sales you expect:\n"
+    printf "   bash scripts/fund-starterpack.sh --network %s --doppler-config %s --welcome N --week N --send\n" "$network" "$config"
+    printf "4. Verify everything, then make a test purchase:\n"
+    printf "   bash scripts/check-starterpack.sh --network %s --doppler-config %s\n" "$network" "$config"
   fi
 ' _ "$network" "$doppler_config" "$mode"

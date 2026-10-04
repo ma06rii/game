@@ -395,6 +395,8 @@ bash scripts/deploy-reward-token.sh --network mainnet --doppler-config prd --sen
 bash scripts/deploy-starterpack.sh --network mainnet --doppler-config prd --send
 #    Then set STARTERPACK_ADDRESS, fund the inventory, and register both packs:
 bash scripts/register-starterpacks.sh --network mainnet --doppler-config prd --send
+bash scripts/fund-starterpack.sh --network mainnet --doppler-config prd --welcome 20 --send
+bash scripts/check-starterpack.sh --network mainnet --doppler-config prd   # read-only
 
 # 2. Root + 14 facets: skips classes already declared on the network.
 bash scripts/declare-routed-classes.sh --network mainnet --doppler-config prd --send

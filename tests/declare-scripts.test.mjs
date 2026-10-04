@@ -267,6 +267,7 @@ test("starter pack deploy passes the five constructor addresses in order", () =>
   ]);
   assert.match(sent.stdout, /Set STARTERPACK_ADDRESS in Doppler prd/);
   assert.match(sent.stdout, /register-starterpacks\.sh --network mainnet --doppler-config prd --send/);
+  assert.match(sent.stdout, /check-starterpack\.sh --network mainnet --doppler-config prd/);
 
   const implicit = run(packScript, ["--network", "mainnet", "--send"]);
   assert.equal(implicit.status, 2);

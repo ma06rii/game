@@ -210,7 +210,7 @@ async function main() {
   const [welcome, week] = call(pack, 'get_pack_ids');
   if (Number(welcome) !== ids.welcome || Number(week) !== ids.week) throw new Error('get_pack_ids readback failed');
   console.log(`\nRegistered: Welcome ${ids.welcome}, Week ${ids.week}.`);
-  console.log('Next: fund the pack contract inventory, then make a test purchase per docs/PACKS.md.');
+  console.log('Next: fund the inventory with scripts/fund-starterpack.sh, run scripts/check-starterpack.sh, then make a test purchase.');
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {

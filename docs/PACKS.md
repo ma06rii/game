@@ -91,7 +91,16 @@ Use this deployment sequence:
    ```
 3. Fund the deployed contract with enough of all three tokens for the planned
    sales window. It needs no token allowance because it uses direct ERC-20
-   transfers from its own inventory.
+   transfers from its own inventory. `scripts/fund-starterpack.sh` does this
+   once the pack IDs are set: give it the number of sales to cover. It reads
+   the live `pack_amounts` and transfers only each token's shortfall, so
+   re-running it tops up instead of double-funding. The sender keeps 1 STRK
+   back for gas.
+
+   ```bash
+   bash scripts/fund-starterpack.sh --network mainnet --doppler-config prd --welcome 20 --week 5          # dry run
+   bash scripts/fund-starterpack.sh --network mainnet --doppler-config prd --welcome 20 --week 5 --send
+   ```
 4. Register Welcome in Arcade at $9.99 with `reissuable = false`, using the
    deployed implementation address. Steps 4-7 are scripted (see below).
 5. Register Week in Arcade at $29.99 with `reissuable = true`, using the same
@@ -100,7 +109,10 @@ Use this deployment sequence:
    `set_pack_ids(welcome_id, week_id)` as owner. Issuance reverts until this
    step is complete.
 7. Read back `get_pack_ids`, `pack_amounts`, `get_token_addresses`,
-   `get_min_hide_stake_usdc`, and `get_arcade_registry`.
+   `get_min_hide_stake_usdc`, and `get_arcade_registry`. Run
+   `bash scripts/check-starterpack.sh --network mainnet --doppler-config prd`
+   for these plus both Arcade quotes and the inventory. It sends no transaction,
+   prints PASS, WARN or FAIL per check, and exits 1 on any failure.
 8. Issue test purchases to fresh recipient addresses and reconcile all three
    contract and recipient balances before enabling public sales.
 
